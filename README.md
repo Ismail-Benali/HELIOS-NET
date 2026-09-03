@@ -97,6 +97,11 @@ python run_simulation.py
 
 ---
 
+## 🗺️ Future Roadmap
+Check our official [Project Roadmap](ROADMAP.md) for upcoming milestones, including P2P C2 Mesh networking and Ring 0 Kernel driver integration.
+
+---
+
 ## 🧪 Automated Testing
 
 Execute the comprehensive self-verification test suite:
