@@ -1,5 +1,7 @@
 # HELIOS-NET — Autonomous Polyglot Cyber Warfare & Offensive Reconnaissance Orchestrator
 
+<img width="1792" height="592" alt="Helios-Net" src="https://github.com/user-attachments/assets/eb7d5c73-ee03-4500-bc95-45269d7afec6" />
+
 [![GitHub Actions](https://img.shields.io/badge/github-actions-black.svg?style=for-the-badge&logo=githubactions&logoColor=green)](https://github.com/Ismail-Benali/HELIOS-NET)
 [![Python](https://img.shields.io/badge/python-3.12-black.svg?style=for-the-badge&logo=python&logoColor=green)](https://www.python.org/)
 [![Go](https://img.shields.io/badge/go-1.27-black.svg?style=for-the-badge&logo=go&logoColor=green)](https://golang.org/)
@@ -7,7 +9,6 @@
 
 **HELIOS-NET** is an enterprise-grade, autonomous polyglot cyber warfare and offensive reconnaissance orchestration framework. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Adaptation), HELIOS-NET eliminates external dependencies, relying entirely on Python stdlib for control orchestration, high-performance Go binaries for concurrent networking, and low-level C binaries for Evasion and memory execution.
 
----
 
 ## 🏛️ System Architecture Topology
 
@@ -52,8 +53,6 @@
         +-------------------------------------+
 ```
 
----
-
 ## ⚙️ What HELIOS-NET Does (Core Capabilities)
 
 1. **Closed-Loop Intelligence Orchestration:** Manages campaign state, dependency planning, and parallel wave execution with absolute fault isolation.
@@ -63,8 +62,6 @@
 5. **Autonomous Self-Healing & Mutation:** Detects WAF/Honeypot traps, shreds local temporary footprints securely, mutates encryption keys, and shifts attack vectors automatically.
 6. **Encrypted Transactional WAL:** Guarantees absolute crash recovery and zero data loss with at-record HMAC-SHA256 authenticated encryption.
 7. **Continuous Autonomous Daemon:** Operates as a silent background agent (`daemon.py`) running continuous recon and self-preservation loops.
-
----
 
 ## 🚀 Quick Start & CLI Usage
 
@@ -95,12 +92,9 @@ python run.py daemon --target 127.0.0.1 --interval 15
 python run_simulation.py
 ```
 
----
-
 ## 🗺️ Future Roadmap
 Check our official [Project Roadmap](ROADMAP.md) for upcoming milestones, including P2P C2 Mesh networking and Ring 0 Kernel driver integration.
 
----
 
 ## 🧪 Automated Testing
 
@@ -108,8 +102,6 @@ Execute the comprehensive self-verification test suite:
 ```bash
 python tests/smoke.py
 ```
-
----
 
 ## 🛡️ Security & Operational Notice
 
