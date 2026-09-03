@@ -1,7 +1,6 @@
 // HELIOS-NET :: transport/goscan/goscan.go
 // High-performance concurrent TCP port scanner written in pure Go.
-// Bypasses Python interpreter overhead, utilizing Go's lightweight goroutines.
-// Compiled to a standalone binary invoked natively by the orchestrator.
+// Streams results incrementally via NDJSON (Newline Delimited JSON) to prevent pipe buffer deadlocks.
 
 package main
 
@@ -35,20 +34,18 @@ func scanPort(ip string, port int, timeout time.Duration, wg *sync.WaitGroup, re
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: goscan <target-ip> <port1,port2,... or range>");
+		fmt.Fprintln(os.Stderr, "usage: goscan <target-ip> <port1,port2,... or range>")
 		os.Exit(2)
 	}
 
 	targetIP := os.Args[1]
 	portArg := os.Args[2]
 
-	// Parse ports (supports comma-separated list or simple range)
 	var ports []int
 	p, err := strconv.Atoi(portArg)
 	if err == nil {
 		ports = []int{p}
 	} else {
-		// Default common ports if argument is 'common'
 		ports = []int{21, 22, 23, 25, 53, 80, 110, 443, 445, 3306, 3389, 5432, 8080}
 	}
 
@@ -61,16 +58,15 @@ func main() {
 		go scanPort(targetIP, p, timeout, &wg, resultsChan)
 	}
 
-	wg.Wait()
-	close(resultsChan)
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
 
-	var openPorts []PortResult
+	encoder := json.NewEncoder(os.Stdout)
 	for res := range resultsChan {
 		if res.Open {
-			openPorts = append(openPorts, res)
+			_ = encoder.Encode(res)
 		}
 	}
-
-	output, _ := json.Marshal(openPorts)
-	fmt.Println(string(output))
 }
