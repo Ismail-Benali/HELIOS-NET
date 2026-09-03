@@ -1,10 +1,10 @@
 """HELIOS-NET :: modules/discovery/service.py
-استطلاع: اكتشاف خدمات ومنافذ.
+Reconnaissance: service and port discovery.
 
-العقد:
-  - يلمس الهدف (مفوّض/مملوك) ويُخرج صحيفة خدمات موحّدة.
-  - لا يعتمد على أدوات خارجية في النواة — فقط socket قياسي.
-  - أي توسّع (nmap-parser...) يُضاف كوحدة جانبية لا كفرع من هذا.
+Contract:
+  - Probes the (authorized/owned) target and emits a unified service sheet.
+  - Relies on nothing but the standard socket in the core — no external tools.
+  - Any extension (nmap-parser...) is added as a side module, not a branch of this.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from transport import RAWSYNC, _run
 
-# منافذ شائعة للملاحظة السريعة — قابلة للتوسيع من الخارج.
+# Common ports for a quick observation pass — extensible from outside.
 COMMON_PORTS = {
     21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
     80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB",
@@ -25,16 +25,16 @@ COMMON_PORTS = {
 
 def discover_ports(host: str, ports: list[int] | None = None,
                    timeout: float = 2.0, max_workers: int = 64) -> list[dict]:
-    """يكشف المنافذ المفتوحة على مضيف في المختبر.
+    """Discovers open ports on a host in the lab.
 
     Args:
-      host: مضيف الهدف (يجب أن يكون مفوّضًا/مملوكًا).
-      ports: قائمة منافذ؛ يُلجأ إلى COMMON_PORTS إن لم تُعطَ.
-      timeout: مهلة الاتصال بالثواني.
-      max_workers: عدد موازي لعمليات الفحص.
+      host: the target host (must be authorized/owned).
+      ports: a port list; falls back to COMMON_PORTS if not given.
+      timeout: connection timeout in seconds.
+      max_workers: parallel concurrency for the probe operations.
 
     Returns:
-      قائمة اكتشافات بنمط {module, host, port, service, open}.
+      A list of findings shaped like {module, host, port, service, open}.
     """
     ports = ports or list(COMMON_PORTS.keys())
     results: list[dict] = []
@@ -68,21 +68,22 @@ def discover_ports(host: str, ports: list[int] | None = None,
 
 
 def native_syn_probe(host: str, port: int, timeout: float = 5.0) -> dict:
-    """يمسح المنفذ عبر نواة Go (rawsync) بالاستماع الحقيقي لرد SYN-ACK.
+    """Probes the port via the Go core (rawsync) listening for a real SYN-ACK reply.
 
-    يعتمد على مخرج JSON الصادر من راو-سوكيت:
-      - open:     تلقى SYN-ACK.
-      - closed:   تلقى RST.
-      - filtered: انتهت المهلة أو قيود مقبس خام.
+    Relies on the JSON output from the raw socket:
+      - open:     received a SYN-ACK.
+      - closed:   received RST.
+      - filtered: timed out or raw-socket restrictions.
 
-    عند تعثّر الصلاحيات أو غياب الثنائي، يسقط أمنًا إلى المقبس القياسي.
+    If privileges fail or the binary is missing, it falls back safely to the
+    standard socket.
     """
     ok, out = _run(RAWSYNC, [host, str(port)], timeout=timeout)
     if not ok:
-        # سقوط أمن إلى المقبس القياسي عند قيود النظام
+        # safety fallback to the standard socket under system restrictions
         return discover_ports(host, ports=[port], timeout=2.0) and {"module": "discovery", "host": host, "port": port, "open": True, "source": "fallback(socket)"} or {"module": "discovery", "host": host, "port": port, "open": False, "source": "fallback(socket)"}
 
-    # محاولة قراءة مخرج JSON من الثنائي
+    # try to read the JSON output from the binary
     try:
         data = json.loads(out.strip())
         state = data.get("state", "filtered")
@@ -97,5 +98,5 @@ def native_syn_probe(host: str, port: int, timeout: float = 5.0) -> dict:
             "note": data.get("error", "")
         }
     except json.JSONDecodeError:
-        # Fallback قياسي
+        # standard fallback
         return {"module": "discovery", "host": host, "port": port, "open": False, "source": "native(Go-raw:parse-error)", "raw_out": out}

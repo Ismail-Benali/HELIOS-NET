@@ -1,8 +1,8 @@
 """HELIOS-NET :: modules/internal/subnet_discovery.py
 Internal Subnet & Routing Table Discovery Module.
 
-Parses local or compromised host routing tables and interface configurations
-to dynamically map internal private subnets for lateral movement expansion.
+Parses local host routing tables and interface configurations
+to dynamically map internal private subnets for network topology awareness.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
-"""HELIOS-NET :: نقطة الدخول الرئيسية.
+"""HELIOS-NET :: main entry point.
 
-التشغيل من جذر المشروع:
+Run from the project root:
     python run.py recon --target example.test
     python run.py judge --target example.test
     python run.py recover <campaign_id>

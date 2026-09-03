@@ -1,12 +1,13 @@
 """HELIOS-NET :: engine/algorithms/balancing.py
-فئة خوارزميات الموازنة — أمثلة حيّة لكيف يعمل نظام التوسّع.
+Balancing algorithm family — live examples of how the extensibility works.
 
-تعرض فئتين مقابلتين لنفس الواجهة:
-  - lpt:      التوزيع الجشع الحالي (Longest Processing Time).
-  - brute:    توزيع مثالي عبر بحث عمق-أول مع تقليم (أدق، أغلى).
+Exposes two contrasting classes behind the same interface:
+  - lpt:      the current greedy distribution (Longest Processing Time).
+  - brute:    optimal distribution via pruned depth-first search (slower, costlier).
 
-كلتاهما تحلّ المسألة نفسها: توزيع وظائف بأوزان على عدد عمال بحيث
-يُصغَّر أطول عُمّد (makespan) — وهما نقطة دليل على قابلية التوسّع.
+Both solve the same problem: distributing weighted jobs over a number of
+workers so the longest column (makespan) is minimized — a demonstration of
+extensibility.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from . import register_algo
 
 @dataclass
 class LoadResult:
-    """نتيجة توزيع: دلاء مؤشرات (indices) إلى القائمة الأصلية + makespan."""
+    """Load distribution result: index buckets into the original list + makespan."""
     buckets: list[list[int]]
     makespan: float
 
@@ -27,9 +28,9 @@ class LoadResult:
 
 
 def _lpt(weights: list[float], workers: int) -> LoadResult:
-    """جشع LPT: يرتّب الأثقل أولًا ويضعه على أصغر محمّل حاليًا.
+    """Greedy LPT: orders the heaviest first and places it on the least loaded.
 
-    يعمل على (مؤشر، ثقل) فيُحفظ الربط بالمصدر الأصلي.
+    Works on (index, weight) pairs so the link to the original source is kept.
     """
     indexed = sorted(enumerate(weights), key=lambda x: x[1], reverse=True)
     buckets: list[list[int]] = [[] for _ in range(workers)]
@@ -42,10 +43,10 @@ def _lpt(weights: list[float], workers: int) -> LoadResult:
 
 
 def _brute(weights: list[float], workers: int) -> LoadResult:
-    """بحث عمق-أول للتوازن الأمثل (+ تقليم + كسر تناظر العمال).
+    """Depth-first search for optimal balancing (+ pruning + worker symmetry tiebreak).
 
-    يبني دلاء مؤشرات، فيبقى الربط بالمصدر محفوظًا. أغلى من LPT —
-    مثال حيّ على أن تبديل الخوارزمية مؤثر لا تجميلي.
+    Builds index buckets, keeping the link to the source intact. Costlier than LPT —
+    a live example that switching algorithms is functional, not cosmetic.
     """
     best = (None, float("inf"))
     buckets: list[list[int]] = [[] for _ in range(workers)]
@@ -58,7 +59,7 @@ def _brute(weights: list[float], workers: int) -> LoadResult:
                 best = ([list(b) for b in buckets], mk)
             return
         if max(loads) >= best[1]:
-            return  # تقليم: لا يمكن تحسين حل يتجاوز الأفضل.
+            return  # prune: cannot improve on a solution that already beats the best.
         seen: set[float] = set()
         for w in range(workers):
             if loads[w] in seen:
@@ -72,18 +73,18 @@ def _brute(weights: list[float], workers: int) -> LoadResult:
 
     dfs(0, [0.0] * workers)
     if best[0] is None:
-        return _lpt(weights, workers)  # سقوط أمان.
+        return _lpt(weights, workers)  # safety fallback.
     return LoadResult(buckets=best[0], makespan=best[1])
 
 
-# -- التسجيل في السجل المركزي -------------------------------------------
+# -- registration in the central registry ----------------------------------
 register_algo("balancing", "lpt", _lpt, default=True)
 register_algo("balancing", "brute", _brute)
 
 
 def solve(kind: str = "lpt", weights: list[float] | None = None,
           workers: int = 3) -> LoadResult:
-    """البوابة العامّة — يستدعيها المحرّك عند تغيير الخوارزمية."""
+    """The public gateway — invoked by the engine when switching algorithms."""
     from . import get_algo
     if not weights:
         return LoadResult(buckets=[[] for _ in range(workers)], makespan=0.0)

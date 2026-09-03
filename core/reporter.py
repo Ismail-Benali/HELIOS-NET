@@ -1,10 +1,11 @@
 """HELIOS-NET :: core/reporter.py
-مولّد التقارير الاستخباراتية الشاملة (Executive Briefing).
+Generates comprehensive intelligence reports (Executive Briefing).
 
-يستخلص من حالة الحملة وتقارير المنسّق تقريرًا عالي المستوى يوضح:
-  - الملخص التنفيذي والحالة.
-  - أهم الأصول المستهدفة (Top Targets من الرسم البياني).
-  - تفاصيل الاكتشافات والأحداث.
+Distills a high-level report from the campaign state and orchestrator
+reports, covering:
+  - The executive summary and status.
+  - The top priority targets (Top Targets from the graph).
+  - Discovery and event details.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from .state import CampaignState
 
 
 def generate_executive_briefing(state: CampaignState, report_data: dict) -> str:
-    """يُصدر تقريرًا استخباراتيًا بصيغة Markdown نظيفة."""
+    """Emits a clean Markdown intelligence report."""
     lines = [
         f"# HELIOS-NET :: BRIEFING REPORT",
         f"**Campaign ID:** `{state.campaign_id}`",
@@ -39,7 +40,7 @@ def generate_executive_briefing(state: CampaignState, report_data: dict) -> str:
     ])
 
     timeline = report_data.get("timeline", [])
-    for ev in timeline[-10:]:  # آخر 10 أحداث
+    for ev in timeline[-10:]:  # last 10 events
         lines.append(f"- `[{round(ev.get('ts', 0), 2)}]` **{ev.get('event')}**: `{ev.get('module', 'core')}`")
 
     return "\n".join(lines)

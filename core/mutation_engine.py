@@ -50,5 +50,5 @@ class MutationEngine:
             "generation": self.mutation_generation,
             "traces_shredded": shredded_files,
             "new_mutation_key": new_mutation_key[:12] + "...",
-            "action": "Redirecting orchestrator to alternate attack path."
+            "action": "Redirecting orchestrator to an alternate route."
         }

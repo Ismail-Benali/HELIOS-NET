@@ -1,11 +1,12 @@
-"""HELIOS-NET :: engine/algorithms — نظام الخوارزميات القابلة للتبديل.
+"""HELIOS-NET :: engine/algorithms — the swappable algorithm system.
 
-أدراج الفئات الفرعية (balancing, fingerprint, ...) تلقائيًا كي يُملأ
-السجل المركزي بمجرد استيراد الحزمة.
+Imports the algorithm subclasses (balancing, fingerprint, ...) automatically
+so the central registry is populated as soon as the package is imported.
 
-الفلسفة:
-  كل خوارزمية مسجَّلة في سجل مركزي موحّد، تحمل اسماً وواجهة ثابتة.
-  تبديل الخوارزمية (توزيع، بصمة، ...) يتم بالاسم دون لمس النواة.
+Philosophy:
+  Every algorithm is registered in a unified central registry and carries a
+  name and a fixed interface. Switching an algorithm (balancing, fingerprint,
+  ...) is done by name without touching the core.
 """
 
 from __future__ import annotations
@@ -18,16 +19,16 @@ T = TypeVar("T")
 
 
 class AlgorithmError(Exception):
-    """خطأ تنفيذ خوارزمية — يُعزل كي لا يُسقط الحملة."""
+    """Execution error of an algorithm — isolated so it cannot drop a campaign."""
 
 
-# سجل مركزي: فئة الخوارزمية -> {اسم الخوارزمية -> مُنشئ/دالة}. نموذج عام.
+# Central registry: algorithm kind -> {algorithm name -> factory/function}. Generic model.
 ALGO_REGISTRY: dict[str, dict[str, Callable[..., T]]] = {}
 DEFAULT_FALLBACK = "__default__"
 
 
 def register_algo(kind: str, name: str, factory: Callable[..., T], default: bool = False) -> None:
-    """يسجّل خوارزمية في الفئة المعنية، مع اختيار الاحتياطية الافتراضية."""
+    """Registers an algorithm in its kind, optionally as the default fallback."""
     bucket = ALGO_REGISTRY.setdefault(kind, {})
     bucket[name] = factory
     if default:
@@ -35,7 +36,7 @@ def register_algo(kind: str, name: str, factory: Callable[..., T], default: bool
 
 
 def get_algo(kind: str, name: str | None = None):
-    """يستخرج خوارزمية، مع سقوط أمن إلى الاحتياطية عند الغياب."""
+    """Retrieves an algorithm, with a safe fallback to the default when absent."""
     bucket = ALGO_REGISTRY.get(kind)
     if not bucket:
         raise AlgorithmError(f"no algorithm class {kind!r}")
@@ -52,7 +53,7 @@ def list_algos(kind: str | None = None) -> dict:
     return {k: sorted(v.keys()) for k, v in ALGO_REGISTRY.items()}
 
 
-# تحميل فئات الخوارزميات الفرعية المسجَّلة تلقائيًا.
+# Load the algorithm subclasses and register them automatically.
 for _m in ("balancing", "fingerprint"):
     try:
         importlib.import_module(f".{_m}", __name__)

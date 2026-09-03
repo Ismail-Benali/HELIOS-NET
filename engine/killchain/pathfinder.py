@@ -1,10 +1,10 @@
 """HELIOS-NET :: engine/killchain/pathfinder.py
-محرك مسار الهجوم وسلاسل الثغرات (Autonomous Kill-Chain & Pathfinder Engine).
+Least-Resistance Path & Planning Engine.
 
-المميزات:
-  - تطبيق خوارزمية Dijkstra لاحتساب مسار المقاومة الأدنى (Least Resistance Path).
-  - محاكاة سلاسل الثغرات والحركة الجانبية (Lateral Movement & Pivoting).
-  - توليد خطة هجوم آلية تفصيلية (Automated Kill-Chain Plan).
+Features:
+  - Applies Dijkstra's algorithm to compute the Least Resistance path.
+  - Models multi-step engagement routes and pivoting.
+  - Generates a structured, automated engagement plan.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from engine.graph.core import AssetGraph
 
 
 class KillChainEngine:
-    """محرك مسارات الاختراق وسلاسل القتل (Kill-Chain)."""
+    """Least-resistance path and engagement-plan engine."""
 
-    # أوزان افتراضية لمقاومة الخدمات (كلما قل الوزن، زادت سهولة الاستغلال)
+    # Default resistance weights per service (lower weight = easier reach)
     SERVICE_COSTS = {
         "http": 2.0,
         "https": 2.5,
@@ -33,11 +33,11 @@ class KillChainEngine:
         self.graph = graph
 
     def find_attack_path(self, entry_node: str, crown_jewel: str) -> Tuple[List[str], float]:
-        """يحسب أقصر مسار هجوم (Least Resistance Path) باستخدام خوارزمية Dijkstra."""
+        """Computes the shortest path (Least Resistance) using Dijkstra's algorithm."""
         if entry_node not in self.graph.nodes or crown_jewel not in self.graph.nodes:
             return [], float("inf")
 
-        # طابور أولوية لـ Dijkstra: (cumulative_cost, current_node, path_history)
+        # Dijkstra priority queue: (cumulative_cost, current_node, path_history)
         pq: List[Tuple[float, str, List[str]]] = [(0.0, entry_node, [entry_node])]
         visited: Dict[str, float] = {entry_node: 0.0}
 
@@ -54,7 +54,7 @@ class KillChainEngine:
                 if neighbor not in self.graph.nodes:
                     continue
                 
-                # حساب تكلفة الانتقال للجار
+                # compute transition cost to neighbor
                 node_meta = self.graph.nodes[neighbor]
                 kind = node_meta.get("kind", "unknown")
                 name = node_meta.get("name", "unknown").lower()
@@ -69,7 +69,7 @@ class KillChainEngine:
         return [], float("inf")
 
     def simulate_chaining(self, path: List[str]) -> List[dict]:
-        """يحاكي سلسلة الثغرات والحركة الجانبية خطوة بخطوة بناءً على المسار."""
+        """Models a step-by-step engagement route based on the computed path."""
         chain = []
         for i in range(len(path) - 1):
             src = path[i]
@@ -78,16 +78,16 @@ class KillChainEngine:
             src_meta = self.graph.nodes.get(src, {})
             dst_meta = self.graph.nodes.get(dst, {})
             
-            action = "Pivot / Lateral Movement"
-            tactic = "Access"
+            action = "Route to adjacent node"
+            tactic = "Discovery"
             
             if src_meta.get("kind") == "host" and dst_meta.get("kind") == "service":
                 svc_name = dst_meta.get("name", "service")
-                action = f"Exploit exposed service ({svc_name}) on target"
-                tactic = "Initial Access"
+                action = f"Reach exposed service ({svc_name}) on target"
+                tactic = "Reconnaissance"
             elif dst_meta.get("kind") == "database" or "sql" in str(dst_meta).lower():
-                action = "Data Exfiltration & Credential Harvesting"
-                tactic = "Collection"
+                action = "Collect exposed data store output"
+                tactic = "Assessment"
 
             chain.append({
                 "step": i + 1,
@@ -100,26 +100,26 @@ class KillChainEngine:
         return chain
 
     def generate_kill_chain_plan(self, entry_node: str, crown_jewel: str) -> str:
-        """يولّد خطة هجوم آلية تفصيلية (Automated Kill-Chain Plan)."""
+        """Generates a structured, automated engagement plan."""
         path, total_cost = self.find_attack_path(entry_node, crown_jewel)
         if not path:
-            return f"[!] لا يمكن العثور على مسار هجوم متاح من '{entry_node}' إلى '{crown_jewel}'."
+            return f"[!] No reachable path found from '{entry_node}' to '{crown_jewel}'."
 
         chain = self.simulate_chaining(path)
 
         report = [
-            "# HELIOS-NET :: AUTOMATED KILL-CHAIN PLAN",
+            "# HELIOS-NET :: ENGAGEMENT ROUTE PLAN",
             f"**Entry Point:** `{entry_node}`",
-            f"**Crown Jewel (Target):** `{crown_jewel}`",
-            f"**Calculated Risk / Resistance Cost:** `{total_cost}`",
+            f"**Priority Asset:** `{crown_jewel}`",
+            f"**Calculated Resistance Cost:** `{total_cost}`",
             "",
-            "## Tactical Attack Steps (Kill-Chain)",
+            "## Route Steps",
         ]
 
         for step in chain:
             report.append(f"### Step {step['step']}: {step['tactic']}")
-            report.append(f"- **Route:** `{step['from']}` ➔ `{step['to']}`")
-            report.append(f"- **Execution:** {step['action']}")
+            report.append(f"- **Route:** `{step['from']}` -> `{step['to']}`")
+            report.append(f"- **Action:** {step['action']}")
             report.append("")
 
         return "\n".join(report)

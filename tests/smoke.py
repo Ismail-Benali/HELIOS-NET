@@ -1,11 +1,11 @@
-"""HELIOS-NET :: اختبار ذاتي (لا يتطلب مكتبات خارجية).
+"""HELIOS-NET :: self-test (no external libraries required).
 
-التشغيل:
-    python -m pytest tests/ -q      (إن توفّر pytest)
-    python tests/smoke.py           (اختبار خفيف مباشر)
+Run:
+    python -m pytest tests/ -q      (if pytest is available)
+    python tests/smoke.py           (lightweight direct test)
 
-يغطي: state, planner, orchestrator (ذي وحدات وهمية), scanner (LPT),
-verdict, modules (discovery على loopback/مضيف محلي آمن).
+Covers: state, planner, orchestrator (with mock modules), scanner (LPT),
+verdict, modules (discovery on loopback/safe local host).
 """
 
 from __future__ import annotations
@@ -47,9 +47,9 @@ def test_planner_waves():
         {"module": "recon", "action": "fingerprint", "priority": 20},
     ], "lab.test")
     waves = p.schedule(steps)
-    # لا دفعة تتجاوز حد التوازي.
+    # no batch exceeds the concurrency limit.
     assert all(len(w) <= 2 for w in waves)
-    # exfil تجمعي في النهاية: يعتمد على كل الخطوات.
+    # exfil is aggregate at the end: it depends on all the steps.
     exfil = [s for s in steps if s.module == "exfil"]
     assert exfil and len(exfil[0].depends_on) == len(steps) - 1
     print("planner: OK")
@@ -90,7 +90,7 @@ def test_scanner_balancing():
     s = Scanner(max_workers=3)
     tasks = [ScanTask(name=f"t{i}", fn=lambda i=i: {"i": i}, weight=float(i + 1)) for i in range(5)]
     batches = s.balanced_batches(tasks, 3)
-    # التأكد من أن لكل دفعة أصغر من أو تساوي حد العمداء للأوزان.
+    # verify that each batch is at or below the worker load limit.
     loads = [sum(t.weight for t in b) for b in batches]
     assert len(batches) == 3
     results = s.scan(tasks)
@@ -112,12 +112,12 @@ def test_algorithm_registry():
     from engine.algorithms.balancing import solve as bal_solve
     from engine.algorithms.fingerprint import fingerprint_sig
 
-    # تبديل خوارزمية التوزيع مؤثر فعليًا.
+    # switching the balancing algorithm is genuinely effective.
     w = [5, 4, 3, 2, 1]
     assert bal_solve("lpt", w, 3).makespan == 5.0
     assert bal_solve("brute", w, 3).makespan == 5.0
 
-    # تبديل نموذج البصمة.
+    # switching the fingerprint model.
     assert fingerprint_sig({"ttl": 64}, "ttl_flat")["guess"] == "linux"
     assert fingerprint_sig({"ttl": 127, "window": 65535, "tcp_options_len": 40}, "bayes")["guess"] == "windows"
 
@@ -152,7 +152,7 @@ def test_custom_arsenal():
     from modules.discovery.dns_resolver import EliteDNSResolver
     from core.async_engine import enterprise_adaptive_recon
 
-    # 1. اختبار Transactional WAL مع Begin/Commit
+    # 1. test the Transactional WAL with Begin/Commit
     with tempfile.TemporaryDirectory() as tmp:
         wal_file = Path(tmp) / "trans.wal"
         wal = TransactionalWAL(wal_file)
@@ -162,18 +162,18 @@ def test_custom_arsenal():
         records = wal.replay()
         assert len(records) == 1 and records[0]["op"] == "TXN_OP"
 
-    # 2. اختبار Aho-Corasick Automaton
+    # 2. test the Aho-Corasick Automaton
     ac = AhoCorasickMatcher()
     ac.load_defaults()
     hits = ac.match("Running OpenSSH and Nginx server securely.")
     assert len(hits) >= 2
 
-    # 3. اختبار Elite DNS Resolver
+    # 3. test the Elite DNS Resolver
     resolver = EliteDNSResolver()
     ips = asyncio.run(resolver.resolve("localhost"))
     assert isinstance(ips, list)
 
-    # 4. اختبار Adaptive Recon Engine
+    # 4. test the Adaptive Recon Engine
     recon_res = asyncio.run(enterprise_adaptive_recon("127.0.0.1", [80]))
     assert isinstance(recon_res, list)
 
@@ -196,8 +196,8 @@ def test_killchain_engine():
     assert len(path) == 2 and cost > 0
 
     plan = engine.generate_kill_chain_plan("host:10.0.0.1", "svc:10.0.0.1:22/ssh")
-    assert "AUTOMATED KILL-CHAIN PLAN" in plan
-    print("killchain_engine: OK (Dijkstra pathfinding & Kill-Chain verified)")
+    assert "ENGAGEMENT ROUTE PLAN" in plan
+    print("killchain_engine: OK (Dijkstra pathfinding & route planning verified)")
 
 
 def test_lateral_movement():

@@ -1,13 +1,16 @@
 """HELIOS-NET :: modules/recon/fingerprint.py
-استطلاع عميق: بصمة نظام التشغيل من TTL والسلوك.
+Deep reconnaissance: OS fingerprinting from TTL and behavior.
 
-العقد:
-  - يستخلص بصمة أولية من قيم TTL/IP-ID لاستقبال حزم (نموذج هزلي في المنطق).
-  - لا يحتاج صلاحيات root — يقرأ فقط ما يعود من توصيلات قياسية.
-  - نقطة الامتداد: ربط الـ C fingerprint (transport/) هنا عند التجهيز.
+Contract:
+  - Derives a preliminary fingerprint from TTL/IP-ID values of received packets
+    (a heuristic model in the logic).
+  - Requires no root privileges — it only reads what standard connections
+    return.
+  - Extension point: hook in the C fingerprint (transport/) here once built.
 
-ملاحظة:
-  - يمثل هذا رأيًا تقديريًا يستحق التحقق، لا حكمًا نهائيًا — البصمة علم احتمالي.
+Note:
+  - This represents an estimate worth verifying, not a final judgment —
+    fingerprinting is a probabilistic science.
 """
 
 from __future__ import annotations
@@ -20,14 +23,16 @@ from transport import FINGERPRINT, _run
 
 
 def fingerprint_native(host: str, observed_ttl: int | None = None) -> dict | None:
-    """يستدعي ثنائي C fingerprint عبر subprocess إن بُني.
+    """Invokes the C fingerprint binary via subprocess if built.
 
     Arg:
-      host: مضيف الهدف.
-      observed_ttl: قيمة TTL مقيسة؛ إن غابت نُمرّر فترة هزلية من المضيف.
+      host: the target host.
+      observed_ttl: the measured TTL value; if absent, a heuristic value is
+                    passed from the host.
 
     Returns:
-      صحيفة بصمة مع source="native(C)" أو None عند تغيّب الثنائي.
+      A fingerprint sheet with source="native(C)" or None when the binary is
+      missing.
     """
     ttl = observed_ttl if observed_ttl is not None else 64
     ok, out = _run(FINGERPRINT, [str(ttl)], timeout=5.0)
@@ -42,7 +47,7 @@ def fingerprint_native(host: str, observed_ttl: int | None = None) -> dict | Non
 
 
 def _platform_default_family() -> str:
-    """قيمة بصمة من بيئة النظام المضيف (تجريبية/للمختبر)."""
+    """Fingerprint value from the host system environment (experimental/lab)."""
     sys = platform.system().lower()
     if sys == "windows":
         return "Windows (TTL≈128)"
@@ -54,20 +59,23 @@ def _platform_default_family() -> str:
 
 
 def fingerprint_host(host: str, observed_sig: dict | None = None) -> dict:
-    """يُنتج تقدير بصمة عالي الدقة من الهدف عبر خوارزمية بايز المتعددة الدلائل.
+    """Produces a high-accuracy fingerprint estimate of the target via the
+    multi-signal Bayes algorithm.
 
     Arg:
-      host: مضيف الهدف.
-      observed_sig: إشارة مرصودة تتضمن ttl, window, tcp_options_len إن توفرت.
+      host: the target host.
+      observed_sig: an observed signal including ttl, window, tcp_options_len if
+                    available.
 
     Returns:
-      صحيفة بصمة دقيقة بنمط {module, host, os_guess, confidence, method, source}.
+      A precise fingerprint sheet shaped like
+      {module, host, os_guess, confidence, method, source}.
     """
     from engine.algorithms.fingerprint import fingerprint_sig
 
     sig = observed_sig or {"ttl": 64, "window": 64240, "tcp_options_len": 20}
     
-    # محاولة استخدام البصمة البايزية المتقدمة
+    # try the advanced Bayesian fingerprint first
     try:
         bayes_res = fingerprint_sig(sig, kind="bayes")
         return {
@@ -81,7 +89,7 @@ def fingerprint_host(host: str, observed_sig: dict | None = None) -> dict:
     except Exception:
         pass
 
-    # احتياطي إلى C أو محلي
+    # fall back to C or local
     native = fingerprint_native(host)
     if native is not None:
         return native
@@ -95,16 +103,16 @@ def fingerprint_host(host: str, observed_sig: dict | None = None) -> dict:
 
 def banner_grab(host: str, port: int, timeout: float = 3.0,
                 probe: bytes = b"\r\n") -> dict:
-    """يلتقط لافتة (banner) لخدمة مفتوحة عبر اتصال.
+    """Grabs the banner of an open service over a connection.
 
     Arg:
-      host: مضيف الهدف.
-      port: منفذ الخدمة المفتوحة.
-      timeout: مهلة الاستقبال.
-      probe: بايت الإرسال الأول (إفطاضي).
+      host: the target host.
+      port: the open service port.
+      timeout: receive timeout.
+      probe: the first bytes sent (default).
 
     Returns:
-      صحيفة لافتة نصية.
+      A text banner sheet.
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)

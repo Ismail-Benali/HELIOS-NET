@@ -1,14 +1,15 @@
 """HELIOS-NET :: modules/core.py
-نظام توصيل الوحدات (Module Spawner) — توسّع الوحدات بلا لمس النواة.
+Module spawner system — extending modules without touching the core.
 
-الفلسفة:
-  بدل سجل إعداد يدوي ثابت، كل وحدة مستقلة تُسجَّل نفسها عبر زخرفة
-  `@module()` وتعلن: اسمها، فئتها، و«منفّذها» (runner). ثم يُكشف أي
-  مجلد جديد تلقائيًا ويُحمَّل. النظام يبقى قابلاً للنمو دون إعادة بناء.
+Philosophy:
+  Instead of a fixed manual registration list, each standalone module registers
+  itself via the `@module()` decorator and declares its name, kind, and runner.
+  Any new folder is then auto-discovered and loaded. The system stays growable
+  without a rebuild.
 
-العقد:
-  - الوحدة: كائن يحمل name, kind, runner, ورابط إلى جوهرة مهمتها.
-  - السجل عام: يمكن للمحرك أو المنسّق الاستعلام عنه بأي وقت.
+Contract:
+  - A module: an object holding name, kind, runner, and a link to its task core.
+  - The registry is global: the engine or orchestrator can query it anytime.
 """
 
 from __future__ import annotations
@@ -25,19 +26,19 @@ Runner = Callable[..., dict]
 
 @dataclass
 class ModuleSpec:
-    """مواصفة وحدة مسجَّلة."""
+    """A registered module spec."""
     name: str
     kind: str
     runner: Runner
     params: dict = field(default_factory=dict)
 
 
-# السجل العام — وحيد لكل عملية.
+# The global registry — unique per process.
 _MODULES: dict[str, ModuleSpec] = {}
 
 
 def module(name: str, kind: str = "generic", **params):
-    """زخرفة لوحدة: تُسجّل في السجل بمجرد استيراده.
+    """Decorator for a module: registers it in the registry on import.
 
     Example:
         @module("dns_enum", kind="discovery", timeout=3)
@@ -60,10 +61,10 @@ def list_modules(kind: str | None = None) -> list[ModuleSpec]:
 
 
 def load_package(module_path: str) -> int:
-    """يستورد حزمة/مجلدًا، فيتسبّب في تسجيل كل وحداته المزيّنة.
+    """Imports a package/folder, causing all its decorated modules to register.
 
     Returns:
-      عدد الوحدات الجديدة المسجّلة بعد الاستيراد.
+      The number of newly registered modules after import.
     """
     before = set(_MODULES)
     importlib.import_module(module_path)
@@ -71,12 +72,12 @@ def load_package(module_path: str) -> int:
 
 
 def discover(scan_dir: Path) -> int:
-    """يكشف ويستورد كل ملفات .py جديدة في مجلد، مسجّلًا وحداتها.
+    """Discovers and imports every new .py file in a folder, registering its modules.
 
-    تخطّى الملفات التي نشرت نفسها سابقًا (لا إعادة تسجيل مزدوجة).
+    Skips files that already registered themselves (no double registration).
 
     Returns:
-      عدد الوحدات الجديدة.
+      The number of new modules.
     """
     before = set(_MODULES)
     sys.path.insert(0, str(scan_dir))
@@ -86,5 +87,5 @@ def discover(scan_dir: Path) -> int:
         try:
             importlib.import_module(py.stem)
         except Exception:
-            continue  # وحدة تالفة تتخطّى — لا تُسقط الاكتشاف.
+            continue  # a broken module is skipped — it does not drop discovery.
     return len(set(_MODULES) - before)
