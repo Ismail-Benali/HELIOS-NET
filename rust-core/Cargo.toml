@@ -1,0 +1,17 @@
+// HELIOS-NET :: rust-core — نوى مشفّرة عالية الأداء (مرحلة متقدمة)
+//
+// يعاد استخدامه لاحقًا: تسريع منطق البصمة/التجزئة والإيقاع دون تكلفة GIL.
+// هذه ملفّ Cargo افتراضي جاهز للبنية — تُؤطَّر عند توفر cargo.
+//
+// تُجمَّع عبر:
+//   cargo build --release
+[package]
+name = "helios_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "helios_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]

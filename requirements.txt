@@ -1,0 +1,2 @@
+# dependencies required only for the high-performance transport layer
+# core (state/planner/orchestrator/engine/cli) uses only the stdlib.

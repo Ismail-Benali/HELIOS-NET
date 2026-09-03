@@ -1,0 +1,5 @@
+data/campaigns/
+data/*.jsonl
+__pycache__/
+*.pyc
+*.exe
