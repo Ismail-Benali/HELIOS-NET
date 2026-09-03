@@ -1,8 +1,11 @@
 // HELIOS-NET :: rust-core/src/lib.rs
-// High-performance Rust Core Module for Graph Pathfinding, TTL Analysis, and Secure Checksums.
+// High-performance Rust Core Module with FFI C-ABI Exports, Dijkstra Pathfinding, TTL Analysis, and Secure Checksums.
 
 use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Ordering;
+use std::os::raw::{c_char, c_double, c_int};
+use std::ffi::{CStr, CString};
+use std::ptr;
 
 /// Represents a weighted directed graph for route planning and attack surface traversal.
 #[derive(Default, Clone)]
@@ -108,6 +111,80 @@ pub fn compute_checksum(data: &[u8]) -> u64 {
         hash = hash.wrapping_mul(0x100000001B3);
     }
     hash
+}
+
+// ============================================================================
+// FFI C-ABI EXPORTS (Zero-Dependency Python ctypes Bridge)
+// ============================================================================
+
+#[no_mangle]
+pub extern "C" fn helios_graph_new() -> *mut RustAssetGraph {
+    Box::into_raw(Box::new(RustAssetGraph::new()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn helios_graph_free(ptr: *mut RustAssetGraph) {
+    if !ptr.is_null() {
+        let _ = Box::from_raw(ptr);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn helios_graph_add_edge(
+    ptr: *mut RustAssetGraph,
+    from: *const c_char,
+    to: *const c_char,
+    cost: c_double,
+) {
+    if ptr.is_null() || from.is_null() || to.is_null() {
+        return;
+    }
+    let graph = &mut *ptr;
+    let c_from = CStr::from_ptr(from);
+    let c_to = CStr::from_ptr(to);
+    if let (Ok(s_from), Ok(s_to)) = (c_from.to_str(), c_to.to_str()) {
+        graph.add_edge(s_from, s_to, cost);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn helios_graph_shortest_path(
+    ptr: *mut RustAssetGraph,
+    start: *const c_char,
+    goal: *const c_char,
+    out_buf: *mut c_char,
+    out_len: usize,
+) -> c_int {
+    if ptr.is_null() || start.is_null() || goal.is_null() || out_buf.is_null() {
+        return -1;
+    }
+    let graph = &*ptr;
+    let c_start = CStr::from_ptr(start);
+    let c_goal = CStr::from_ptr(goal);
+
+    let (s_start, s_goal) = match (c_start.to_str(), c_goal.to_str()) {
+        (Ok(a), Ok(b)) => (a, b),
+        _ => return -1,
+    };
+
+    if let Some((path, _cost)) = graph.shortest_path(s_start, s_goal) {
+        let path_str = path.join(",");
+        let bytes = path_str.as_bytes();
+        if bytes.len() >= out_len {
+            return -2;
+        }
+        ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, out_buf, bytes.len());
+        *out_buf.add(bytes.len()) = 0;
+        bytes.len() as c_int
+    } else {
+        -1
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn helios_ttl_family(ttl: c_int) -> *const c_char {
+    let family = ttl_family(ttl);
+    CString::new(family).unwrap().into_raw()
 }
 
 #[cfg(test)]
