@@ -1,5 +1,6 @@
-"""HELIOS-NET :: modules/plugins — حزمة الوحدات الموسّعة.
+"""HELIOS-NET :: modules/plugins — the extended modules package.
 
-أضِف أي وحدة استراتيجية جديدة كملف .py هنا، وسيُكتشف ويُحمَّل تلقائيًا
-عبر modules.core.discover — دون تعديل أي سجل يدوي.
+Add any new strategic module as a .py file here and it will be discovered and
+loaded automatically via modules.core.discover — without editing any manual
+registry.
 """

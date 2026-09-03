@@ -89,7 +89,7 @@ class Planner:
             steps.append(self._mk("stealth", it.get("action", "pace"), target,
                                   self.MODULE_PRIORITY["stealth"], depends_on=[s.step_id for s in steps]))
 
-        # 4) Exfiltration and collection
+        # 4) Data collection / reporting
         if steps:
             steps.append(self._mk("exfil", "collect", target,
                                   self.MODULE_PRIORITY["exfil"], depends_on=[s.step_id for s in steps]))

@@ -1,6 +1,6 @@
-"""HELIOS-NET :: engine/graph — معمارية الأصول وتحليل المركزيّة.
+"""HELIOS-NET :: engine/graph — asset architecture and centrality analysis.
 
-نظام تحويل الاكتشافات إلى رسم بياني للأصول، وترتيبها حسب الأهمية.
+Converts findings into an asset graph and ranks them by importance.
 """
 
 from .core import AssetGraph

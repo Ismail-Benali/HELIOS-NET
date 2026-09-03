@@ -1,9 +1,9 @@
 """HELIOS-NET :: modules/registry.py
-ربط الوحدات القابلة للتنفيذ بسجل المنسّق (Orchestrator).
+Links the executable modules to the orchestrator's registry.
 
-كل «منفّذ» (runner) يتلقى (step, ctx) ويُخرج صحيفة اكتشاف dict.
-هنا نلمّع الوحدات الأساسية عقدًا عامًا ثابتًا — فتصبح جاهزة للتسجيل في
-core/orchestrator دون تعديل النواة.
+Each runner receives (step, ctx) and emits a finding dict. Here we surface the
+core modules under a stable public contract — ready for registration in
+core/orchestrator without touching the core.
 """
 
 from __future__ import annotations
@@ -20,12 +20,12 @@ from modules.exfil.collector import Collector
 
 
 def discovery_runner(step: PlanStep, ctx: dict) -> dict:
-    """ينفّذ اكتشاف المنافذ على هدف الخطوة، مع ربط نواة Go إن بُنيَت."""
+    """Runs port discovery on the step's target, wiring in the Go core if built."""
     ports = step.params.get("ports")
     found = discover_ports(step.target, ports=ports)
     ctx.setdefault("findings", []).extend(found)
 
-    # ربط نواة الأداء: إرسال SYN خام عبر rawsync عند توفّره.
+    # wire in the performance core: send a raw SYN via rawsync when available.
     native_note = None
     if ports:
         native_note = native_syn_probe(step.target, ports[0])
@@ -38,7 +38,7 @@ def discovery_runner(step: PlanStep, ctx: dict) -> dict:
 
 
 def recon_runner(step: PlanStep, ctx: dict) -> dict:
-    """ينفّذ البصمة (أولوية لنواة C) والتقاط اللوافت من المنافذ المكتشفة."""
+    """Runs fingerprinting (C core preferred) and banner grabbing on discovered ports."""
     result = fingerprint_host(step.target)
     ctx.setdefault("findings", []).append(result)
     if result.get("source") == "native(C)":
@@ -47,7 +47,7 @@ def recon_runner(step: PlanStep, ctx: dict) -> dict:
 
 
 def stealth_runner(step: PlanStep, ctx: dict) -> dict:
-    """يطبّق إيقاعًا مسيَّرًا على الخطوات، ويُعيد إعداد الإيقاع."""
+    """Applies a paced cadence to the steps and returns the pacing settings."""
     pacer = Pacer(base_dwell=step.params.get("base_dwell", 0.2), jitter=step.params.get("jitter", 0.1))
     plan = ctx.get("plan", [])
     dwells = pacer.schedule(len(plan))
@@ -56,14 +56,14 @@ def stealth_runner(step: PlanStep, ctx: dict) -> dict:
 
 
 def exfil_runner(step: PlanStep, ctx: dict) -> dict:
-    """يجمع كل النتائج في Collector ويربطها بعينة السياق."""
+    """Collects all results into a Collector and links them to the context sample."""
     col = Collector()
     added = col.extend(ctx.get("findings", []))
     ctx["collected"] = added
     return {"module": "exfil", "collected": added, "total": len(ctx.get("findings", []))}
 
 
-# سجل موحّد — يُمرَّر إلى Orchestrator.register لكل وحدة.
+# Unified registry — passed to Orchestrator.register per module.
 def default_registry() -> dict:
     reg = {
         "discovery": discovery_runner,
@@ -76,10 +76,10 @@ def default_registry() -> dict:
 
 
 def discovered_plugins() -> dict:
-    """يكتشف الوحدات الموسّعة من مجلد plugins ويكشف منفّذيها في السجل.
+    """Discovers the extension modules in plugins/ and exposes their runners.
 
-    كل وحدة مسجَّلة عبر @module() تُضاف تلقائيًا — لا تعديل يدوي بعد الآن.
-    إن تعثّرت وحدة واحدة لا تُسقط الباقي.
+    Every module registered via @module() is added automatically — no more manual
+    edits. If one module fails it does not drop the rest.
     """
     out: dict[str, callable] = {}
     plugins_dir = Path(__file__).resolve().parent / "plugins"
@@ -89,6 +89,6 @@ def discovered_plugins() -> dict:
         return out
     for spec in list_modules():
         if spec.name in ("discovery", "recon", "stealth", "exfil"):
-            continue  # لا نستبدل الوحدات النواة — نضيف الجديد فقط.
+            continue  # don't replace core modules — only add new ones.
         out[spec.name] = spec.runner
     return out

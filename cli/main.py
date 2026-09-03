@@ -121,7 +121,7 @@ def cmd_daemon(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="helios", description="HELIOS-NET — Autonomous Cyber Warfare Orchestrator")
+    p = argparse.ArgumentParser(prog="helios", description="HELIOS-NET — Autonomous Red Teaming & Attack Surface Management Orchestrator")
     p.add_argument("--data", default=str(DEFAULT_DATA), help="Campaign data directory")
     sub = p.add_subparsers(dest="cmd", required=True)
 

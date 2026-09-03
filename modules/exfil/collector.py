@@ -1,10 +1,10 @@
 """HELIOS-NET :: modules/exfil/collector.py
-جمع وربط البيانات (findings) من مصادر الحملة.
+Collecting and correlating data (findings) from campaign sources.
 
-المسؤولية:
-  - يدمج نتائج الوحدات المتفرقة في مستودع واحد منظم.
-  - يضمّن الطوابع الزمنية ومعرّفات الحملة للتعقّب.
-  - يخصص إخراجًا نهائيًا (JSON/JSONL) جاهزًا للتقرير أو التخزين.
+Responsibilities:
+  - Merges the scattered module results into a single organized repository.
+  - Embeds timestamps and campaign identifiers for tracking.
+  - Produces a final (JSON/JSONL) output ready for reporting or storage.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import uuid
 
 
 class Collector:
-    """تجميع وايجار صحائف الاكتشافات."""
+    """Collects and aggregates finding sheets."""
 
     def __init__(self, campaign_id: str | None = None):
         self.campaign_id = campaign_id or uuid.uuid4().hex
@@ -23,7 +23,7 @@ class Collector:
         self._dedupe: set[tuple] = set()
 
     def add(self, finding: dict) -> bool:
-        """يضيف اكتشافًا (مع إزالة تكرار بسيط بمعرّف طبيعي)."""
+        """Adds a finding (with simple deduplication by a natural id)."""
         natural_id = (finding.get("module"), finding.get("host"), finding.get("port"), finding.get("service"))
         if natural_id in self._dedupe:
             return False

@@ -1,5 +1,5 @@
 """HELIOS-NET :: core/state.py
-إدارة حالة الحملة (campaign state) والمخزن الموزّع القابل للتبديل.
+Manages the campaign state and the swappable distributed store.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ class CampaignState:
 
 
 class StorageBackend(Protocol):
-    """عقد المخزن الموزّع للقابلية للتوسّع (Local / Redis / Postgres)."""
+    """Distributed store contract for scalability (Local / Redis / Postgres)."""
     def save(self, state: CampaignState) -> None: ...
     def load(self, campaign_id: str) -> CampaignState: ...
     def load_all(self) -> list[CampaignState]: ...
@@ -69,7 +69,7 @@ class StorageBackend(Protocol):
 
 
 class StateStore:
-    """مخزن الحالة المحلي القائم على ملفات JSONL المضمونة."""
+    """Local state store backed by durable JSONL files."""
 
     def __init__(self, data_dir: str | Path):
         self.data_dir = Path(data_dir)

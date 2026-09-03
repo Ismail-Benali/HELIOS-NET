@@ -1,10 +1,10 @@
 """HELIOS-NET :: modules/discovery/dns_resolver.py
-محلل DNS فائق الأداء متعدد التدفقات (Multiplexed Async DNS Resolver).
+High-performance multiplexed async DNS resolver.
 
-المميزات:
-  - دعم EDNS0 لطلبات واسعة النطاق وتجنب الاقتصار على UDP البسيط.
-  - تدوير تلقائي وخاصية الفشل الاحتياطي لخوادم الأسماء (Nameserver Failover).
-  - معالجة متزامنة لعشرات الاستعلامات عبر حزمة نقل واحدة.
+Features:
+  - EDNS0 support for wide requests, avoiding reliance on plain UDP alone.
+  - Automatic rotation and failover for nameservers.
+  - Concurrent handling of dozens of queries over a single transport.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Dict, List, Tuple
 
 
 class EliteDNSResolver:
-    """محلل DNS عالي الأداء مع Failover و EDNS0."""
+    """High-performance DNS resolver with failover and EDNS0."""
 
     def __init__(self, nameservers: List[str] | None = None, timeout: float = 1.5):
         self.nameservers = nameservers or ["8.8.8.8", "1.1.1.1", "8.8.4.4"]
@@ -26,7 +26,7 @@ class EliteDNSResolver:
 
     def _build_edns_query(self, domain: str, qtype: int = 1) -> bytes:
         tx_id = random.randint(0, 65535)
-        # الهيدر: QDCOUNT=1, ARCOUNT=1 (لإضافة EDNS0 OPT record)
+        # header: QDCOUNT=1, ARCOUNT=1 (to add the EDNS0 OPT record)
         header = struct.pack("!HHHHHH", tx_id, 0x0100, 1, 0, 0, 1)
         
         qname = bytearray()
@@ -109,7 +109,7 @@ class EliteDNSResolver:
             finally:
                 s.close()
 
-        # محاولة تدوير خوادم الأسماء عند فشل الأول (Failover)
+        # Try rotating through nameservers when the first one fails (failover)
         ips = []
         for ns in self.nameservers:
             ips = await asyncio.to_thread(_query_sync, ns)

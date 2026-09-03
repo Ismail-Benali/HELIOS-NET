@@ -3,7 +3,7 @@
 Copyright (c) 2026 Ismail Benali (H3l!0s_T3k)
 
 ## 1. Purpose & Scope
-HELIOS-NET is an autonomous polyglot cyber warfare and offensive reconnaissance orchestration framework engineered strictly for authorized security research, educational network defense training, and licensed red-teaming engagements.
+HELIOS-NET is an autonomous polyglot red teaming and attack surface management (ASM) orchestrator engineered strictly for authorized security research, educational network defense training, and licensed red-teaming engagements.
 
 ## 2. Prohibition of Commercial Use
 **Commercial use of this software is strictly prohibited.** You may not sell, rent, lease, sublicense, or distribute HELIOS-NET as part of any commercial product, security-as-a-service offering, or proprietary enterprise software without explicit written permission from the author.

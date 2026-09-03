@@ -1,8 +1,8 @@
-# HELIOS-NET :: Polyglot Cyber Warfare Architecture Blueprint
+# HELIOS-NET :: Polyglot Red Teaming & ASM Architecture Blueprint
 
-> **System Designation:** Autonomous Offensive Reconnaissance & Cyber Warfare Framework  
+> **System Designation:** Autonomous Attack Surface Management & Red Teaming Orchestrator  
 > **Architecture Style:** Polyglot Micro-Kernel & Sensor Mesh  
-> **Core Languages:** Python 3.12 (Orchestration & AI), Go (High-Concurrency Networking & Transport), C (Low-Level Sovereignty, Evasion & Memory Execution)
+> **Core Languages:** Python 3.12 (Orchestration & Planning), Go (High-Concurrency Networking & Transport), C (User-Mode Evasion Primitives & In-Memory Execution)
 
 ---
 
@@ -40,13 +40,13 @@
         | - covert.go (Polymorphic DNS Tunnel)|
         | - raft.go (Distributed Consensus)   |
         +-------------------------------------+
-        |          C SOVEREIGN (GCC -O3)      |
-        | - c_matcher.exe (Memory Matcher)    |
-        | - fingerprint.exe (TTL OS Engine)   |
-        | - evasion.exe (Direct Syscalls)     |
-        | - verifier.exe (Protocol Fuzzer)    |
-        | - kernel_filter.c (Ring 0 Driver)   |
-        +-------------------------------------+
+        |          C USER-MODE PRIMITIVES (GCC -O3) |
+        | - c_matcher.exe (Memory Matcher)          |
+        | - fingerprint.exe (TTL OS Engine)         |
+        | - evasion.exe (Indirect Syscalls)         |
+        | - memory_loader.exe (In-Memory Exec)      |
+        | - verifier.exe (Protocol Fuzzer)          |
+        +------------------------------------------+
 ```
 
 ---
@@ -54,27 +54,27 @@
 ## Polyglot Component Breakdown
 
 ### 1. The Mind (Python Core Layer)
-Responsible for state orchestration, intelligence planning, decision making, and AI/Graph analytics.
-* **`core/orchestrator.py` & `planner.py`:** Manages closed-loop intelligence cycles, dividing campaigns into parallel dependency waves.
+Responsible for state orchestration, planning, decision making, and graph analytics.
+* **`core/orchestrator.py` & `planner.py`:** Manages closed-loop intelligence cycles, dividing engagements into parallel dependency waves.
 * **`core/wal.py`:** Encrypted Transactional Write-Ahead Log (WAL) with HMAC-SHA256 integrity and atomic `BEGIN/COMMIT` operations.
-* **`engine/graph/core.py`:** Converts raw discoveries into an Asset Graph and calculates Degree Centrality to isolate high-value target assets.
-* **`engine/killchain/pathfinder.py`:** Implements Dijkstra's algorithm to calculate the Least Resistance Attack Path and simulates automated multi-step Kill-Chain plans.
-* **`core/mutation_engine.py`:** Autonomous self-healing engine that detects WAF/Honeypot traps, shreds local footprints, and triggers polymorphic mutation.
-* **`core/daemon.py`:** Continuous background execution daemon enabling zero-touch autonomous missions.
+* **`engine/graph/core.py`:** Converts raw discoveries into an Asset Graph and calculates Degree Centrality to isolate high-priority assets.
+* **`engine/killchain/pathfinder.py`:** Implements Dijkstra's algorithm to calculate the Least Resistance path and models multi-step engagement plans.
+* **`core/mutation_engine.py`:** Autonomous self-healing engine that detects bogus/honeypot traps, shreds local footprints, and triggers re-targeting.
+* **`core/daemon.py`:** Continuous background execution daemon enabling zero-touch autonomous monitoring.
 
-### 2. The Muscle & Network (Go Transport Layer)
+### 2. The Network (Go Transport Layer)
 Handles high-concurrency packet generation, raw socket communications, and distributed consensus without Python GIL bottlenecks.
 * **`transport/goscan/goscan.go`:** High-performance concurrent TCP port scanner powered by thousands of lightweight Goroutines.
 * **`transport/rawsocket/rawsync.go`:** Low-level raw socket engine that dispatches raw TCP SYN packets and listens for SYN-ACK/RST responses.
-* **`transport/tunnel/covert.go`:** Encrypts streams with AES-GCM and wraps data into polymorphic random-padded DNS queries to bypass DPI.
+* **`transport/tunnel/covert.go`:** Encrypts streams with AES-GCM and wraps data into polymorphic random-padded DNS queries.
 * **`core/consensus/raft.go`:** Raft-lite consensus state machine for decentralized node state synchronization.
 
-### 3. The Sovereign Core (C Low-Level Layer)
-Executes memory-speed pattern matching, anti-EDR evasion, system syscall manipulation, and kernel-level control.
-* **`transport/c_matcher/c_matcher.c`:** Zero-allocation, pointer-level signature analyzer operating at SIMD/memory bandwidth speed.
-* **`transport/evasion/evasion.c` & `direct_syscalls.c`:** Bypasses user-mode API hooking via direct NTDLL SSN resolution and runtime XOR decryption.
-* **`transport/harness/protocol_fuzzer.c` & `verifier.c`:** Stateful protocol handshake verifier confirming service vulnerabilities with absolute precision.
-* **`transport/rootkit/kernel_filter.c`:** Ring 0 Windows Filtering Platform (WFP) driver skeleton for kernel-level network interception.
+### 3. The User-Mode Primitive Layer (C Low-Level)
+Executes memory-speed pattern matching, anti-instrumentation evasion, direct syscall invocation, and in-memory execution.
+* **`transport/c_matcher/c_matcher.c`:** Zero-allocation, pointer-level signature analyzer operating at memory bandwidth speed.
+* **`transport/evasion/evasion.c` & `direct_syscalls.c`:** Indirect syscall resolution and runtime in-memory decryption that bypass user-mode hooking.
+* **`transport/c_loader/memory_loader.c`:** Reflectively loads and executes encrypted blobs entirely in memory.
+* **`transport/harness/protocol_fuzzer.c` & `verifier.c`:** Stateful protocol handshake verifier confirming service behavior for authorized testing.
 
 ---
 

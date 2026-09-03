@@ -1,9 +1,9 @@
 """HELIOS-NET :: modules/plugins/dns_enum.py
-وحدة توسّعية مثال: استطلاع DNS (تحليل النطاقات الفرعية).
+Example extension module: DNS reconnaissance (subdomain enumeration).
 
-تُسجَّل ذاتيًا عبر زخرفة @module — تُكتشف وتُحمَّل بـ modules.core.discover
-بلا تعديل أي سجل يدوي. هذا مثال حيّ على كيف يُضاف استراتيجية جديدة
-إلى النظام في سطرين فقط.
+Registers itself via the @module decorator — discovered and loaded by
+modules.core.discover without editing any manual registry. This is a live
+example of adding a new strategy to the system in just two lines.
 """
 
 from __future__ import annotations
@@ -15,15 +15,15 @@ from modules.core import module
 
 def _subdomains(domain: str, wordlist: list[str],
                 timeout: float = 2.0) -> list[dict]:
-    """يلمس نطاقات فرعية قياسية ويحتفظ بالمستحق منها.
+    """Probes standard subdomains and keeps the ones that resolve.
 
     Arg:
-      domain: النطاق (مفوّض/مملوك).
-      wordlist: كلمات تحويل النطاقات الفرعية.
-      timeout: مهلة الاستعلام (جودة SQLite-أصلية، لا مكتبة).
+      domain: the (authorized/owned) domain.
+      wordlist: subdomain transformation words.
+      timeout: query timeout (native quality, no library).
 
     Returns:
-      قائمة نطاقات فرعية مستحقة.
+      A list of subdomains that resolve.
     """
     hits = []
     for w in wordlist:
@@ -38,10 +38,10 @@ def _subdomains(domain: str, wordlist: list[str],
 
 @module("dns_enum", kind="discovery", wordlist=("www", "admin", "api", "mail", "dev"))
 def dns_runner(step, ctx) -> dict:
-    """ينفّذ تعداد نطاقات فرعية على هدف الخطوة."""
+    """Runs subdomain enumeration against the step's target."""
     wordlist = step.params.get("wordlist", ("www", "admin", "api", "mail", "dev"))
     found = _subdomains(step.target, wordlist=list(wordlist))
-    # تسجيل الاكتشافات الخام في سياق الحملة المشترك.
+    # record the raw findings into the shared campaign context.
     ctx.setdefault("findings", []).extend(
         {"module": "dns_enum", "host": step.target, "subdomain": h["subdomain"]}
         for h in found

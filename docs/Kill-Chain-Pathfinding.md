@@ -1,3 +1,3 @@
-# Kill-Chain Pathfinding & Asset Graph
+# Pathfinding & Asset Graph
 
-The intelligence engine converts raw discoveries into an **Asset Graph**, computing Degree Centrality to isolate high-value target assets and running **Dijkstra's Shortest Path Algorithm** to determine the least resistance attack vector for automated lateral movement.
+The planning engine converts raw discoveries into an **Asset Graph**, computing Degree Centrality to isolate high-priority assets and running **Dijkstra's Shortest Path Algorithm** to determine the least resistance path for automated engagement mapping within an authorized scope.

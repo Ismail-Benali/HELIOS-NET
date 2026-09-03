@@ -1,14 +1,15 @@
 """HELIOS-NET :: engine/verdict.py
-قواعد «إذا/إذن» ذكية تصنّف المخاطر والقرارات الأولية.
+Smart if/then rules that classify risks and preliminary decisions.
 
-المسؤولية:
-  - تحويل صحائف الحقائق (findings) إلى حكم (verdict) بوزن وخطورة.
-  - القواعد قابلة للتوسّع (plugins) وقابلة للاختبار، لا منطق مبعثر في الوحدات.
-  - يبقى «الحكم» قائمًا على الحقائق المسجّلة، لا على تخمين خارج المشهد.
+Responsibilities:
+  - Convert finding sheets into a verdict with a weight and severity.
+  - Rules are extensible (plugins) and testable — no scattered logic in modules.
+  - The verdict stays grounded in recorded findings, not on out-of-scope guessing.
 
-ملاحظة أمنية ثابتة:
-  - هذا المكوّن يحلل مشهدًا داخليًا/مفوّضًا. أي استخدام خارج نطاق مفوَّض
-    مسؤولية المستخدم، والقواعد هنا لا تجيز ولا تستهدف شيئًا سوى التصنيف.
+Standing security note:
+  - This component analyzes an internal/authorized scope. Any use outside an
+    authorized scope is the user's responsibility; the rules here only classify
+    and target nothing beyond classification.
 """
 
 from __future__ import annotations
@@ -19,10 +20,10 @@ from typing import Any, Callable
 
 @dataclass
 class Rule:
-    """قاعدة تصنيف واحدة."""
+    """A single classification rule."""
     name: str
-    weight: float                 # وزن الخطورة (0..1)
-    test: Callable[[dict], bool]  # هل تنطبق على هذا الاكتشاف؟
+    weight: float                 # severity weight (0..1)
+    test: Callable[[dict], bool]  # does it apply to this finding?
     note: str = ""
 
     def applies(self, finding: dict) -> bool:
@@ -34,7 +35,7 @@ class Rule:
 
 @dataclass
 class Verdict:
-    """النتيجة المصنّفة لاكتشاف واحد."""
+    """The classified result for a single finding."""
     finding: dict
     rules_hit: list[str] = field(default_factory=list)
     max_weight: float = 0.0
@@ -51,7 +52,7 @@ class Verdict:
 
 
 class VerdictEngine:
-    """محرّك القواعد — كل قاعدة=مكوّن plugin قابل للنمو."""
+    """The rules engine — every rule is a growable plugin component."""
 
     def __init__(self, rules: list[Rule] | None = None):
         self._rules: list[Rule] = list(rules or [])
@@ -60,7 +61,7 @@ class VerdictEngine:
         self._rules.append(rule)
 
     def load_plugins(self, registry: dict[str, Callable[[], Rule]]) -> None:
-        """يستورد قواعد من سجل plugins/ — قابل للتوسّع دون تعديل النواة."""
+        """Imports rules from the plugins/ registry — extensible without touching the core."""
         for name, factory in registry.items():
             self._rules.append(factory())
 
@@ -77,7 +78,7 @@ class VerdictEngine:
 
 
 # ----------------------------------------------------------------------------
-# قواعد افتراضية جاهزة — تُحمَّل افتراضيًا.
+# Ready-made default rules — loaded by default.
 # ----------------------------------------------------------------------------
 def default_rules() -> list[Rule]:
     return [
@@ -85,24 +86,24 @@ def default_rules() -> list[Rule]:
             name="open_service",
             weight=0.3,
             test=lambda f: bool(f.get("open") is True or f.get("port") is not None),
-            note="خدمة مفتوحة مشبوهة/جديرة بالفحص.",
+            note="Open service that is suspicious/worth inspecting.",
         ),
         Rule(
             name="unpatched_hint",
             weight=0.6,
             test=lambda f: any(k in str(f.get("service", "")).lower() for k in ("old", "deprecated", "eol")),
-            note="مؤشر على إصدار قديم غير محدّث.",
+            note="Indicates an old, unpatched version.",
         ),
         Rule(
             name="admin_interface",
             weight=0.7,
             test=lambda f: any(k in str(f.get("service", "")).lower() for k in ("admin", "management", "ssh", "rdp")),
-            note="واجهة إدارة/تحكم — أولوية الفحص.",
+            note="Admin/management interface — priority for inspection.",
         ),
         Rule(
             name="default_credentials_hint",
             weight=0.8,
             test=lambda f: any(k in str(f.get("finding_note", "")).lower() for k in ("default", "factory", "weak")),
-            note="مؤشر على بيانات اعتماد افتراضية/ضعيفة.",
+            note="Indicates default/weak credentials.",
         ),
     ]

@@ -1,8 +1,9 @@
 """HELIOS-NET :: modules/stealth/pacer.py
-التخفي: إيقاع احتمالي متقدّم (توزيع أسي/بواسون).
+Stealth: advanced probabilistic pacing (exponential/Poisson distribution).
 
-يحاكي ضوضاء الشبكة الطبيعية وتفاوت الحركة البشرية، مما يُعجز
-أنظمة كشف التسلل (IDS/IPS) عن رصد النمط التكراري للمسح.
+Simulates natural network noise and human-like movement variance, making it
+hard for intrusion detection systems (IDS/IPS) to spot the repetitive scanning
+pattern.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import random
 
 
 class Pacer:
-    """مسيّر إيقاع احتمالي متقدّم."""
+    """An advanced probabilistic pacing runner."""
 
     def __init__(self, mean_dwell: float = 0.3, jitter: float = 0.15, rng=None):
         self.mean_dwell = max(0.01, mean_dwell)
@@ -20,13 +21,14 @@ class Pacer:
         self._rng = rng or random.Random()
 
     def dwell(self, mode: str = "exponential") -> float:
-        """يحسب الفجوة الزمنية التالية بتوزيع احتمالي واقعي.
+        """Computes the next time gap with a realistic probabilistic distribution.
 
         Args:
-          mode: 'exponential' (توزيع أسي يحاكي طوابير الانتظار) أو 'uniform' (ثابت+مشوش).
+          mode: 'exponential' (an exponential distribution simulating queue
+                wait-times) or 'uniform' (constant + jitter).
         """
         if mode == "exponential":
-            # التوزيع الأسي: -mean * ln(1 - U)
+            # exponential distribution: -mean * ln(1 - U)
             u = max(1e-6, self._rng.random())
             val = -self.mean_dwell * math.log(u)
             return max(0.01, val + self._rng.uniform(-self.jitter, self.jitter))

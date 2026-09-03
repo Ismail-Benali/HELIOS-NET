@@ -1,7 +1,7 @@
 """HELIOS-NET :: engine/plugins/__init__.py
-سجل قواعد المحرّك — نقطة توسّع دون تعديل النواة.
+The engine rules registry — an extension point without touching the core.
 
-كل عنصر هنا يصنع Rule واحدة. تُحمَّل عبر VerdictEngine.load_plugins.
+Each entry here builds one Rule. They are loaded via VerdictEngine.load_plugins.
 """
 
 from __future__ import annotations
@@ -10,23 +10,23 @@ from ..verdict import Rule
 
 
 def open_high_value_port() -> Rule:
-    """قاعدة: منفذ مفتوح على واحدة من الخدمات الإدارية الحرجة."""
+    """Rule: an open port on one of the critical administrative services."""
     critical = {"22": "ssh", "3389": "rdp", "443": "https", "3306": "mysql"}
     return Rule(
         name="critical_port_open",
         weight=0.65,
         test=lambda f: str(f.get("port")) in critical or str(f.get("service", "")).lower() in critical.values(),
-        note="منفذ حرج مفتوح — أولوية فحص عميق.",
+        note="Critical port open — flagged for deep inspection.",
     )
 
 
 def web_presence() -> Rule:
-    """قاعدة: وجود واجهة ويب — مؤشر لسطح هجوم تطبيقاتي."""
+    """Rule: a web interface present — an indicator of an application attack surface."""
     return Rule(
         name="web_surface",
         weight=0.5,
         test=lambda f: any(k in str(f.get("service", "")).upper() for k in ("HTTP", "HTTPS", "8080")),
-        note="واجهة ويب قابلة للاستطلاع التطبيقي.",
+        note="Web interface available for application reconnaissance.",
     )
 
 

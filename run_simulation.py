@@ -1,10 +1,10 @@
 """HELIOS-NET :: run_simulation.py
-End-to-End Cinematic Live Simulation Script.
+End-to-End Demonstration Script.
 
-Executes a full operational combat simulation connecting:
+Executes a full operational demonstration connecting:
   1. Encrypted Transactional WAL (Secure Logging)
   2. Industrial Async Recon Engine & Go/C Bridge
-  3. Asset Graph & Dijkstra Kill-Chain Pathfinding
+  3. Asset Graph & Dijkstra Pathfinding
   4. Autonomous Mutation Engine & Self-Healing
   5. Executive Briefing Report Generation
 """
@@ -25,19 +25,19 @@ from engine.graph.core import AssetGraph
 from engine.killchain.pathfinder import KillChainEngine
 
 
-async def simulate_combat_mission():
+async def simulate_engagement():
     print("=" * 60)
-    print("[HELIOS-NET] INITIATING END-TO-END COMBAT SIMULATION...")
+    print("[HELIOS-NET] INITIATING END-TO-END DEMONSTRATION...")
     print("=" * 60)
 
     with tempfile.TemporaryDirectory() as tmp:
         state_dir = Path(tmp)
 
         # 1. Initialize Secure Encrypted WAL
-        wal_path = state_dir / "combat_mission.wal"
+        wal_path = state_dir / "engagement.wal"
         wal = TransactionalWAL(wal_path)
         wal.begin()
-        wal.append("MISSION_INIT", {"operator": "Demiurg", "target": "127.0.0.1"})
+        wal.append("ENGAGEMENT_INIT", {"operator": "Demiurg", "target": "127.0.0.1"})
         wal.commit()
         print("[+] [Step 1] Secure Encrypted WAL initialized and transaction committed.")
 
@@ -53,8 +53,8 @@ async def simulate_combat_mission():
         c_matches = run_c_matcher(sample_banner)
         print(f"    -> C Native Matcher detected signatures: {c_matches}")
 
-        # 4. Build Asset Graph & Compute Kill-Chain Pathfinding
-        print("[+] [Step 4] Constructing Asset Graph & calculating Dijkstra Kill-Chain path...")
+        # 4. Build Asset Graph & Compute Pathfinding
+        print("[+] [Step 4] Constructing Asset Graph & calculating Dijkstra path...")
         g = AssetGraph()
         host_node = f"host:{target}"
         g.add_node(host_node, "host", ip=target)
@@ -73,16 +73,16 @@ async def simulate_combat_mission():
         if active_services:
             target_svc = f"svc:{target}:{active_services[0]['port']}/tcp"
             path, cost = engine.find_attack_path(host_node, target_svc)
-            print(f"    -> Calculated Attack Path: {path} (Resistance Cost: {cost})")
+            print(f"    -> Calculated Path: {path} (Resistance Cost: {cost})")
 
         # 5. Simulate Trap Detection & Autonomous Mutation (Self-Healing)
-        print("[+] [Step 5] Simulating WAF/Honeypot trap detection & self-healing mutation...")
+        print("[+] [Step 5] Simulating anomaly/trap detection & self-healing tuning...")
         mutator = MutationEngine(state_dir)
         trap_detected = mutator.detect_trap(response_latency=6.5, http_status=200)
         print(f"    -> Anomaly/Trap Triggered: {trap_detected}")
         
         mutation_result = mutator.trigger_self_destruct_and_mutate()
-        print(f"    -> Mutation Executed: Generation {mutation_result['generation']} (Traces shredded: {mutation_result['traces_shredded']})")
+        print(f"    -> Tuning Executed: Generation {mutation_result['generation']} (Traces shredded: {mutation_result['traces_shredded']})")
 
         # 6. Generate Executive Briefing Report
         print("[+] [Step 6] Compiling Executive Briefing Report...")
@@ -95,9 +95,9 @@ async def simulate_combat_mission():
 
         report_data = {
             "timeline": [
-                {"ts": 1788403200.0, "event": "mission_start", "module": "core"},
+                {"ts": 1788403200.0, "event": "engagement_start", "module": "core"},
                 {"ts": 1788403201.5, "event": "async_recon_complete", "module": "async_engine"},
-                {"ts": 1788403202.0, "event": "killchain_computed", "module": "pathfinder"},
+                {"ts": 1788403202.0, "event": "path_computed", "module": "pathfinder"},
                 {"ts": 1788403203.1, "event": "mutation_triggered", "module": "mutation_engine"}
             ]
         }
@@ -106,8 +106,8 @@ async def simulate_combat_mission():
         print("\n" + "=" * 60)
         print(briefing)
         print("=" * 60)
-        print("[HELIOS-NET] COMBAT SIMULATION COMPLETED WITH ABSOLUTE SUPREMACY.")
+        print("[HELIOS-NET] DEMONSTRATION COMPLETED.")
 
 
 if __name__ == "__main__":
-    asyncio.run(simulate_combat_mission())
+    asyncio.run(simulate_engagement())

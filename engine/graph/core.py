@@ -1,15 +1,16 @@
 """HELIOS-NET :: engine/graph/core.py
-المعمارية الرسومية للأصول — «عين الرأي» التي تحوّل الاكتشافات إلى شبكة.
+Asset graph architecture — the "bird's eye view" that turns findings into a network.
 
-المسؤولية:
-  - تحويل الاكتشافات الخام (منافذ/خدمات/نطاقات/مضيفين) إلى رسم بياني:
-    عقده = أصول، حوافه = علاقات (خدمة تُشغَّل على مضيف، نطاق فرعي→نطاق).
-  - التحليل المركزيّ (Centrality) لترتيب الأصول حسب الأهمية — فيعرف القائد
-    مَن يستحق التركيز إذن، لا أن يلمس كل شيء عشوائيًا.
-  - البقاء خالصًا من أي تلامس شبكي: يعمل على صحائف البيانات وحدها.
+Responsibilities:
+  - Convert raw findings (ports/services/domains/hosts) into a graph:
+    nodes = assets, edges = relationships (a service runs on a host,
+    subdomain -> domain).
+  - Centrality analysis to rank assets by importance — so the commander knows
+    who deserves focus, rather than touching everything at random.
+  - Stays completely network-free: it only works on data sheets.
 
-العارض:
-  - النمط (patron) خالٍ من المكتبات الخارجية — رسم بياني قائم على قواميس.
+Remarks:
+  - The pattern is free of external libraries — a dictionary-based graph.
 """
 
 from __future__ import annotations
@@ -19,38 +20,38 @@ from collections import defaultdict, deque
 
 
 class AssetGraph:
-    """رسم بياني موثّق للأصول والعلاقات."""
+    """A documented graph of assets and relationships."""
 
     def __init__(self):
         self.nodes: dict[str, dict] = {}      # node_id -> meta
         self.adj: dict[str, set[str]] = defaultdict(set)   # node_id -> neighboring ids
         self._edges: set[tuple[str, str]] = set()
 
-    # -- العقد والحواف ------------------------------------------------------
+    # -- nodes and edges ------------------------------------------------------
     def add_node(self, node_id: str, kind: str, **meta) -> str:
         self.nodes[node_id] = {"id": node_id, "kind": kind, **meta}
         return node_id
 
     def add_edge(self, a: str, b: str, rel: str = "related") -> None:
-        # يضمن وجود الطرفين أولًا.
+        # ensure both endpoints exist first.
         for n in (a, b):
             self.nodes.setdefault(n, {"id": n, "kind": "asset"})
-            self.adj[n]  # يهيّئ المجموعة.
+            self.adj[n]  # initialize the set.
         self.adj[a].add(b)
         self.adj[b].add(a)
         self._edges.add((a, b))
 
-    # -- التغذية من الاكتشافات -------------------------------------------------
+    # -- feeding from findings -------------------------------------------------
     def ingest(self, findings: list[dict]) -> int:
-        """يبني الرسم البياني من صحائف الاكتشافات الخام.
+        """Builds the graph from raw finding sheets.
 
-        يقرأ أنماطًا معروفة:
-          - منفذ/خدمة على مضيف -> عقدة مضيف + عقدة خدمة (حافة).
-          - نطاق فرعي -> عقدة نطاق فرعي + حافة إلى عقدة النطاق الأم (إن وُجد).
-        أي نمط غير معروف يُتخطى بأمان (لا يوقِف البناء).
+        Reads known patterns:
+          - port/service on a host -> host node + service node (edge).
+          - subdomain -> subdomain node + edge to the parent domain node (if any).
+        Unknown patterns are safely skipped (they do not stop the build).
 
         Returns:
-          عدد الحواف المضافة.
+          The number of edges added.
         """
         added = 0
         for f in findings:
@@ -65,16 +66,17 @@ class AssetGraph:
             elif mid == "dns_enum" and f.get("subdomain"):
                 sub = f"sub:{f['subdomain']}"
                 self.add_node(sub, "subdomain", fqdn=f["subdomain"])
-                # يستهدف إن وجد نطاق أمّ ضمن الاكتشافات (لا حاجة، نبقي بلا).
+                # only if a parent domain exists within the findings (not required; leave unlinked).
                 added += 1
         return added
 
-    # -- التحليل المركزيّ ------------------------------------------------------
+    # -- centrality analysis ------------------------------------------------------
     def degree_centrality(self) -> list[tuple[str, float]]:
-        """ترتيب بالأهمية: عدد العلاقات المباشرة (degree) لكل عقدة.
+        """Ranking by importance: the number of direct relations (degree) per node.
 
-        أبسط معيار وأسرعه: الأصل ذو الرابطات الأكثر غالبًا هو الأهم
-        (خدمات متعددة على مضيف واحد، نطاق يستضيف عدة).
+        The simplest and fastest criterion: the asset with the most links is
+        usually the most important (multiple services on one host, a domain
+        hosting several others).
         """
         if not self.nodes:
             return []
@@ -89,11 +91,11 @@ class AssetGraph:
         return ranked
 
     def top_targets(self, limit: int = 10) -> list[str]:
-        """أهم الأصول المرتّبة — بما يستحق الحملة التركيز عليه."""
+        """The top-ranked assets — what the campaign should focus on."""
         return [nid for nid, _ in self.degree_centrality()[:limit]]
 
     def connected_components(self) -> list[list[str]]:
-        """فصل المجموعات المتصلة: يبين نطاقات أصول مستقلة عن بعضها."""
+        """Separates connected components: surfaces independent groups of assets."""
         if not self.nodes:
             return []
         seen: set[str] = set()
@@ -115,7 +117,7 @@ class AssetGraph:
         comps.sort(key=len, reverse=True)
         return comps
 
-    # -- تصدير ---------------------------------------------------------------
+    # -- export ---------------------------------------------------------------
     def to_dict(self) -> dict:
         return {
             "nodes": self.nodes,
