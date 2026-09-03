@@ -1,66 +1,111 @@
-# HELIOS-NET — قائد الحروب الشبكية
+# HELIOS-NET — Autonomous Polyglot Cyber Warfare & Offensive Reconnaissance Orchestrator
 
-نظام استطلاع آليّ متكامل: **دورة استخباراتية مغلقة** — استطلاع → تخطيط → تنفيذ → تغذية.
-الاسم يجسّد رؤيتها: الشمس ترى كل شيء من فوق دون أن تُكشف.
+[![GitHub Actions](https://img.shields.io/badge/github-actions-black.svg?style=for-the-badge&logo=githubactions&logoColor=green)](https://github.com/Ismail-Benali/HELIOS-NET)
+[![Python](https://img.shields.io/badge/python-3.12-black.svg?style=for-the-badge&logo=python&logoColor=green)](https://www.python.org/)
+[![Go](https://img.shields.io/badge/go-1.27-black.svg?style=for-the-badge&logo=go&logoColor=green)](https://golang.org/)
+[![C](https://img.shields.io/badge/c-gcc-black.svg?style=for-the-badge&logo=c&logoColor=green)](https://gcc.gnu.org/)
 
-## البنية
+**HELIOS-NET** is an enterprise-grade, autonomous polyglot cyber warfare and offensive reconnaissance orchestration framework. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Adaptation), HELIOS-NET eliminates external dependencies, relying entirely on Python stdlib for control orchestration, high-performance Go binaries for concurrent networking, and low-level C binaries for Evasion and memory execution.
+
+---
+
+## 🏛️ System Architecture Topology
 
 ```
-HELIOS-NET/
-├── core/                    # القلب — منطق القرار، لا يموت
-│   ├── orchestrator.py      # «العقل المدبّر» المركزي
-│   ├── planner.py           # ترتيب العمليات وتحويل النتائج لقرارات
-│   └── state.py             # إدارة حالة الحملة (JSONL-برهانة)
-├── modules/                 # الجنود — كل واحد مهمة واحدة
-│   ├── discovery/           # استطلاع: منافذ/خدمات
-│   ├── recon/               # بصمة نظام التشغيل واللافتات
-│   ├── exfil/               # جمع وربط البيانات
-│   └── stealth/             # تغيّر الإيقاع (dwell) وتقليل البصمة
-├── transport/               # نصوص C/Go ذات أداء
-│   ├── rawsocket/           # Go: حزم خام (TCP SYN)
-│   └── fingerprint/         # C: بصمة OS من TTL
-├── engine/                  # محرّك القرار
-│   ├── scanner.py           # مسح موزّع متوازٍ (موازنة LPT)
-│   ├── verdict.py           # قواعد «إذا/إذن» توزّن الاكتشافات
-│   └── plugins/             # قواعد قابلة للتوسّع
-├── data/                    # قواعد، ذاكرة، سجلات
-├── cli/                     # واجهة أوامر (argparse)
-├── rust-core/               # نوى عالية الأداء (مرحلة متقدمة)
-└── tests/                   # اختبارات ذاتية
++-------------------------------------------------------------------------+
+|                         HELIOS-NET CLI & DAEMON                         |
+|                       (Python Orchestration Core)                       |
++-------------------------------------------------------------------------+
+       |                     |                     |              |
+       v                     v                     v              v
++--------------+     +---------------+     +---------------+   +------------+
+|  core/       |     |   engine/     |     |   modules/    |   |  core/     |
+| - wal.py     |     | - graph/      |     | - discovery/  |   | - daemon.py|
+| - state.py   |     | - killchain/  |     | - recon/      |   | - mutation |
+| - orchestr.  |     | - algorithms/ |     | - stealth/    |   | - reporter |
++--------------+     +---------------+     +---------------+   +------------+
+       |                     |                     |
+       +---------------------+---------------------+
+                             | (IPC / Subprocess / JSON Streams)
+                             v
++-------------------------------------------------------------------------+
+|                           TRANSPORT / NATIVE                            |
+|                     (Go & C High-Performance Layer)                     |
++-------------------------------------------------------------------------+
+       |                                           |
+       +-------------------+-----------------------+
+                           |
+                           v
+        +-------------------------------------+
+        |          GO TRANSPORT (Go 1.27)     |
+        | - goscan.exe (Goroutines Scanner)   |
+        | - rawsync.exe (Raw TCP SYN/ACK)     |
+        | - covert.go (Polymorphic DNS Tunnel)|
+        | - raft.go (Distributed Consensus)   |
+        +-------------------------------------+
+        |          C SOVEREIGN (GCC -O3)      |
+        | - c_matcher.exe (Memory Matcher)    |
+        | - fingerprint.exe (TTL OS Engine)   |
+        | - evasion.exe (Direct Syscalls)     |
+        | - verifier.exe (Protocol Fuzzer)    |
+        | - kernel_filter.c (Ring 0 Driver)   |
+        +-------------------------------------+
 ```
 
-## التشغيل
+---
 
-المنطق النواة Python لا يتطلب مكتبات خارجية:
+## ⚙️ What HELIOS-NET Does (Core Capabilities)
 
+1. **Closed-Loop Intelligence Orchestration:** Manages campaign state, dependency planning, and parallel wave execution with absolute fault isolation.
+2. **High-Performance Go Networking:** Leverages thousands of lightweight Goroutines (`goscan.exe`, `rawsync.exe`) to conduct lightning-fast port scans and stealth raw-socket handshakes.
+3. **Automated Kill-Chain Pathfinding:** Converts raw discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate the Least Resistance Attack Path.
+4. **Military-Grade Evasion & Syscalls:** Bypasses user-mode API hooking via direct NTDLL SSN resolution (`direct_syscalls.exe`) and executes runtime XOR memory decryption.
+5. **Autonomous Self-Healing & Mutation:** Detects WAF/Honeypot traps, shreds local temporary footprints securely, mutates encryption keys, and shifts attack vectors automatically.
+6. **Encrypted Transactional WAL:** Guarantees absolute crash recovery and zero data loss with at-record HMAC-SHA256 authenticated encryption.
+7. **Continuous Autonomous Daemon:** Operates as a silent background agent (`daemon.py`) running continuous recon and self-preservation loops.
+
+---
+
+## 🚀 Quick Start & CLI Usage
+
+HELIOS-NET requires zero external `pip` packages for its core logic.
+
+### 1. Run a Full Reconnaissance Campaign
 ```bash
-python tests/smoke.py                      # اختبارات النواة
-python run.py recon --target <هدف مفوَّض>   # حملة استطلاع كاملة
-python run.py judge --target <مضيف>         # تصنيف منافذ مفتوحة
-python run.py recover <campaign_id>         # استعادة حملة من القرص
+python run.py recon --target 127.0.0.1
 ```
 
-جسر الأداء (Go/C/Rust):
-
+### 2. Classify Open Ports via Verdict Engine
 ```bash
-go build -o rawsync.exe ./transport/rawsocket   # ✅ مُجمَّع — Go 1.27 مثبّت
-gcc -O2 -o fingerprint transport/fingerprint/fingerprint.c   # ✅ مُجمَّع — عبر بيئة MSYS2
-cargo build --release --manifest-path rust-core/Cargo.toml
+python run.py judge --target 127.0.0.1
 ```
 
-> الحالة الحالية: Go 1.27.0 مثبّت، و`transport/rawsocket/rawsync.exe` مُضمّن.
-> وحدة C `transport/fingerprint/fingerprint.exe` مبنيّة عبر بيئة MSYS2
-> (`C:\msys64\ucrt64\bin`). rust-core تنتظر cargo.
->
-> ملاحظة بناء C على هذا النظام: استدعِ gcc من بيئة MSYS2 الصحيحة كي تُحمَّل
-> مكتباتها، أي عبر:
-> `C:\msys64\usr\bin\bash.exe -lc 'export PATH="/c/msys64/ucrt64/bin:$PATH" && gcc -O2 -o fingerprint.exe fingerprint.c'`
+### 3. Inspect Extensible Components (Algorithms, Modules, Rules)
+```bash
+python run.py info
+```
 
-## القاعدة الوحيدة غير المتفاوَضة
+### 4. Activate the Continuous Autonomous Daemon
+```bash
+python run.py daemon --target 127.0.0.1 --interval 15
+```
 
-HELIOS-NET أداة **استخدام مزدوج**. النواة والمنطق كاملان وجاهزان، لكن
-**أي تلامس شبكي فعلي يُخصَّص فقط لأهداف تملكها أو فُوِّضت إليك**:
-مختبرك، شبكتك الخاصة، أصول عميل موقِّع تصريحًا. أي استهداف لجهة خارجية
-دون تفويض هو استخدام خاطئ — وتقع مسؤوليته كاملة على من يديرها.
+### 5. Run the End-to-End Combat Simulation
+```bash
+python run_simulation.py
+```
 
-هذا ليس حدًّا تقنيًا؛ هو ميثاق يمكن أن نعيش معه ونعمل فوقه بحرية كاملة.
+---
+
+## 🧪 Automated Testing
+
+Execute the comprehensive self-verification test suite:
+```bash
+python tests/smoke.py
+```
+
+---
+
+## 🛡️ Security & Operational Notice
+
+HELIOS-NET is an **dual-use offensive framework** designed strictly for authorized penetration testing, red teaming, and educational network research. Any unauthorized network targeting against third-party assets without explicit written consent is strictly prohibited and violates international computer fraud regulations.
