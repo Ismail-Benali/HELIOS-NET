@@ -37,7 +37,7 @@ def build_go_components() -> None:
     for sub in transport_dir.iterdir():
         if sub.is_dir() and (sub / "go.mod").exists():
             print(f"\n[+] Building Go module: {sub.name}")
-            run_cmd(["go", "build", "-o", f"{sub.name}.exe" if os.name == "nt" else sub.name, "."], sub)
+            run_cmd(["go", "build", "-ldflags=-s -w", "-o", f"{sub.name}.exe" if os.name == "nt" else sub.name, "."], sub)
 
 
 def build_rust_core() -> None:

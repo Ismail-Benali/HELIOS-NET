@@ -7,4 +7,10 @@ edition = "2021"
 name = "helios_core"
 crate-type = ["cdylib", "rlib"]
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
 [dependencies]
