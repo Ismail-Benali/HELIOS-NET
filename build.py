@@ -21,7 +21,7 @@ def run_cmd(cmd: list[str], cwd: Path) -> bool:
         return res.returncode == 0
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"[-] Error executing {' '.join(cmd)}: {e}")
-        return false
+        return False
 
 
 def build_go_components() -> None:
