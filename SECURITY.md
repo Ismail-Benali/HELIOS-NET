@@ -21,7 +21,7 @@ We actively maintain and patch the latest release. Older releases receive securi
 
 Instead, report privately so we can coordinate a fix and disclosure responsibly. To report a vulnerability:
 
-- **Email:** [7175ismail@gmail.com](mailto:ismail-benali@proton.me)
+- **Email:** [ismail-benali@proton.me](mailto:ismail-benali@proton.me)
   - Subject line: `[HELIOS-NET SECURITY] <short summary>`
 - **Alternatively:** use GitHub's **Private Vulnerability Reporting** on this repository
   - Repo → **Security** tab → **Report a vulnerability**
