@@ -14,9 +14,20 @@ import os
 import subprocess
 from pathlib import Path
 
+from core.error_envelope import parse_envelope
+
 ROOT = Path(__file__).resolve().parents[2]
 _EXE = ".exe" if os.name == "nt" else ""
 GOSCAN_BIN = ROOT / "transport" / "goscan" / f"goscan{_EXE}"
+
+# Optional hook so the broker can feed native error envelopes into MutationEngine.
+mutation_engine = None
+
+
+def attach_mutation_engine(engine) -> None:
+    """Allows the orchestrator to bind a MutationEngine for tactical adaptation."""
+    global mutation_engine
+    mutation_engine = engine
 
 
 async def run_go_scan_async(target: str, port_arg: str = "common") -> list[dict]:
@@ -29,8 +40,24 @@ async def run_go_scan_async(target: str, port_arg: str = "common") -> list[dict]
         proc = await asyncio.create_subprocess_exec(
             str(GOSCAN_BIN), target, port_arg,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL
+            stderr=asyncio.subprocess.PIPE
         )
+
+        # Capture stderr line-by-line and parse standardized error envelopes.
+        async def _drain_errors():
+            if not proc.stderr:
+                return
+            while True:
+                line = await proc.stderr.readline()
+                if not line:
+                    break
+                text = line.decode("utf-8", errors="replace").strip()
+                env = parse_envelope(text)
+                if env and mutation_engine:
+                    # Let the engine adapt tactics automatically (e.g. EDR_BLOCKED).
+                    mutation_engine.adapt_to_envelope(env)
+
+        err_task = asyncio.create_task(_drain_errors()) if proc.stderr else None
 
         if proc.stdout:
             while True:
@@ -51,6 +78,8 @@ async def run_go_scan_async(target: str, port_arg: str = "common") -> list[dict]
                 except json.JSONDecodeError:
                     continue
 
+        if err_task:
+            await err_task
         await proc.wait()
     except Exception:
         pass

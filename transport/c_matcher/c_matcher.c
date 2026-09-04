@@ -31,6 +31,10 @@ int match_signature(const char *banner, const char *sig) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
+        // Standardized Error Envelope (SEE)
+        fprintf(stderr, "{\"status\":\"error\",\"code\":\"PARSE_ERROR\","
+                        "\"message\":\"usage: c_matcher <banner-string>\","
+                        "\"component\":\"transport/c_matcher\",\"module\":\"c_matcher\"}\n");
         fprintf(stderr, "usage: c_matcher <banner-string>\n");
         return 1;
     }
