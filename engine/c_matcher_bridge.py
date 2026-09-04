@@ -12,9 +12,20 @@ import os
 import subprocess
 from pathlib import Path
 
+from core.error_envelope import parse_envelope
+
 ROOT = Path(__file__).resolve().parents[1]
 _EXE = ".exe" if os.name == "nt" else ""
 CMATCHER_BIN = ROOT / "transport" / "c_matcher" / f"c_matcher{_EXE}"
+
+# Optional hook so the broker can feed native error envelopes into MutationEngine.
+mutation_engine = None
+
+
+def attach_mutation_engine(engine) -> None:
+    """Allows the orchestrator to bind a MutationEngine for tactical adaptation."""
+    global mutation_engine
+    mutation_engine = engine
 
 
 def run_c_matcher(banner: str) -> list[str]:
@@ -27,6 +38,11 @@ def run_c_matcher(banner: str) -> list[str]:
             [str(CMATCHER_BIN), banner],
             capture_output=True, text=True, timeout=5.0
         )
+        # Surface any standardized error envelope from stderr.
+        error_env = parse_envelope(proc.stderr) if proc.stderr else None
+        if error_env and mutation_engine:
+            mutation_engine.adapt_to_envelope(error_env)
+
         if proc.returncode != 0:
             return []
 

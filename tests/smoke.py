@@ -299,6 +299,38 @@ def test_hardened_security():
     print("hardened_security: OK (Encrypted WAL at rest & Dynamic signature loader verified)")
 
 
+def test_standardized_error_envelopes():
+    import tempfile
+    from pathlib import Path
+    from core.error_envelope import (
+        parse_envelope, build_envelope, ERR_EDR_BLOCKED, TACTIC_FALLBACK
+    )
+    from core.mutation_engine import MutationEngine
+
+    # 1. Envelope construction and parsing should round-trip.
+    envelope = build_envelope(
+        ERR_EDR_BLOCKED, "Anti-evasion interception detected.",
+        "transport/evasion", module="direct_syscalls"
+    )
+    import json as _json
+    parsed = parse_envelope(_json.dumps(envelope))
+    assert parsed == envelope
+
+    # 2. Non-error payloads must be rejected.
+    assert parse_envelope('{"status": "ok", "port": 443}') is None
+
+    # 3. Mutation engine must auto-pivot tactics on an EDR_BLOCKED envelope.
+    with tempfile.TemporaryDirectory() as tmp:
+        engine = MutationEngine(tmp)
+        assert engine.current_tactic == "direct_syscalls"
+        new_tactic = engine.select_tactical_target(envelope)
+        assert new_tactic == TACTIC_FALLBACK["direct_syscalls"]
+        assert engine.current_tactic == new_tactic
+        assert len(engine.tactic_history) == 1
+
+    print("standardized_error_envelopes: OK (SEE contract + tactical auto-pivot verified)")
+
+
 def main():
     test_state_persistence()
     test_planner_waves()
@@ -314,6 +346,7 @@ def main():
     test_advanced_capabilities()
     test_legendary_capabilities()
     test_hardened_security()
+    test_standardized_error_envelopes()
     print("\nALL SETS PASSED")
 
 
