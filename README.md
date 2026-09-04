@@ -11,7 +11,7 @@
 **HELIOS-NET** is an enterprise-grade, autonomous polyglot orchestrator for **red teaming** and **attack surface management (ASM)** engagements. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Adaptation), HELIOS-NET eliminates external dependencies, relying entirely on Python stdlib for control orchestration, high-performance Go binaries for concurrent networking, and low-level C binaries for user-mode evasion primitives and in-memory execution.
 
 
-## 🏛️ System Architecture Topology
+##  System Architecture Topology
 
 ```
 +-------------------------------------------------------------------------+
@@ -93,21 +93,21 @@ python run.py daemon --target 127.0.0.1 --interval 15
 python run_simulation.py
 ```
 
-## 🗺️ Future Roadmap
+##  Future Roadmap
 Check our official [Project Roadmap](ROADMAP.md) for upcoming milestones, including P2P mesh networking and advanced user-mode evasion primitives.
 
 
-## 🧪 Automated Testing
+##  Automated Testing
 
 Execute the comprehensive self-verification test suite:
 ```bash
 python tests/smoke.py
 ```
 
-## 🤝 Contributing
+##  Contributing
 We welcome contributions from security researchers and engineers. Please read our [Contributing Guidelines](CONTRIBUTING.md) before opening a pull request, and our [Security Policy](SECURITY.md) for responsibly reporting vulnerabilities.
 
 
-## 🛡️ Security & Operational Notice
+##  Security & Operational Notice
 
 HELIOS-NET is a **dual-use security framework** designed strictly for authorized penetration testing, red teaming, and educational network research. Any unauthorized network targeting against third-party assets without explicit written consent is strictly prohibited and violates international computer fraud regulations.
