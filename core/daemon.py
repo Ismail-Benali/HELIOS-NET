@@ -6,9 +6,9 @@ Recon -> Pathfinding -> Mutation/Self-Healing -> Executive Briefing.
 Zero human intervention required.
 """
 
-__all__ = ["AutonomousDaemon"]
-
 from __future__ import annotations
+
+__all__ = ["AutonomousDaemon"]
 
 import asyncio
 import logging
