@@ -1,0 +1,125 @@
+name: HELIOS-NET Binary Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: helios-net-linux-x64
+            arch: x64
+          - os: windows-latest
+            artifact: helios-net-win-x64
+            arch: x64
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # For C compilation (gcc present on ubuntu; windows uses mingw / cl)
+      - name: Setup MinGW (Windows only)
+        if: runner.os == 'Windows'
+        uses: egor-tensin/setup-mingw@v2
+
+      - name: Build Native Components via build.py
+        run: python build.py
+
+      # Copy resulting native binaries from transport/ to a staging dir
+      - name: Stage Go & C binaries (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p dist/bin
+          cp -fv transport/goscan/goscan dist/bin/ 2>/dev/null || true
+          cp -fv transport/rawsocket/rawsync dist/bin/ 2>/dev/null || true
+          cp -fv transport/tunnel/covert dist/bin/ 2>/dev/null || true
+          cp -fv transport/c_matcher/c_matcher dist/bin/ 2>/dev/null || true
+          cp -fv transport/c_loader/memory_loader dist/bin/ 2>/dev/null || true
+          cp -fv transport/evasion/evasion dist/bin/ 2>/dev/null || true
+          cp -fv transport/evasion/direct_syscalls dist/bin/ 2>/dev/null || true
+          cp -fv transport/fingerprint/fingerprint dist/bin/ 2>/dev/null || true
+          cp -fv transport/harness/verifier dist/bin/ 2>/dev/null || true
+          cp -fv transport/harness/protocol_fuzzer dist/bin/ 2>/dev/null || true
+          find rust-core/target/release -name 'libhelios_core*' -exec cp -fv {} dist/bin/ \; 2>/dev/null || true
+          find rust-core/target/release -name 'helios_core*' -exec cp -fv {} dist/bin/ \; 2>/dev/null || true
+
+      - name: Stage Go & C binaries (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist/bin
+          cp -fv transport/goscan/goscan.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/rawsocket/rawsync.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/tunnel/covert.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/c_matcher/c_matcher.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/c_loader/memory_loader.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/evasion/evasion.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/evasion/direct_syscalls.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/fingerprint/fingerprint.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/harness/verifier.exe dist/bin/ 2>/dev/null || true
+          cp -fv transport/harness/protocol_fuzzer.exe dist/bin/ 2>/dev/null || true
+          find rust-core/target/release -name '*helios_core*' -exec cp -fv {} dist/bin/ \; 2>/dev/null || true
+
+      - name: Create Archive
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a -tzip "${{ matrix.artifact }}.zip" bin/ 2>/dev/null || tar -czf "${{ matrix.artifact }}.zip" bin/
+          else
+            tar -czf "${{ matrix.artifact }}.tar.gz" bin/
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.zip
+          if-no-files-found: ignore
+
+  release:
+    name: Publish Release Assets
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Attach Assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF/refs\/tags\//}"
+          echo "Attaching assets to release: $TAG"
+          for f in $(find artifacts -type f -name '*.zip' -o -name '*.tar.gz'); do
+            echo "Uploading: $f"
+            gh release upload "$TAG" "$f" --clobber
+          done
