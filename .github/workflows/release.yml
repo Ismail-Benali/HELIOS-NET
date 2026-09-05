@@ -48,13 +48,8 @@ jobs:
           update: false
           install: mingw-w64-x86_64-gcc
 
-      - name: Build Native Components via build.py (Windows)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: python build.py
-
-      - name: Build Native Components via build.py (Linux)
-        if: runner.os != 'Windows'
+      - name: Build Native Components via build.py
+        shell: bash
         run: python build.py
 
       # Copy resulting native binaries from transport/ to a staging dir
