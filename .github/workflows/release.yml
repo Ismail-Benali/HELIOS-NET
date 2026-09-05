@@ -40,12 +40,21 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # For C compilation (gcc present on ubuntu; windows uses mingw / cl)
-      - name: Setup MinGW (Windows only)
+      - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
-        uses: egor-tensin/setup-mingw@v2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
 
-      - name: Build Native Components via build.py
+      - name: Build Native Components via build.py (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: python build.py
+
+      - name: Build Native Components via build.py (Linux)
+        if: runner.os != 'Windows'
         run: python build.py
 
       # Copy resulting native binaries from transport/ to a staging dir
@@ -89,7 +98,7 @@ jobs:
         run: |
           cd dist
           if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a -tzip "${{ matrix.artifact }}.zip" bin/ 2>/dev/null || tar -czf "${{ matrix.artifact }}.zip" bin/
+            tar -czf "${{ matrix.artifact }}.zip" bin/
           else
             tar -czf "${{ matrix.artifact }}.tar.gz" bin/
           fi
@@ -98,7 +107,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
           if-no-files-found: ignore
 
   release:
