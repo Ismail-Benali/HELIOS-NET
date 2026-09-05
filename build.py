@@ -58,6 +58,43 @@ def build_rust_core() -> None:
         print("[-] Rust core compilation failed (ensure Rust/Cargo is installed).")
 
 
+# Size-optimization flags for C primitives (minimize binary footprint / detection surface).
+C_SIZE_FLAGS = [
+    "-Os",
+    "-ffunction-sections",
+    "-fdata-sections",
+    "-static",
+    "-Wl,--gc-sections",
+    "-s",
+]
+
+
+def build_c_components() -> None:
+    print("\n" + "=" * 50)
+    print("[HELIOS-NET] Building C User-Mode Primitives (size-optimized)...")
+    print("=" * 50)
+
+    transport_dir = ROOT / "transport"
+    if not transport_dir.exists():
+        print("[-] transport directory not found.")
+        return
+
+    for sub in transport_dir.iterdir():
+        if not sub.is_dir():
+            continue
+        c_files = list(sub.glob("*.c"))
+        if not c_files:
+            continue
+        for cf in c_files:
+            out_name = cf.stem + (".exe" if os.name == "nt" else "")
+            out_path = sub / out_name
+            cmd = ["gcc"] + C_SIZE_FLAGS + ["-o", str(out_path), str(cf)]
+            if not run_cmd(cmd, sub):
+                # Second attempt using clang if gcc is unavailable.
+                clang_cmd = ["clang"] + C_SIZE_FLAGS + ["-o", str(out_path), str(cf)]
+                run_cmd(clang_cmd, sub)
+
+
 def main() -> None:
     print("[HELIOS-NET] Initializing Polyglot Build Pipeline...")
     
@@ -76,6 +113,19 @@ def main() -> None:
         build_rust_core()
     except FileNotFoundError:
         print("[-] Cargo/Rust compiler not found in PATH. Skipping Rust builds.")
+
+    # Check C compiler (gcc/clang) for size-optimized C primitives
+    try:
+        res = subprocess.run(["gcc", "--version"], capture_output=True, text=True)
+        print(f"[+] Found GCC: {res.stdout.splitlines()[0].strip() if res.stdout else 'unknown'}")
+        build_c_components()
+    except FileNotFoundError:
+        try:
+            res = subprocess.run(["clang", "--version"], capture_output=True, text=True)
+            print(f"[+] Found Clang: {res.stdout.splitlines()[0].strip() if res.stdout else 'unknown'}")
+            build_c_components()
+        except FileNotFoundError:
+            print("[-] No C compiler (gcc/clang) found in PATH. Skipping C builds.")
 
     print("\n" + "=" * 50)
     print("[HELIOS-NET] Build Pipeline Completed.")
