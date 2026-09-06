@@ -109,3 +109,22 @@ def get_rust_checksum(data: bytes) -> Optional[int]:
     except Exception:
         pass
     return None
+
+
+def match_signatures_rust(banner: str) -> List[str]:
+    if not _rust_lib or not banner:
+        return []
+    try:
+        buf = ctypes.create_string_buffer(1024)
+        _rust_lib.helios_match_signatures.restype = ctypes.c_int
+        res = _rust_lib.helios_match_signatures(
+            banner.encode("utf-8"),
+            buf,
+            1024
+        )
+        if res >= 0:
+            s = buf.value.decode("utf-8")
+            return [m for m in s.split(",") if m]
+    except Exception:
+        pass
+    return []
