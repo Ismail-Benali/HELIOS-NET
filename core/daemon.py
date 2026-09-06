@@ -20,6 +20,7 @@ from core.mutation_engine import MutationEngine
 from core.wal import TransactionalWAL
 from engine.graph.core import AssetGraph
 from engine.killchain.pathfinder import KillChainEngine
+from modules.stealth.pacer import Pacer
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class AutonomousDaemon:
         self.interval = interval_seconds
         self.wal = TransactionalWAL(self.state_dir / "daemon_missions.wal")
         self.mutator = MutationEngine(self.state_dir)
+        self.pacer = Pacer(mean_dwell=self.interval, jitter=self.interval * 0.35)
         self._running = False
 
     async def run_mission_cycle(self) -> None:
@@ -78,12 +80,13 @@ class AutonomousDaemon:
             log.error(f"[DAEMON] Mission cycle failed: {exc}")
 
     async def start(self) -> None:
-        """Starts the infinite autonomous daemon loop."""
+        """Starts the infinite autonomous daemon loop with probabilistic behavioral jitter."""
         self._running = True
-        log.info("[DAEMON] Autonomous Helios Daemon activated in background.")
+        log.info("[DAEMON] Autonomous Helios Daemon activated in background with stealth jitter.")
         while self._running:
             await self.run_mission_cycle()
-            await asyncio.sleep(self.interval)
+            dwell_time = self.pacer.dwell("exponential")
+            await asyncio.sleep(dwell_time)
 
     def stop(self) -> None:
         self._running = False
