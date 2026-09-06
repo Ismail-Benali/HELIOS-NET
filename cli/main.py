@@ -120,6 +120,14 @@ def cmd_daemon(args) -> int:
     return 0
 
 
+def cmd_sim(args) -> int:
+    """Executes the full end-to-end framework simulation."""
+    import run_simulation
+    import asyncio
+    asyncio.run(run_simulation.simulate_engagement())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="helios", description="HELIOS-NET — Autonomous Red Teaming & Attack Surface Management Orchestrator")
     p.add_argument("--data", default=str(DEFAULT_DATA), help="Campaign data directory")
@@ -147,6 +155,9 @@ def build_parser() -> argparse.ArgumentParser:
     dm.add_argument("--target", required=True, help="Target host")
     dm.add_argument("--interval", type=float, default=15.0, help="Loop interval in seconds")
     dm.set_defaults(fn=cmd_daemon)
+
+    sim = sub.add_parser("sim", help="Run end-to-end simulation demonstration")
+    sim.set_defaults(fn=cmd_sim)
 
     return p
 
