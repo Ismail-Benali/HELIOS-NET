@@ -77,9 +77,18 @@
 | **OPSEC Engine** | Python / Pacer | **Exponential behavioral jitter** to defeat SIEM/IDS periodicity analysis. |
 | **CI/CD Pipeline** | GitHub Actions | Automated cross-platform binary builds & releases (`v1.2.0`). |
 
-## 📦 Download Pre-compiled Binaries (v1.2.0)
+## 📦 Download & Run (Latest Release)
 
-Looking for instant **Download & Run**? Grab the latest hardened binaries (Windows & Linux) from our [GitHub Releases](https://github.com/Ismail-Benali/HELIOS-NET/releases/tag/v1.2.0).
+Looking for instant **Download & Run**? Grab the latest pre-compiled, hardened binaries directly:
+
+- 🐧 **Linux (x64):** [helios-net-linux-x64.tar.gz](https://github.com/Ismail-Benali/HELIOS-NET/releases/latest/download/helios-net-linux-x64.tar.gz)
+- 🪟 **Windows (x64):** [helios-net-win-x64.zip](https://github.com/Ismail-Benali/HELIOS-NET/releases/latest/download/helios-net-win-x64.zip)
+
+Or download via terminal (Linux):
+```bash
+curl -sL https://github.com/Ismail-Benali/HELIOS-NET/releases/latest/download/helios-net-linux-x64.tar.gz -o helios-net.tar.gz
+tar -xzf helios-net.tar.gz
+```
 
 ## 🚀 Quick Start & CLI Usage
 
