@@ -84,6 +84,22 @@ class AhoCorasickMatcher:
             return 0
 
     def match(self, text: str) -> List[dict]:
+        # Try Rust FFI acceleration first for high-speed native pattern matching
+        try:
+            from core.rust_bridge import match_signatures_rust
+            rust_matches = match_signatures_rust(text)
+            if rust_matches:
+                hits = []
+                for m in rust_matches:
+                    hits.append({
+                        "signature": m,
+                        "matched": m,
+                        "position": text.lower().find(m.lower())
+                    })
+                return hits
+        except Exception:
+            pass
+
         text_lower = text.lower()
         node = self.root
         hits = []

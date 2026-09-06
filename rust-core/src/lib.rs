@@ -196,6 +196,49 @@ pub unsafe extern "C" fn helios_compute_checksum(data: *const c_char, len: usize
     compute_checksum(slice)
 }
 
+pub fn match_signatures(banner: &str, signatures: &[&str]) -> Vec<String> {
+    let b_lower = banner.to_lowercase();
+    let mut matches = Vec::new();
+    for &sig in signatures {
+        if b_lower.contains(&sig.to_lowercase()) {
+            matches.push(sig.to_string());
+        }
+    }
+    matches
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn helios_match_signatures(
+    banner_ptr: *const c_char,
+    out_buf: *mut c_char,
+    out_len: usize,
+) -> c_int {
+    if banner_ptr.is_null() || out_buf.is_null() {
+        return -1;
+    }
+    let c_banner = CStr::from_ptr(banner_ptr);
+    let banner = match c_banner.to_str() {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+
+    let signatures = [
+        "openssh", "apache", "nginx", "microsoft-iis",
+        "mariadb", "postgres", "redis", "vsftpd", "dropbear",
+        "mysql", "postgresql", "rdp", "ssh", "http"
+    ];
+
+    let matched = match_signatures(banner, &signatures);
+    let joined = matched.join(",");
+    let bytes = joined.as_bytes();
+    if bytes.len() >= out_len {
+        return -2;
+    }
+    ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, out_buf, bytes.len());
+    *out_buf.add(bytes.len()) = 0;
+    bytes.len() as c_int
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
