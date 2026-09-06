@@ -187,6 +187,15 @@ pub extern "C" fn helios_ttl_family(ttl: c_int) -> *const c_char {
     CString::new(family).unwrap().into_raw()
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn helios_compute_checksum(data: *const c_char, len: usize) -> u64 {
+    if data.is_null() || len == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts(data as *const u8, len);
+    compute_checksum(slice)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
