@@ -63,6 +63,23 @@
 5. **Autonomous Self-Healing & Tuning:** Detects bogus/honeypot traps, shreds local temporary footprints securely, rotates encryption keys, and re-targets automatically.
 6. **Encrypted Transactional WAL:** Guarantees crash recovery and zero data loss with at-record HMAC-SHA256 authenticated encryption.
 7. **Continuous Autonomous Daemon:** Operates as a background agent (`daemon.py`) running continuous recon and self-monitoring loops.
+8. **Standardized Error Envelopes (SEE) & Auto-Adaptive Tactics:** Emits structured machine-readable JSON errors on stderr so `MutationEngine` auto-pivots tactics instantly on EDR/WAF alarms.
+9. **Attack Surface Drift & HTML Reporting:** Computes delta change across scans and generates self-contained dark-mode executive briefing reports.
+
+## ⚡ Polyglot Performance Highlights
+
+| Layer | Technology | Key Advantage |
+|-------|------------|---------------|
+| **Control Plane** | Python 3.12+ | **Zero external pip dependencies** (stdlib only) for absolute portability. |
+| **Network Engine** | Go 1.22+ | Thousands of Goroutines streaming open ports via **NDJSON** to prevent pipe deadlocks. |
+| **Pathfinding Core** | Rust 2024 | High-performance Dijkstra pathfinding exposed via standard **`ctypes` FFI** (native speed). |
+| **Stealth Primitives** | C (GCC/Clang) | Size-optimized (`-Os -Wl,--gc-sections -s`) binaries to minimize detection footprint. |
+| **OPSEC Engine** | Python / Pacer | **Exponential behavioral jitter** to defeat SIEM/IDS periodicity analysis. |
+| **CI/CD Pipeline** | GitHub Actions | Automated cross-platform binary builds & releases (`v1.2.0`). |
+
+## 📦 Download Pre-compiled Binaries (v1.2.0)
+
+Looking for instant **Download & Run**? Grab the latest hardened binaries (Windows & Linux) from our [GitHub Releases](https://github.com/Ismail-Benali/HELIOS-NET/releases/tag/v1.2.0).
 
 ## 🚀 Quick Start & CLI Usage
 
