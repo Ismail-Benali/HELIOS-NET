@@ -97,3 +97,15 @@ def get_rust_ttl(ttl: int) -> Optional[str]:
     except Exception:
         pass
     return None
+
+
+def get_rust_checksum(data: bytes) -> Optional[int]:
+    if not _rust_lib:
+        return None
+    try:
+        _rust_lib.helios_compute_checksum.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+        _rust_lib.helios_compute_checksum.restype = ctypes.c_uint64
+        return _rust_lib.helios_compute_checksum(data, len(data))
+    except Exception:
+        pass
+    return None
