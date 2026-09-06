@@ -331,6 +331,40 @@ def test_standardized_error_envelopes():
     print("standardized_error_envelopes: OK (SEE contract + tactical auto-pivot verified)")
 
 
+def test_attack_surface_drift_and_html_report():
+    import tempfile
+    from pathlib import Path
+    from core.drift import compute_surface_drift
+    from core.reporter_html import generate_html_report
+
+    # 1. Test surface drift computation
+    prev = [{"host": "10.0.0.1", "port": 80}]
+    curr = [{"host": "10.0.0.1", "port": 80}, {"host": "10.0.0.1", "port": 502}]
+    drift = compute_surface_drift(prev, curr)
+    assert drift["drift_detected"] is True
+    assert len(drift["new_assets"]) == 1
+    assert drift["new_assets"][0]["port"] == 502
+
+    # 2. Test HTML executive report generation
+    with tempfile.TemporaryDirectory() as tmp:
+        out_file = Path(tmp) / "report.html"
+        briefing = {
+            "campaign_id": "test-123",
+            "target": "127.0.0.1",
+            "status": "done",
+            "findings_count": 2,
+            "top_targets": ["host:127.0.0.1"],
+            "events": [{"ts": 123.45, "event": "recon_complete", "module": "async_engine"}]
+        }
+        res = generate_html_report(briefing, out_file)
+        assert res.exists()
+        html_text = res.read_text(encoding="utf-8")
+        assert "⚡ HELIOS-NET" in html_text
+        assert "test-123" in html_text
+
+    print("drift_and_html_report: OK (Attack surface diff & HTML executive reporting verified)")
+
+
 def main():
     test_state_persistence()
     test_planner_waves()
@@ -347,6 +381,7 @@ def main():
     test_legendary_capabilities()
     test_hardened_security()
     test_standardized_error_envelopes()
+    test_attack_surface_drift_and_html_report()
     print("\nALL SETS PASSED")
 
 
