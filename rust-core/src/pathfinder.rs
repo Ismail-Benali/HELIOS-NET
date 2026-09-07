@@ -137,7 +137,6 @@ impl AStarPathfinder {
                         None => continue,
                     };
 
-                    // Compute composite risk score for the node
                     let risk_penalty = (n_profile.edr_presence_score * weights.edr) +
                                        (n_profile.firewall_level * weights.firewall) +
                                        (n_profile.honeypot_probability * weights.honeypot) +
@@ -182,20 +181,23 @@ pub unsafe extern "C" fn calculate_optimal_path(
         return ptr::null_mut();
     }
 
-    let c_start = CStr::from_ptr(start_node);
-    let c_target = CStr::from_ptr(target_node);
-    let c_strat = CStr::from_ptr(strategy);
+    let (s_start, s_target, s_strat) = unsafe {
+        let c_start = CStr::from_ptr(start_node);
+        let c_target = CStr::from_ptr(target_node);
+        let c_strat = CStr::from_ptr(strategy);
 
-    let s_start = match c_start.to_str() { Ok(s) => s, Err(_) => return ptr::null_mut() };
-    let s_target = match c_target.to_str() { Ok(s) => s, Err(_) => return ptr::null_mut() };
-    let s_strat = match c_strat.to_str() { Ok(s) => s, Err(_) => "balanced" };
+        let s_start = match c_start.to_str() { Ok(s) => s, Err(_) => return ptr::null_mut() };
+        let s_target = match c_target.to_str() { Ok(s) => s, Err(_) => return ptr::null_mut() };
+        let s_strat = match c_strat.to_str() { Ok(s) => s, Err(_) => "balanced" };
+        (s_start, s_target, s_strat)
+    };
 
     let mut pathfinder = AStarPathfinder::new();
-    let profiles = std::slice::from_raw_parts(nodes_ptr, node_count as usize);
+    let profiles = unsafe { std::slice::from_raw_parts(nodes_ptr, node_count as usize) };
 
     for p in profiles {
         if !p.node_id.is_null() {
-            if let Ok(id_str) = CStr::from_ptr(p.node_id).to_str() {
+            if let Ok(id_str) = unsafe { CStr::from_ptr(p.node_id) }.to_str() {
                 pathfinder.add_node(NodeRiskProfile {
                     node_id: p.node_id,
                     edr_presence_score: p.edr_presence_score,
@@ -205,17 +207,15 @@ pub unsafe extern "C" fn calculate_optimal_path(
                     base_distance: p.base_distance,
                 }, id_str.to_string());
                 
-                // Add default bidirectional unit connections for demonstration if graph topology is implicit
                 pathfinder.add_edge(id_str, id_str, 1.0);
             }
         }
     }
 
-    // Connect sequential nodes or grid edges
     for i in 0..profiles.len() {
-        if let Ok(id1) = CStr::from_ptr(profiles[i].node_id).to_str() {
+        if let Ok(id1) = unsafe { CStr::from_ptr(profiles[i].node_id) }.to_str() {
             for j in (i + 1)..profiles.len() {
-                if let Ok(id2) = CStr::from_ptr(profiles[j].node_id).to_str() {
+                if let Ok(id2) = unsafe { CStr::from_ptr(profiles[j].node_id) }.to_str() {
                     pathfinder.add_edge(id1, id2, 1.0);
                     pathfinder.add_edge(id2, id1, 1.0);
                 }
@@ -259,17 +259,19 @@ pub unsafe extern "C" fn free_path(path_ptr: *mut OptimalPath) {
     if path_ptr.is_null() {
         return;
     }
-    let path = Box::from_raw(path_ptr);
-    if !path.path_nodes.is_null() && path.path_length > 0 {
-        let slice = std::slice::from_raw_parts_mut(path.path_nodes, path.path_length as usize);
-        for &mut ptr in slice {
-            if !ptr.is_null() {
-                let _ = CString::from_raw(ptr);
+    unsafe {
+        let path = Box::from_raw(path_ptr);
+        if !path.path_nodes.is_null() && path.path_length > 0 {
+            let slice = std::slice::from_raw_parts_mut(path.path_nodes, path.path_length as usize);
+            for &mut ptr in slice {
+                if !ptr.is_null() {
+                    let _ = CString::from_raw(ptr);
+                }
             }
+            let _ = Box::from_raw(path.path_nodes);
         }
-        let _ = Box::from_raw(path.path_nodes);
-    }
-    if !path.strategy.is_null() {
-        let _ = CString::from_raw(path.strategy as *mut c_char);
+        if !path.strategy.is_null() {
+            let _ = CString::from_raw(path.strategy as *mut c_char);
+        }
     }
 }
