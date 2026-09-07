@@ -1,0 +1,14 @@
+.git
+.github
+tests/
+docs/
+*.md
+.env
+.DS_Store
+__pycache__/
+*.pyc
+target/
+rust-core/target/
+.pytest_cache/
+.dockerignore
+Dockerfile
