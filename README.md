@@ -2,16 +2,21 @@
 
 <img width="1792" height="592" alt="Helios-Net" src="https://github.com/user-attachments/assets/eb7d5c73-ee03-4500-bc95-45269d7afec6" />
 
+<br>
+<p align="center">
 [![Release](https://img.shields.io/github/v/release/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=release&color=black)](https://github.com/Ismail-Benali/HELIOS-NET/releases)
 [![Stars](https://img.shields.io/github/stars/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=stars&color=black&logo=github)](https://github.com/Ismail-Benali/HELIOS-NET/stargazers)
 [![Forks](https://img.shields.io/github/forks/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=forks&color=black)](https://github.com/Ismail-Benali/HELIOS-NET/network)
 [![License](https://img.shields.io/badge/license-non--commercial-black.svg?style=for-the-badge&color=black)](LICENSE)
 [![CI/CD](https://img.shields.io/github/actions/workflow/status/Ismail-Benali/HELIOS-NET/build.yml?style=for-the-badge&label=build&logo=githubactions&logoColor=green)](https://github.com/Ismail-Benali/HELIOS-NET/actions)
+</p>
 
+<p align="center">
 [![Python](https://img.shields.io/badge/python-3.12-black.svg?style=for-the-badge&logo=python&logoColor=green)](https://www.python.org/)
 [![Go](https://img.shields.io/badge/go-1.27-black.svg?style=for-the-badge&logo=go&logoColor=green)](https://golang.org/)
 [![C](https://img.shields.io/badge/c-gcc-black.svg?style=for-the-badge&logo=c&logoColor=green)](https://gcc.gnu.org/)
 [![Rust](https://img.shields.io/badge/rust-black.svg?style=for-the-badge&logo=rust&logoColor=green)](https://www.rust-lang.org/)
+</p>
 
 **HELIOS-NET** is an enterprise-grade, autonomous polyglot orchestrator for **red teaming** and **attack surface management (ASM)** engagements. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Adaptation), HELIOS-NET eliminates external dependencies, relying entirely on Python stdlib for control orchestration, high-performance Go binaries for concurrent networking, and low-level C binaries for user-mode evasion primitives and in-memory execution.
 
