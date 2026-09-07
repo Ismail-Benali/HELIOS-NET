@@ -2,7 +2,12 @@
 
 <img width="1792" height="592" alt="Helios-Net" src="https://github.com/user-attachments/assets/eb7d5c73-ee03-4500-bc95-45269d7afec6" />
 
-[![GitHub Actions](https://img.shields.io/badge/github-actions-black.svg?style=for-the-badge&logo=githubactions&logoColor=green)](https://github.com/Ismail-Benali/HELIOS-NET)
+[![Release](https://img.shields.io/github/v/release/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=release&color=black)](https://github.com/Ismail-Benali/HELIOS-NET/releases)
+[![Stars](https://img.shields.io/github/stars/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=stars&color=black&logo=github)](https://github.com/Ismail-Benali/HELIOS-NET/stargazers)
+[![Forks](https://img.shields.io/github/forks/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=forks&color=black)](https://github.com/Ismail-Benali/HELIOS-NET/network)
+[![License](https://img.shields.io/badge/license-non--commercial-black.svg?style=for-the-badge&color=black)](LICENSE)
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/Ismail-Benali/HELIOS-NET/build.yml?style=for-the-badge&label=build&logo=githubactions&logoColor=green)](https://github.com/Ismail-Benali/HELIOS-NET/actions)
+
 [![Python](https://img.shields.io/badge/python-3.12-black.svg?style=for-the-badge&logo=python&logoColor=green)](https://www.python.org/)
 [![Go](https://img.shields.io/badge/go-1.27-black.svg?style=for-the-badge&logo=go&logoColor=green)](https://golang.org/)
 [![C](https://img.shields.io/badge/c-gcc-black.svg?style=for-the-badge&logo=c&logoColor=green)](https://gcc.gnu.org/)
@@ -10,8 +15,38 @@
 
 **HELIOS-NET** is an enterprise-grade, autonomous polyglot orchestrator for **red teaming** and **attack surface management (ASM)** engagements. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Adaptation), HELIOS-NET eliminates external dependencies, relying entirely on Python stdlib for control orchestration, high-performance Go binaries for concurrent networking, and low-level C binaries for user-mode evasion primitives and in-memory execution.
 
+> ⚠️ **Dual-use notice:** HELIOS-NET is a security framework for **authorized** penetration testing, red-teaming, and educational research only. Using it against any system without explicit written permission is illegal. See [Security & Operational Notice](#-security--operational-notice).
 
-##  System Architecture Topology
+---
+
+## 📑 Table of Contents
+1. [Why HELIOS-NET?](#why-helios-net)
+2. [System Architecture Topology](#-system-architecture-topology)
+3. [Core Capabilities](#-what-helios-net-does-core-capabilities)
+4. [Polyglot Performance Highlights](#-polyglot-performance-highlights)
+5. [Download & Run](#-download--run-latest-release)
+6. [Quick Start & CLI Usage](#-quick-start--cli-usage)
+7. [Automated Testing](#-automated-testing)
+8. [Roadmap & Documentation](#-future-roadmap)
+9. [Contributing & Security](#-contributing)
+
+---
+
+## Why HELIOS-NET?
+
+| Problem | HELIOS-NET |
+|---|---|
+| Tool sprawl across recon/adversary stages | **One orchestrated pipeline** — recon → planning → execution → adaptation, fault-isolated |
+| Fragile `pip install`-heavy dependency graphs | **Zero runtime pip dependencies** (Python stdlib control plane) |
+| Slow single-threaded scanners | **Thousands of Go Goroutines** streaming NDJSON results, no pipe deadlocks |
+| Hookable user-mode APIs on Windows | **C primitives** with indirect NTDLL SSN resolution + in-memory execution |
+| OPSEC-unaware automation (periodic timers) | **Exponential behavior jitter** to defeat SIEM/IDS periodicity analysis |
+| No crash-survivability | **Authenticated transactional WAL** (HMAC-SHA256) — zero data loss |
+| Static toolkits that die on one EDR alarm | **Auto-adaptive Mutation Engine** pivots tactics on structured JSON errors |
+
+---
+
+## 🗺️ System Architecture Topology
 
 ```
 +-------------------------------------------------------------------------+
@@ -119,21 +154,23 @@ python run.py daemon --target 127.0.0.1 --interval 15
 python run_simulation.py
 ```
 
-##  Future Roadmap
-Check our official [Project Roadmap](ROADMAP.md) for upcoming milestones, including P2P mesh networking and advanced user-mode evasion primitives.
-
-
-##  Automated Testing
+## ✅ Automated Testing
 
 Execute the comprehensive self-verification test suite:
 ```bash
 python tests/smoke.py
 ```
 
-##  Contributing
+## 🧭 Future Roadmap
+Check our official [Project Roadmap](ROADMAP.md) for upcoming milestones, including P2P mesh networking and advanced user-mode evasion primitives. In-depth technical material lives in [`docs/`](docs/Home.md) — architecture, autonomous daemon behavior, kill-chain pathfinding, and API reference.
+
+## 🤝 Contributing
 We welcome contributions from security researchers and engineers. Please read our [Contributing Guidelines](CONTRIBUTING.md) before opening a pull request, and our [Security Policy](SECURITY.md) for responsibly reporting vulnerabilities.
 
-
-##  Security & Operational Notice
+## 🔒 Security & Operational Notice
 
 HELIOS-NET is a **dual-use security framework** designed strictly for authorized penetration testing, red teaming, and educational network research. Any unauthorized network targeting against third-party assets without explicit written consent is strictly prohibited and violates international computer fraud regulations.
+
+- 🔖 **License:** [Ethical Use & Non-Commercial License](LICENSE) — review before use.
+- 🛡️ **Open:** Issues, PRs, and design discussions are welcome.
+- ⚖️ **Scope:** Authorized engagements only.
