@@ -125,10 +125,10 @@ jobs:
         with:
           name: HELIOS-NET v1.3.0 -- Strategic Pathfinding & Advanced Evasion Integration
           body: |
-            **What's New:**
-            - 🧠 **Rust A* Pathfinder Core:** تنفيذ محرك توجيه استراتيجي جديد يحسب "المسار الأكثر أماناً" بناءً على تسجيل مخاطر متعدد العوامل (EDR Presence, Firewall Levels, Honeypot Probability) بدلاً من المسافة فقط.
-            - 🛡️ **Enhanced C Evasion Suite:** دمج تقنيات تخفي متقدمة (Sleep Masking, ETW Patching, AMSI Bypass) مع دعم كامل لاستدعاءات النظام غير المباشرة (Indirect Syscalls).
-            - 🔄 **Standardized Communication (SEE & NDJSON):** توحيد كامل لمخرجات الأخطاء والنتائج بين جميع مكونات النظام (Python, Go, C, Rust) لضمان موثوقية دورة الاستخبارات المغلقة.
-            - ⚙️ **CI/CD Stabilization:** تحسين خطوط أنابيب البناء الآلي، وإصلاح خطوات النشر، وضمان استقرار اختبارات الدخان (Smoke Tests) عبر الأنظمة المتعددة.
+            What's New:
+            - Rust A* Pathfinder Core: Implemented a new strategic routing engine that calculates the safest path based on multi-factor risk scoring (EDR presence, firewall levels, honeypot probability) rather than shortest distance alone.
+            - Enhanced C Evasion Suite: Integrated advanced stealth techniques including memory sleep masking, ETW patching, and AMSI bypass, with full support for indirect system calls (Indirect Syscalls).
+            - Standardized Communication (SEE & NDJSON): Unified error and result outputs across all system components (Python, Go, C, Rust) to ensure closed-loop intelligence reliability.
+            - CI/CD Stabilization: Optimized automated build pipelines, fixed deployment steps, and ensured smoke testing stability across multi-platform environments.
           draft: false
           prerelease: false
