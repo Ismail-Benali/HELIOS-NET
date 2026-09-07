@@ -168,7 +168,7 @@ impl AStarPathfinder {
 // FFI EXPORTS FOR PYTHON CONTROL PLANE
 // ============================================================================
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn calculate_optimal_path(
     nodes_ptr: *const NodeRiskProfile,
     node_count: c_int,
@@ -254,7 +254,7 @@ pub unsafe extern "C" fn calculate_optimal_path(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_path(path_ptr: *mut OptimalPath) {
     if path_ptr.is_null() {
         return;
