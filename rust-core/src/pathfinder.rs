@@ -79,7 +79,6 @@ impl AStarPathfinder {
         #[derive(Clone)]
         struct State {
             f_score_bits: u64,
-            g_score: f64,
             node: String,
         }
 
@@ -113,7 +112,6 @@ impl AStarPathfinder {
 
         open_set.push(State {
             f_score_bits: f_start.to_bits(),
-            g_score: 0.0,
             node: start.to_string(),
         });
 
@@ -154,7 +152,6 @@ impl AStarPathfinder {
 
                         open_set.push(State {
                             f_score_bits: f.to_bits(),
-                            g_score: tentative_g,
                             node: neighbor.clone(),
                         });
                     }
