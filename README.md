@@ -145,6 +145,27 @@ tar -xzf helios-net.tar.gz
 
 ---
 
+## 🐳 Run with Docker
+
+Want to run HELIOS-NET instantly without setting up local toolchains (Go, Rust, Python, GCC)? Pull the official production-ready container image directly from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/ismail-benali/helios-net:latest
+```
+
+### Quick Container Execution
+Execute campaigns seamlessly inside the sandboxed container environment:
+
+```bash
+# Run a reconnaissance campaign
+docker run --rm ghcr.io/ismail-benali/helios-net:latest recon --target 127.0.0.1
+
+# Run the end-to-end simulation
+docker run --rm ghcr.io/ismail-benali/helios-net:latest run_simulation.py
+```
+
+---
+
 ## 🚀 Quick Start & CLI Usage
 
 HELIOS-NET requires zero external `pip` packages for its core logic.
