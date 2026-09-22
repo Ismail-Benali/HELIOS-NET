@@ -26,21 +26,55 @@ class PivotProxyServer:
         self._active_sessions += 1
         peer = writer.get_extra_info("peername")
         try:
-            # For tunneling, expect target handshake or direct destination framing
-            # Simplified TCP tunnel bridge: forward raw bytes to internal destination
-            header = await reader.read(512)
+            # Expect target handshake: target_ip:target_port\n
+            header = await reader.readline()
             if not header:
                 return
-            
-            # Example protocol framing: target_ip:target_port encoded in header or direct relay
-            # For elite demonstration, we establish a bidirectional pipe
-            pass
+            header_str = header.decode("utf-8", errors="replace").strip()
+            if ":" not in header_str:
+                return
+            target_host, target_port_str = header_str.rsplit(":", 1)
+            target_port = int(target_port_str)
+
+            # Connect to actual target destination
+            try:
+                target_reader, target_writer = await asyncio.open_connection(target_host, target_port)
+            except Exception as e:
+                log.error(f"Pivot failed to connect to target {target_host}:{target_port}: {e}")
+                return
+
+            # Bidirectional relay pipe between client and target
+            async def forward(src_reader, dst_writer):
+                try:
+                    while True:
+                        data = await src_reader.read(4096)
+                        if not data:
+                            break
+                        dst_writer.write(data)
+                        await dst_writer.drain()
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        dst_writer.close()
+                        await dst_writer.wait_closed()
+                    except Exception:
+                        pass
+
+            await asyncio.gather(
+                forward(reader, target_writer),
+                forward(target_reader, writer),
+                return_exceptions=True
+            )
         except Exception as exc:
             log.error(f"Pivot session error with {peer}: {exc}")
         finally:
             self._active_sessions -= 1
-            writer.close()
-            await writer.wait_closed()
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
 
     async def start(self) -> None:
         self._server = await asyncio.start_server(
