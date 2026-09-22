@@ -96,38 +96,49 @@ def build_c_components() -> None:
 
 
 def main() -> None:
-    print("[HELIOS-NET] Initializing Polyglot Build Pipeline...")
+    print("[HELIOS-NET] Initializing Polyglot Build Pipeline & Pre-flight Diagnostics...")
     
+    toolchain_status = {"go": False, "rust": False, "c": False}
+
     # Check Go
     try:
-        res = subprocess.run(["go", "version"], capture_output=True, text=True)
-        print(f"[+] Found Go: {res.stdout.strip()}")
+        res = subprocess.run(["go", "version"], capture_output=True, text=True, check=True)
+        print(f"[+] [Diagnostic] Found Go toolchain: {res.stdout.strip()}")
+        toolchain_status["go"] = True
         build_go_components()
-    except FileNotFoundError:
-        print("[-] Go compiler not found in PATH. Skipping Go builds.")
+    except (subprocess.SubprocessError, FileNotFoundError):
+        print("[-] [Diagnostic] Go compiler not found or execution failed. Skipping Go builds.")
 
     # Check Cargo/Rust
     try:
-        res = subprocess.run(["cargo", "--version"], capture_output=True, text=True)
-        print(f"[+] Found Cargo: {res.stdout.strip()}")
+        res = subprocess.run(["cargo", "--version"], capture_output=True, text=True, check=True)
+        print(f"[+] [Diagnostic] Found Cargo/Rust toolchain: {res.stdout.strip()}")
+        toolchain_status["rust"] = True
         build_rust_core()
-    except FileNotFoundError:
-        print("[-] Cargo/Rust compiler not found in PATH. Skipping Rust builds.")
+    except (subprocess.SubprocessError, FileNotFoundError):
+        print("[-] [Diagnostic] Cargo/Rust compiler not found or execution failed. Skipping Rust builds.")
 
     # Check C compiler (gcc/clang) for size-optimized C primitives
     try:
-        res = subprocess.run(["gcc", "--version"], capture_output=True, text=True)
-        print(f"[+] Found GCC: {res.stdout.splitlines()[0].strip() if res.stdout else 'unknown'}")
+        res = subprocess.run(["gcc", "--version"], capture_output=True, text=True, check=True)
+        print(f"[+] [Diagnostic] Found GCC C compiler: {res.stdout.splitlines()[0].strip() if res.stdout else 'unknown'}")
+        toolchain_status["c"] = True
         build_c_components()
-    except FileNotFoundError:
+    except (subprocess.SubprocessError, FileNotFoundError):
         try:
-            res = subprocess.run(["clang", "--version"], capture_output=True, text=True)
-            print(f"[+] Found Clang: {res.stdout.splitlines()[0].strip() if res.stdout else 'unknown'}")
+            res = subprocess.run(["clang", "--version"], capture_output=True, text=True, check=True)
+            print(f"[+] [Diagnostic] Found Clang C compiler: {res.stdout.splitlines()[0].strip() if res.stdout else 'unknown'}")
+            toolchain_status["c"] = True
             build_c_components()
-        except FileNotFoundError:
-            print("[-] No C compiler (gcc/clang) found in PATH. Skipping C builds.")
+        except (subprocess.SubprocessError, FileNotFoundError):
+            print("[-] [Diagnostic] No C compiler (gcc/clang) found in PATH. Skipping C builds.")
 
     print("\n" + "=" * 50)
+    print(f"[HELIOS-NET] Pre-flight Toolchain Diagnostics Summary:")
+    print(f"    - Go Compiler:    {'AVAILABLE' if toolchain_status['go'] else 'MISSING'}")
+    print(f"    - Rust/Cargo:     {'AVAILABLE' if toolchain_status['rust'] else 'MISSING'}")
+    print(f"    - C Compiler:     {'AVAILABLE' if toolchain_status['c'] else 'MISSING'}")
+    print("=" * 50)
     print("[HELIOS-NET] Build Pipeline Completed.")
     print("=" * 50)
 
