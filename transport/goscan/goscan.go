@@ -95,7 +95,7 @@ func guessServiceFromBanner(banner string) string {
 func scanPort(ip string, port int, timeout time.Duration, sem chan struct{}, wg *sync.WaitGroup, results chan<- PortResult) {
 	defer wg.Done()
 	<-sem // acquire token
-	defer func() { sem <- struct{}() }() // release token
+	defer func() { sem <- struct{}{} }() // release token
 
 	target := fmt.Sprintf("%s:%d", ip, port)
 	start := time.Now()
