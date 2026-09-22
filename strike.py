@@ -1,101 +1,61 @@
 """
 HELIOS-NET :: Authorized Engagement Runner (strike.py)
-Executes authorized attack surface management and route planning against user-specified targets.
-Includes comprehensive coverage for Web, Databases, Infrastructure, and Industrial SCADA/ICS protocols.
-Defaults to local loopback (127.0.0.1) for safety.
+Executes authorized attack surface management and route planning against user-specified targets
+integrated with the central Orchestrator, StateStore, and HTML Reporting engine.
 """
 
-import asyncio
-import sys
+from __future__ import annotations
+
 import argparse
-import ipaddress
-from modules.discovery.dns_resolver import EliteDNSResolver
-from core.async_engine import enterprise_adaptive_recon
-from engine.graph.core import AssetGraph
-from engine.killchain.pathfinder import KillChainEngine
+import sys
+from pathlib import Path
 
-async def execute_engagement(target: str = "127.0.0.1"):
-    print(f"[HELIOS-NET] Initializing authorized engagement orchestration for target: {target}")
-    
-    # Check if target is already an IP address
-    ips = []
-    try:
-        ipaddress.ip_address(target)
-        ips = [target]
-        print(f"[+] Target is a direct IP address: {target}")
-    except ValueError:
-        resolver = EliteDNSResolver()
-        ips = await resolver.resolve(target)
-        print(f"[+] Resolved target domain to IP addresses: {ips}")
-    
-    if not ips:
-        print("[-] Could not resolve target addresses.")
-        return
-        
-    primary_ip = ips[0]
-    print(f"[+] Focusing on primary node: {primary_ip}")
-    
-    # Expanded port list covering Web, Infrastructure, Databases, and Industrial SCADA/ICS
-    ports = [
-        # Web & Proxy
-        80, 443, 8080, 8443, 8888,
-        # Infrastructure & Remote Access
-        21, 22, 23, 25, 53, 110, 445, 3389, 5900,
-        # Databases & Big Data
-        1433, 1521, 3306, 5432, 6379, 27017, 9200,
-        # Industrial Control Systems (SCADA / ICS)
-        102,    # Siemens S7Comm
-        502,    # Modbus TCP
-        1883,   # MQTT (IoT / ICS telemetry)
-        2404,   # IEC 60870-5-104
-        4840,   # OPC UA
-        20000,  # DNP3
-        44818,  # EtherNet/IP (CIP)
-    ]
-    
-    active_services = await enterprise_adaptive_recon(primary_ip, ports)
-    print(f"[+] Active services observed: {active_services}")
-    
-    g = AssetGraph()
-    host_node = f"host:{primary_ip}"
-    g.add_node(host_node, "host", ip=primary_ip, domain=target)
-    
-    for svc in active_services:
-        p = svc["port"]
-        svc_node = f"svc:{primary_ip}:{p}/tcp"
-        
-        # Categorize service name for rich asset graph labeling
-        if p in [80, 443, 8080, 8443, 8888]:
-            svc_name = "web-service"
-        elif p in [3306, 5432, 1433, 1521, 27017, 6379, 9200]:
-            svc_name = "database"
-        elif p in [502, 102, 44818, 20000, 4840, 2404, 1883]:
-            svc_name = "scada-ics"
-        else:
-            svc_name = "infrastructure-service"
-            
-        g.add_node(svc_node, "service", port=p, name=svc_name)
-        g.add_edge(host_node, svc_node, "runs")
-        
-    engine = KillChainEngine(g)
-    if active_services:
-        target_svc = f"svc:{primary_ip}:{active_services[0]['port']}/tcp"
-        path, cost = engine.find_attack_path(host_node, target_svc)
-        print(f"[+] Computed engagement route plan: {path} with impedance cost: {cost}")
-        
-        plan = engine.generate_kill_chain_plan(host_node, target_svc)
-        print("\n" + "="*50)
-        print(plan)
-        print("="*50)
-    else:
-        print("[-] No open active ports observed for route planning (target protected or ports closed).")
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-def main():
-    parser = argparse.ArgumentParser(description="HELIOS-NET Authorized Engagement Runner")
+from core.orchestrator import Orchestrator
+from core.state import StateStore
+from core.reporter_html import generate_html_report
+from modules.registry import default_registry
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="HELIOS-NET Authorized Engagement Orchestrator")
     parser.add_argument("--target", default="127.0.0.1", help="Target domain or IP (default: 127.0.0.1)")
+    parser.add_argument("--data", default=str(ROOT / "data"), help="Campaign data directory")
     args = parser.parse_args()
+
+    print(f"[HELIOS-NET] Initializing authorized campaign engagement against target: {args.target}")
     
-    asyncio.run(execute_engagement(args.target))
+    store = StateStore(args.data)
+    orch = Orchestrator(store=store, reg=default_registry())
+    
+    state = orch.run_campaign(args.target)
+    rep = orch.report(state)
+    
+    print(f"[HELIOS] Campaign {state.campaign_id} completed with status: {state.status}")
+    print(f"[HELIOS] Findings collected: {state.meta.get('findings_count', 0)}")
+    print(f"[HELIOS] Asset graph nodes: {state.meta.get('graph_nodes', 0)}, edges: {state.meta.get('graph_edges', 0)}")
+    
+    if state.meta.get("top_targets"):
+        print(f"[HELIOS] Top high-centrality targets: {state.meta['top_targets']}")
+
+    # Generate Executive HTML Report
+    html_out = Path(args.data) / f"campaign_{state.campaign_id}_report.html"
+    briefing = {
+        "campaign_id": state.campaign_id,
+        "target": state.target,
+        "status": state.status,
+        "findings_count": state.meta.get("findings_count", 0),
+        "top_targets": state.meta.get("top_targets", []),
+        "events": rep.get("timeline", [])
+    }
+    report_path = generate_html_report(briefing, html_out)
+    print(f"[HELIOS] Executive HTML report generated at: {report_path}")
+
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
