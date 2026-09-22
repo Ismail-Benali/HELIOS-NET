@@ -220,11 +220,16 @@ int check_sandbox_timing(void) {
     LARGE_INTEGER freq, start, end;
     if (!QueryPerformanceFrequency(&freq)) return 0;
     QueryPerformanceCounter(&start);
-    volatile int x = 0;
-    for (int i = 0; i < 1000000; i++) {
-        x += i;
+    volatile unsigned long long x = 0;
+    for (int i = 0; i < 5000000; i++) {
+        x += (unsigned long long)i ^ 0xABCDEF;
     }
     QueryPerformanceCounter(&end);
+    double elapsed_ms = (double)(end.QuadPart - start.QuadPart) * 1000.0 / (double)freq.QuadPart;
+    // Return 1 if time acceleration (< 1ms) or debugger breakpoint delay (> 1500ms) is detected
+    if (elapsed_ms < 1.0 || elapsed_ms > 1500.0) {
+        return 1;
+    }
     return 0;
 }
 
