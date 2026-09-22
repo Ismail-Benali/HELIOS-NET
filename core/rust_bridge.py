@@ -66,7 +66,7 @@ class RustGraphFFI:
         if not self.obj or not _rust_lib:
             return None
         try:
-            buf = ctypes.create_string_buffer(1024)
+            buf = ctypes.create_string_buffer(4096)
             _rust_lib.helios_graph_shortest_path.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
             _rust_lib.helios_graph_shortest_path.restype = ctypes.c_int
             res = _rust_lib.helios_graph_shortest_path(
@@ -74,7 +74,7 @@ class RustGraphFFI:
                 start.encode("utf-8"),
                 goal.encode("utf-8"),
                 buf,
-                1024
+                4096
             )
             if res > 0:
                 path_str = buf.value.decode("utf-8")
@@ -127,13 +127,13 @@ def match_signatures_rust(banner: str) -> List[str]:
     if not _rust_lib or not banner:
         return []
     try:
-        buf = ctypes.create_string_buffer(1024)
+        buf = ctypes.create_string_buffer(4096)
         _rust_lib.helios_match_signatures.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
         _rust_lib.helios_match_signatures.restype = ctypes.c_int
         res = _rust_lib.helios_match_signatures(
             banner.encode("utf-8"),
             buf,
-            1024
+            4096
         )
         if res >= 0:
             s = buf.value.decode("utf-8")

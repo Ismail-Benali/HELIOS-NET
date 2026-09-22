@@ -26,22 +26,32 @@ class TransactionalWAL:
     def __init__(self, wal_path: str | Path, master_key: bytes | None = None):
         self.path = Path(wal_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # Derive a robust local encryption key if none provided
-        self._key = master_key or hashlib.sha256(b"HELIOS_SECURE_MASTER_KEY_SEED").digest()
+        # Secure master key handling: generate cryptographic random key if none provided (eliminates hardcoded seed vulnerability)
+        self._key = master_key if master_key is not None else os.urandom(32)
         self._lsn = 0
         self._active_txn = False
         self._txn_buffer = []
         self._lock = threading.Lock()
         self._init_lsn()
 
+    def _generate_keystream(self, derived_key: bytes, salt: bytes, length: int) -> bytes:
+        """Generates a cryptographic keystream of arbitrary length using counter-mode SHA-256 (no repeating keystream vulnerability)."""
+        keystream = bytearray()
+        counter = 0
+        while len(keystream) < length:
+            block = hashlib.sha256(derived_key + salt + struct.pack("!I", counter)).digest()
+            keystream.extend(block)
+            counter += 1
+        return bytes(keystream[:length])
+
     def _encrypt(self, plaintext: bytes) -> bytes:
-        """Lightweight authenticated encryption using stdlib hmac & hashlib with optional Rust FFI checksum acceleration."""
+        """Authenticated encryption using HMAC-SHA256, PBKDF2 (100,000 iterations), and counter-mode stream cipher."""
         salt = os.urandom(16)
-        derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 1000, 32)
+        derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 32)
         
-        # Simple secure stream cipher via XOR with derived key expansion
-        stream = hashlib.sha256(derived_key + salt).digest()
-        ciphertext = bytearray(b ^ stream[i % len(stream)] for i, b in enumerate(plaintext))
+        # Cryptographic stream cipher with full-length keystream expansion
+        stream = self._generate_keystream(derived_key, salt, len(plaintext))
+        ciphertext = bytearray(b ^ stream[i] for i, b in enumerate(plaintext))
         
         # Calculate HMAC signature for integrity
         sig = hmac.new(derived_key, salt + bytes(ciphertext), hashlib.sha256).digest()
@@ -52,14 +62,14 @@ class TransactionalWAL:
         return sig + salt + bytes(ciphertext)
 
     def _decrypt(self, raw_data: bytes) -> bytes | None:
-        """Verifies HMAC, validates via Rust FFI checksum if available, and decrypts record."""
+        """Verifies HMAC, validates via Rust FFI checksum if available, and decrypts record securely."""
         if len(raw_data) < 48:
             return None
         sig = raw_data[:32]
         salt = raw_data[32:48]
         ciphertext = raw_data[48:]
 
-        derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 1000, 32)
+        derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 32)
         expected_sig = hmac.new(derived_key, salt + ciphertext, hashlib.sha256).digest()
         
         if not hmac.compare_digest(sig, expected_sig):
@@ -68,8 +78,8 @@ class TransactionalWAL:
         # Optional native Rust checksum fast-path check
         _ = get_rust_checksum(ciphertext)
 
-        stream = hashlib.sha256(derived_key + salt).digest()
-        plaintext = bytes(b ^ stream[i % len(stream)] for i, b in enumerate(ciphertext))
+        stream = self._generate_keystream(derived_key, salt, len(ciphertext))
+        plaintext = bytes(b ^ stream[i] for i, b in enumerate(ciphertext))
         return plaintext
 
     def _init_lsn(self) -> None:
