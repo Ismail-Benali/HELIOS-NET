@@ -17,8 +17,6 @@ import struct
 import threading
 from pathlib import Path
 
-from core.rust_bridge import get_rust_checksum
-
 
 class TransactionalWAL:
     """Secure encrypted transactional WAL."""
@@ -56,13 +54,10 @@ class TransactionalWAL:
         # Calculate HMAC signature for integrity
         sig = hmac.new(derived_key, salt + bytes(ciphertext), hashlib.sha256).digest()
         
-        # Optional Rust FFI native checksum verification hook
-        _ = get_rust_checksum(bytes(ciphertext))
-        
         return sig + salt + bytes(ciphertext)
 
     def _decrypt(self, raw_data: bytes) -> bytes | None:
-        """Verifies HMAC, validates via Rust FFI checksum if available, and decrypts record securely."""
+        """Verifies HMAC and decrypts record securely."""
         if len(raw_data) < 48:
             return None
         sig = raw_data[:32]
@@ -74,9 +69,6 @@ class TransactionalWAL:
         
         if not hmac.compare_digest(sig, expected_sig):
             return None  # Tampered or corrupted data
-
-        # Optional native Rust checksum fast-path check
-        _ = get_rust_checksum(ciphertext)
 
         stream = self._generate_keystream(derived_key, salt, len(ciphertext))
         plaintext = bytes(b ^ stream[i] for i, b in enumerate(ciphertext))
