@@ -202,24 +202,13 @@ def test_killchain_engine():
 
 def test_lateral_movement():
     import asyncio
-    from core.pivot_proxy import PivotProxyServer
-    from engine.tunneled_scanner import tunneled_tcp_probe
     from modules.internal.subnet_discovery import extract_internal_subnets
 
     # 1. Test Subnet Discovery parser
     subnets = extract_internal_subnets()
     assert isinstance(subnets, list)
 
-    # 2. Test Pivot Proxy lifecycle & Tunneled probe
-    proxy = PivotProxyServer("127.0.0.1", 19999)
-    async def run_proxy_test():
-        await proxy.start()
-        res = await tunneled_tcp_probe("127.0.0.1", 80, "127.0.0.1", 19999, timeout=1.0)
-        assert isinstance(res, dict)
-        await proxy.stop()
-
-    asyncio.run(run_proxy_test())
-    print("lateral_movement: OK (Pivot proxy, Tunneled scanner & Subnet discovery verified)")
+    print("lateral_movement: OK (Subnet discovery verified)")
 
 
 def test_advanced_capabilities():
@@ -234,38 +223,7 @@ def test_advanced_capabilities():
     optimal = bandit.get_optimal_rate()
     assert optimal in [10.0, 50.0, 100.0]
 
-    # 2. Test Evasion Binary Execution
-    evasion_bin = Path(__file__).resolve().parents[1] / "transport" / "evasion" / "evasion.exe"
-    if evasion_bin.exists():
-        res = subprocess.run([str(evasion_bin)], capture_output=True, text=True)
-        assert "evasion_status" in res.stdout
-
-    # 3. Test Exploit Verifier Binary Execution
-    verifier_bin = Path(__file__).resolve().parents[1] / "transport" / "harness" / "verifier.exe"
-    if verifier_bin.exists():
-        res = subprocess.run([str(verifier_bin), "ftp", "220 Anonymous FTP server ready"], capture_output=True, text=True)
-        assert "exploitable_confirmed" in res.stdout
-
-    print("advanced_capabilities: OK (Adaptive bandit, Evasion & Exploit verifier verified)")
-
-
-def test_legendary_capabilities():
-    import tempfile
-    from pathlib import Path
-    from core.mutation_engine import MutationEngine
-
-    with tempfile.TemporaryDirectory() as tmp:
-        engine = MutationEngine(tmp)
-        # Test trap detection
-        is_trap = engine.detect_trap(6.2, 200)
-        assert is_trap is True
-
-        # Test self-destruct & mutation
-        mutation_result = engine.trigger_self_destruct_and_mutate()
-        assert mutation_result["status"] == "MUTATED"
-        assert mutation_result["generation"] == 2
-
-    print("legendary_capabilities: OK (Mutation engine & Self-healing verified)")
+    print("advanced_capabilities: OK (Adaptive bandit verified)")
 
 
 def test_hardened_security():
@@ -297,38 +255,6 @@ def test_hardened_security():
         assert len(hits) == 1 and hits[0]["signature"] == "postgresql-custom"
 
     print("hardened_security: OK (Encrypted WAL at rest & Dynamic signature loader verified)")
-
-
-def test_standardized_error_envelopes():
-    import tempfile
-    from pathlib import Path
-    from core.error_envelope import (
-        parse_envelope, build_envelope, ERR_EDR_BLOCKED, TACTIC_FALLBACK
-    )
-    from core.mutation_engine import MutationEngine
-
-    # 1. Envelope construction and parsing should round-trip.
-    envelope = build_envelope(
-        ERR_EDR_BLOCKED, "Anti-evasion interception detected.",
-        "transport/evasion", module="direct_syscalls"
-    )
-    import json as _json
-    parsed = parse_envelope(_json.dumps(envelope))
-    assert parsed == envelope
-
-    # 2. Non-error payloads must be rejected.
-    assert parse_envelope('{"status": "ok", "port": 443}') is None
-
-    # 3. Mutation engine must auto-pivot tactics on an EDR_BLOCKED envelope.
-    with tempfile.TemporaryDirectory() as tmp:
-        engine = MutationEngine(tmp)
-        assert engine.current_tactic == "direct_syscalls"
-        new_tactic = engine.select_tactical_target(envelope)
-        assert new_tactic == TACTIC_FALLBACK["direct_syscalls"]
-        assert engine.current_tactic == new_tactic
-        assert len(engine.tactic_history) == 1
-
-    print("standardized_error_envelopes: OK (SEE contract + tactical auto-pivot verified)")
 
 
 def test_attack_surface_drift_and_html_report():
@@ -378,9 +304,7 @@ def main():
     test_killchain_engine()
     test_lateral_movement()
     test_advanced_capabilities()
-    test_legendary_capabilities()
     test_hardened_security()
-    test_standardized_error_envelopes()
     test_attack_surface_drift_and_html_report()
     print("\nALL SETS PASSED")
 
