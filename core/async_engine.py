@@ -10,8 +10,15 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import random
 import time
-from typing import List
+
+
+async def jittered_backoff(base_delay: float = 0.05, max_delay: float = 1.0, attempt: int = 1) -> None:
+    """Applies exponential backoff with random jitter to defeat IDS/SIEM periodicity detection."""
+    delay = min(max_delay, base_delay * (2 ** max(0, attempt - 1)))
+    jitter = random.uniform(0, 0.5 * delay)
+    await asyncio.sleep(delay + jitter)
 
 
 class AIMDController:
@@ -78,6 +85,7 @@ async def enterprise_adaptive_recon(host: str, ports: List[int]) -> List[dict]:
                 await controller.onError()
             results.append(res)
             queue.task_done()
+            await jittered_backoff()
 
     workers = [asyncio.create_task(worker()) for _ in range(5)]
     await queue.join()

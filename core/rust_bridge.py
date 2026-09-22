@@ -32,35 +32,42 @@ for cand in LIB_CANDIDATES:
 
 
 class RustGraphFFI:
-    """Wrapper for Rust high-performance graph pathfinding via ctypes."""
+    """Wrapper for Rust high-performance graph pathfinding via ctypes with robust diagnostics."""
 
     def __init__(self):
         self.obj = None
         if _rust_lib:
             try:
+                _rust_lib.helios_graph_new.argtypes = []
                 _rust_lib.helios_graph_new.restype = ctypes.c_void_p
                 self.obj = _rust_lib.helios_graph_new()
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).debug(f"FFI helios_graph_new failed: {e}")
                 self.obj = None
 
     def add_edge(self, from_node: str, to_node: str, cost: float) -> None:
         if not self.obj or not _rust_lib:
             return
         try:
+            _rust_lib.helios_graph_add_edge.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_double]
+            _rust_lib.helios_graph_add_edge.restype = None
             _rust_lib.helios_graph_add_edge(
                 self.obj,
                 from_node.encode("utf-8"),
                 to_node.encode("utf-8"),
                 ctypes.c_double(cost)
             )
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"FFI helios_graph_add_edge failed: {e}")
 
     def shortest_path(self, start: str, goal: str) -> Optional[Tuple[List[str], float]]:
         if not self.obj or not _rust_lib:
             return None
         try:
             buf = ctypes.create_string_buffer(1024)
+            _rust_lib.helios_graph_shortest_path.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
             _rust_lib.helios_graph_shortest_path.restype = ctypes.c_int
             res = _rust_lib.helios_graph_shortest_path(
                 self.obj,
@@ -73,13 +80,16 @@ class RustGraphFFI:
                 path_str = buf.value.decode("utf-8")
                 path = path_str.split(",")
                 return path, 0.0
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"FFI helios_graph_shortest_path failed: {e}")
         return None
 
     def __del__(self):
         if self.obj and _rust_lib:
             try:
+                _rust_lib.helios_graph_free.argtypes = [ctypes.c_void_p]
+                _rust_lib.helios_graph_free.restype = None
                 _rust_lib.helios_graph_free(self.obj)
             except Exception:
                 pass
@@ -94,8 +104,9 @@ def get_rust_ttl(ttl: int) -> Optional[str]:
         res = _rust_lib.helios_ttl_family(ttl)
         if res:
             return res.decode("utf-8")
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"FFI helios_ttl_family failed: {e}")
     return None
 
 
@@ -106,8 +117,9 @@ def get_rust_checksum(data: bytes) -> Optional[int]:
         _rust_lib.helios_compute_checksum.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
         _rust_lib.helios_compute_checksum.restype = ctypes.c_uint64
         return _rust_lib.helios_compute_checksum(data, len(data))
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"FFI helios_compute_checksum failed: {e}")
     return None
 
 
@@ -116,6 +128,7 @@ def match_signatures_rust(banner: str) -> List[str]:
         return []
     try:
         buf = ctypes.create_string_buffer(1024)
+        _rust_lib.helios_match_signatures.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
         _rust_lib.helios_match_signatures.restype = ctypes.c_int
         res = _rust_lib.helios_match_signatures(
             banner.encode("utf-8"),
@@ -125,6 +138,7 @@ def match_signatures_rust(banner: str) -> List[str]:
         if res >= 0:
             s = buf.value.decode("utf-8")
             return [m for m in s.split(",") if m]
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"FFI helios_match_signatures failed: {e}")
     return []

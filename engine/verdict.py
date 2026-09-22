@@ -65,6 +65,30 @@ class VerdictEngine:
         for name, factory in registry.items():
             self._rules.append(factory())
 
+    def load_from_json(self, json_path: str | Path) -> int:
+        """Dynamically loads rules from an external JSON file (Dynamic DSL)."""
+        from pathlib import Path
+        import json
+        path = Path(json_path)
+        if not path.exists():
+            return 0
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            count = 0
+            for r_def in data.get("rules", []):
+                name = r_def.get("name", "custom_rule")
+                weight = float(r_def.get("weight", 0.5))
+                key = r_def.get("field", "service")
+                val = r_def.get("match", "").lower()
+                note = r_def.get("note", "")
+
+                test_fn = lambda f, k=key, v=val: v in str(f.get(k, "")).lower()
+                self._rules.append(Rule(name=name, weight=weight, test=test_fn, note=note))
+                count += 1
+            return count
+        except Exception:
+            return 0
+
     def judge(self, finding: dict) -> Verdict:
         v = Verdict(finding=finding)
         for r in self._rules:
