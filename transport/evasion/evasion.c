@@ -216,6 +216,18 @@ int restore_amsi(void) {
     return 1;
 }
 
+int check_sandbox_timing(void) {
+    LARGE_INTEGER freq, start, end;
+    if (!QueryPerformanceFrequency(&freq)) return 0;
+    QueryPerformanceCounter(&start);
+    volatile int x = 0;
+    for (int i = 0; i < 1000000; i++) {
+        x += i;
+    }
+    QueryPerformanceCounter(&end);
+    return 0;
+}
+
 /* --------------------------------------------------------------------------
    CLI Main Entrypoint
    -------------------------------------------------------------------------- */
