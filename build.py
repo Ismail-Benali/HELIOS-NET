@@ -74,6 +74,10 @@ def build_c_components() -> None:
     print("[HELIOS-NET] Building C User-Mode Primitives (size-optimized)...")
     print("=" * 50)
 
+    if os.name != "nt":
+        print("[-] C evasion primitives are Windows-specific. Skipping on non-Windows CI/CD runner.")
+        return
+
     transport_dir = ROOT / "transport"
     if not transport_dir.exists():
         print("[-] transport directory not found.")

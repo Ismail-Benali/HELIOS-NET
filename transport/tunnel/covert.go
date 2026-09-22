@@ -56,7 +56,7 @@ func main() {
 	payload := []byte(os.Args[1])
 	baseDomain := os.Args[2]
 	
-	// 256-bit AES master key loaded securely from environment or CLI argument, with fallback
+	// 256-bit AES master key loaded strictly from environment or CLI argument (no insecure hardcoded fallback)
 	keyStr := os.Getenv("HELIOS_TUNNEL_KEY")
 	var secretKey []byte
 	if len(keyStr) >= 32 {
@@ -64,7 +64,8 @@ func main() {
 	} else if len(os.Args) > 3 && len(os.Args[3]) >= 32 {
 		secretKey = []byte(os.Args[3][:32])
 	} else {
-		secretKey = []byte("helios-secure-tunnel-key-32bytes!")
+		fmt.Fprintln(os.Stderr, "Error: HELIOS_TUNNEL_KEY environment variable or 32-byte secret-key argument required.")
+		os.Exit(1)
 	}
 
 	encrypted, err := encryptPayload(payload, secretKey)
