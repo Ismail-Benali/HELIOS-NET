@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
 
 class PivotProxyServer:
-    """Asynchronous TCP Tunneling Pivot Relay."""
+    """Asynchronous TCP Tunneling Pivot Relay with Token Auth & Whitelist."""
 
-    def __init__(self, bind_host: str = "127.0.0.1", bind_port: int = 1080):
+    def __init__(self, bind_host: str = "127.0.0.1", bind_port: int = 1080, auth_token: str | None = None, whitelist_hosts: list[str] | None = None):
         self.bind_host = bind_host
         self.bind_port = bind_port
+        self.auth_token = auth_token or os.environ.get("HELIOS_PROXY_TOKEN")
+        self.whitelist_hosts = whitelist_hosts or []
         self._server: asyncio.Server | None = None
         self._active_sessions = 0
 
@@ -26,15 +29,30 @@ class PivotProxyServer:
         self._active_sessions += 1
         peer = writer.get_extra_info("peername")
         try:
-            # Expect target handshake: target_ip:target_port\n
+            # Expect target handshake: [token@]target_ip:target_port\n
             header = await reader.readline()
             if not header:
                 return
             header_str = header.decode("utf-8", errors="replace").strip()
+
+            # Verify token auth if configured
+            if self.auth_token:
+                if "@" not in header_str:
+                    return
+                token_provided, header_str = header_str.split("@", 1)
+                import hmac
+                if not hmac.compare_digest(token_provided, self.auth_token):
+                    return
+
             if ":" not in header_str:
                 return
             target_host, target_port_str = header_str.rsplit(":", 1)
             target_port = int(target_port_str)
+
+            # Check target whitelist if configured
+            if self.whitelist_hosts and target_host not in self.whitelist_hosts:
+                log.warning(f"Blocked connection to non-whitelisted target: {target_host}")
+                return
 
             # Connect to actual target destination
             try:
