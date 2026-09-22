@@ -1,174 +1,79 @@
 <div align="center">
 
 # HELIOS-NET
-### Autonomous Red Teaming & Attack Surface Management Orchestrator
-
-<img width="100%" alt="Helios-Net" src="https://github.com/user-attachments/assets/eb7d5c73-ee03-4500-bc95-45269d7afec6" />
-
-<br>
+### Autonomous Attack Surface Management & High-Performance Scanning Engine
 
 [![Release](https://img.shields.io/github/v/release/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=release&color=black)](https://github.com/Ismail-Benali/HELIOS-NET/releases)
 [![Stars](https://img.shields.io/github/stars/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=stars&color=black&logo=github)](https://github.com/Ismail-Benali/HELIOS-NET/stargazers)
-[![Forks](https://img.shields.io/github/forks/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=forks&color=black)](https://github.com/Ismail-Benali/HELIOS-NET/network)
 [![License](https://img.shields.io/badge/license-non--commercial-black.svg?style=for-the-badge&color=black)](LICENSE)
 [![CI/CD](https://img.shields.io/github/actions/workflow/status/Ismail-Benali/HELIOS-NET/build.yml?style=for-the-badge&label=build&logo=githubactions&logoColor=green)](https://github.com/Ismail-Benali/HELIOS-NET/actions)
 
 <br>
 
 [![Python](https://img.shields.io/badge/python-3.12-black.svg?style=for-the-badge&logo=python&logoColor=green)](https://www.python.org/)
-[![Go](https://img.shields.io/badge/go-1.27-black.svg?style=for-the-badge&logo=go&logoColor=green)](https://golang.org/)
-[![C](https://img.shields.io/badge/c-gcc-black.svg?style=for-the-badge&logo=c&logoColor=green)](https://gcc.gnu.org/)
-[![Rust](https://img.shields.io/badge/rust-black.svg?style=for-the-badge&logo=rust&logoColor=green)](https://www.rust-lang.org/)
+[![Go](https://img.shields.io/badge/go-1.22-black.svg?style=for-the-badge&logo=go&logoColor=green)](https://golang.org/)
 
 </div>
 
 ---
 
-**HELIOS-NET** is an enterprise-grade, autonomous polyglot orchestrator for **red teaming** and **attack surface management (ASM)** engagements. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Adaptation), HELIOS-NET eliminates external dependencies, relying entirely on Python stdlib for control orchestration, high-performance Go binaries for concurrent networking, and low-level C binaries for user-mode evasion primitives and in-memory execution.
+**HELIOS-NET** is a focused, high-performance **Attack Surface Management (ASM)** and **network scanning orchestrator**. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Reporting), HELIOS-NET relies entirely on Python stdlib for control orchestration and high-performance Go binaries (`goscan`) for concurrent networking and NDJSON streaming.
 
-> ⚠️ **Dual-use notice:** HELIOS-NET is a security framework for **authorized** penetration testing, red-teaming, and educational research only. Using it against any system without explicit written permission is illegal. See [Security & Operational Notice](#-security--operational-notice).
+> ⚠️ **Scope Notice:** HELIOS-NET is designed strictly for **authorized** penetration testing, network mapping, and educational research.
 
 ---
 
 ## 📑 Table of Contents
 
-- [Why HELIOS-NET?](#why-helios-net)
-- [System Architecture Topology](#-system-architecture-topology)
-- [Core Capabilities](#-what-helios-net-does-core-capabilities)
-- [Polyglot Performance Highlights](#-polyglot-performance-highlights)
-- [Download & Run](#-download--run-latest-release)
+- [Core Capabilities](#-core-capabilities)
+- [System Architecture](#-system-architecture)
 - [Quick Start & CLI Usage](#-quick-start--cli-usage)
 - [Automated Testing](#-automated-testing)
-- [Roadmap & Documentation](#-future-roadmap)
-- [Contributing & Security](#-contributing)
+- [Honest Project Status](#-honest-project-status)
 
 ---
 
-## Why HELIOS-NET?
+## ⚙️ Core Capabilities
 
-| Problem | HELIOS-NET Solution |
-| :--- | :--- |
-| **Tool Sprawl** across recon/adversary stages | **One orchestrated pipeline** — recon → planning → execution → adaptation, fault-isolated |
-| **Fragile Dependencies** (`pip install`-heavy graphs) | **Zero runtime pip dependencies** (Python stdlib control plane) |
-| **Slow Single-Threaded Scanners** | **Thousands of Go Goroutines** streaming NDJSON results with zero pipe deadlocks |
-| **Hookable User-Mode APIs** on Windows | **C primitives** with indirect NTDLL SSN resolution + in-memory execution |
-| **OPSEC-Unaware Automation** (periodic timers) | **Exponential behavioral jitter** to defeat SIEM/IDS periodicity analysis |
-| **No Crash-Survivability** | **Authenticated transactional WAL** (HMAC-SHA256) — absolute zero data loss |
-| **Static Toolkits** that die on EDR alarms | **Auto-adaptive Mutation Engine** pivots tactics instantly on structured JSON errors |
+1. **Closed-Loop Orchestration:** Manages campaign state, dependency planning, and parallel wave execution with absolute fault isolation.
+2. **Encrypted Transactional WAL:** Crash recovery and secure transaction logging secured by PBKDF2 (100,000 iterations) and Counter-Mode SHA-256 authenticated encryption.
+3. **High-Performance Go Scanning:** Leverages thousands of lightweight Goroutines (`goscan`) streaming open ports via NDJSON.
+4. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
+5. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
+6. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
 
 ---
 
-## 🗺️ System Architecture Topology
+## 🗺️ System Architecture
 
 ```text
 +-------------------------------------------------------------------------+
 |                         HELIOS-NET CLI & DAEMON                         |
-|                       (Python Orchestration Core)                       |
+|                       (Python Control Plane Core)                       |
 +-------------------------------------------------------------------------+
-       |                     |                     |              |
-       v                     v                     v              v
-+--------------+     +---------------+     +---------------+   +------------+
-|  core/       |     |   engine/     |     |   modules/    |   |  core/     |
-| - wal.py     |     | - graph/      |     | - discovery/  |   | - daemon.py|
-| - state.py   |     | - killchain/  |     | - recon/      |   | - mutation |
-| - orchestr.  |     | - algorithms/ |     | - stealth/    |   | - reporter |
-+--------------+     +---------------+     +---------------+   +------------+
+       |                     |                     |              
+       v                     v                     v              
++--------------+     +---------------+     +---------------+   
+|  core/       |     |   engine/     |     |   modules/    |   
+| - wal.py     |     | - graph/      |     | - discovery/  |   
+| - state.py     |     | - killchain/  |     | - recon/      |   
+| - orchestr.  |     | - algorithms/ |     | - stealth/    |   
++--------------+     +---------------+     +---------------+   
        |                     |                     |
        +---------------------+---------------------+
-                             | (IPC / Subprocess / JSON Streams)
+                             | (IPC / NDJSON Streams)
                              v
-+-------------------------------------------------------------------------+
-|                           TRANSPORT / NATIVE                            |
-|                     (Go & C High-Performance Layer)                     |
-+-------------------------------------------------------------------------+
-       |                                           |
-       +-------------------+-----------------------+
-                           |
-                           v
-        +-------------------------------------+
-        |          GO TRANSPORT (Go 1.27)     |
-        | - goscan.exe (Goroutines Scanner)   |
-        | - rawsync.exe (Raw TCP SYN/ACK)     |
-        | - covert.go (Polymorphic DNS Tunnel)|
-        | - raft.go (Distributed Consensus)   |
-        +-------------------------------------+
-        |          C USER-MODE PRIMITIVES (GCC -O3) |
-        | - c_matcher.exe (Memory Matcher)          |
-        | - fingerprint.exe (TTL OS Engine)         |
-        | - evasion.exe (Indirect Syscalls)         |
-        | - memory_loader.exe (In-Memory Exec)      |
-        | - verifier.exe (Protocol Fuzzer)          |
-        +------------------------------------------+
-```
-
----
-
-## ⚙️ What HELIOS-NET Does (Core Capabilities)
-
-1. **Closed-Loop Orchestration:** Manages engagement state, dependency planning, and parallel wave execution with absolute fault isolation.
-2. **High-Performance Go Networking:** Leverages thousands of lightweight Goroutines (`goscan.exe`, `rawsync.exe`) to conduct high-speed port scans and raw-socket handshakes.
-3. **Automated Pathfinding:** Converts raw discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate the Least Resistance path.
-4. **User-Mode Evasion & Syscalls:** Bypasses user-mode API hooking via indirect NTDLL SSN resolution (`direct_syscalls.exe`) and executes runtime in-memory decryption.
-5. **Autonomous Self-Healing & Tuning:** Detects bogus/honeypot traps, shreds local temporary footprints securely, rotates encryption keys, and re-targets automatically.
-6. **Encrypted Transactional WAL:** Guarantees crash recovery and zero data loss with at-record HMAC-SHA256 authenticated encryption.
-7. **Continuous Autonomous Daemon:** Operates as a background agent (`daemon.py`) running continuous recon and self-monitoring loops.
-8. **Standardized Error Envelopes (SEE) & Auto-Adaptive Tactics:** Emits structured machine-readable JSON errors on stderr so `MutationEngine` auto-pivots tactics instantly on EDR/WAF alarms.
-9. **Attack Surface Drift & HTML Reporting:** Computes delta change across scans and generates self-contained dark-mode executive briefing reports.
-
----
-
-## ⚡ Polyglot Performance Highlights
-
-| Layer | Technology | Key Advantage |
-| :--- | :--- | :--- |
-| **Control Plane** | Python 3.12+ | **Zero external pip dependencies** (stdlib only) for absolute portability. |
-| **Network Engine** | Go 1.22+ | Thousands of Goroutines streaming open ports via **NDJSON** to prevent pipe deadlocks. |
-| **Pathfinding Core** | Rust 2024 | High-performance Dijkstra pathfinding exposed via standard **`ctypes` FFI** (native speed). |
-| **Stealth Primitives** | C (GCC/Clang) | Size-optimized (`-Os -Wl,--gc-sections -s`) binaries to minimize detection footprint. |
-| **OPSEC Engine** | Python / Pacer | **Exponential behavioral jitter** to defeat SIEM/IDS periodicity analysis. |
-| **CI/CD Pipeline** | GitHub Actions | Automated cross-platform binary builds & releases (`v1.2.0`). |
-
----
-
-## 📦 Download & Run (Latest Release)
-
-Looking for instant **Download & Run**? Grab the latest pre-compiled, hardened binaries directly from [Releases](https://github.com/Ismail-Benali/HELIOS-NET/releases):
-
-- 🐧 **Linux (x64):** [`helios-net-linux-x64.tar.gz`](https://github.com/Ismail-Benali/HELIOS-NET/releases/latest/download/helios-net-linux-x64.tar.gz)
-- 🪟 **Windows (x64):** [`helios-net-win-x64.zip`](https://github.com/Ismail-Benali/HELIOS-NET/releases/latest/download/helios-net-win-x64.zip)
-
-Or download via terminal (Linux):
-```bash
-curl -sL https://github.com/Ismail-Benali/HELIOS-NET/releases/latest/download/helios-net-linux-x64.tar.gz -o helios-net.tar.gz
-tar -xzf helios-net.tar.gz
-```
-
----
-
-## 🐳 Run with Docker
-
-Want to run HELIOS-NET instantly without setting up local toolchains (Go, Rust, Python, GCC)? Pull the official production-ready container image directly from GitHub Container Registry:
-
-```bash
-docker pull ghcr.io/ismail-benali/helios-net:latest
-```
-
-### Quick Container Execution
-Execute campaigns seamlessly inside the sandboxed container environment:
-
-```bash
-# Run a reconnaissance campaign
-docker run --rm ghcr.io/ismail-benali/helios-net:latest recon --target 127.0.0.1
-
-# Run the end-to-end simulation
-docker run --rm ghcr.io/ismail-benali/helios-net:latest run_simulation.py
+         +-------------------------------------+
+         |          GO NETWORK ENGINE          |
+         | - goscan (Goroutines Port Scanner)  |
+         +-------------------------------------+
 ```
 
 ---
 
 ## 🚀 Quick Start & CLI Usage
 
-HELIOS-NET requires zero external `pip` packages for its core logic.
+HELIOS-NET requires **zero external pip dependencies** for its core control plane.
 
 ### 1. Run a Full Reconnaissance Campaign
 ```bash
@@ -180,17 +85,7 @@ python run.py recon --target 127.0.0.1
 python run.py judge --target 127.0.0.1
 ```
 
-### 3. Inspect Extensible Components (Algorithms, Modules, Rules)
-```bash
-python run.py info
-```
-
-### 4. Activate the Continuous Autonomous Daemon
-```bash
-python run.py daemon --target 127.0.0.1 --interval 15
-```
-
-### 5. Run the End-to-End Demonstration
+### 3. Run the End-to-End Simulation
 ```bash
 python run_simulation.py
 ```
@@ -206,22 +101,7 @@ python tests/smoke.py
 
 ---
 
-## 🧭 Future Roadmap & Documentation
+## 🛡️ Honest Project Status
 
-Check our official [Project Roadmap](ROADMAP.md) for upcoming milestones, including P2P mesh networking and advanced user-mode evasion primitives. In-depth technical material lives in [`docs/`](docs/Home.md) — architecture, autonomous daemon behavior, kill-chain pathfinding, and API reference.
-
----
-
-## 🤝 Contributing
-
-We welcome contributions from security researchers and engineers. Please read our [Contributing Guidelines](CONTRIBUTING.md) before opening a pull request, and our [Security Policy](SECURITY.md) for responsibly reporting vulnerabilities.
-
----
-
-## 🔒 Security & Operational Notice
-
-HELIOS-NET is a **dual-use security framework** designed strictly for authorized penetration testing, red teaming, and educational network research. Any unauthorized network targeting against third-party assets without explicit written consent is strictly prohibited and violates international computer fraud regulations.
-
-- 🔖 **License:** [Ethical Use & Non-Commercial License](LICENSE) — review before use.
-- 🛡️ **Open:** Issues, PRs, and design discussions are welcome.
-- ⚖️ **Scope:** Authorized engagements only.
+**HELIOS-NET is a focused, research-grade Attack Surface Management and Scanning Framework.**
+Following a major strategic refactoring, all unused polyglot bloat, disconnected evasion stubs, and malware tooling have been surgically removed to focus entirely on robust orchestration, fast network discovery, asset graphing, and executive reporting.

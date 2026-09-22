@@ -19,7 +19,6 @@ from core.async_engine import enterprise_adaptive_recon
 from core.reporter_html import generate_html_report
 from core.state import CampaignState
 from core.wal import TransactionalWAL
-from engine.c_matcher_bridge import run_c_matcher
 from engine.graph.core import AssetGraph
 from engine.killchain.pathfinder import KillChainEngine
 from engine.verdict import VerdictEngine, default_rules
