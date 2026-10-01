@@ -1,4 +1,4 @@
-﻿name: HELIOS-NET CI/CD Build Pipeline
+name: HELIOS-NET CI/CD Build Pipeline
 
 on:
   push:
@@ -22,15 +22,15 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: transport/goscan/go.mod
           cache: true
