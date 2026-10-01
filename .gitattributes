@@ -1,0 +1,6 @@
+# The Go gate runs gofmt, and gofmt rejects a CRLF line ending as a formatting
+# difference. GitHub's Windows runners check out with core.autocrlf=true, so
+# without this rule every .go file arrives with CRLF endings and the gate fails
+# on files no one edited. The blobs were always LF; only the checkout was not.
+# No .bat/.cmd/.ps1 exist in this repository, so forcing LF is safe repo-wide.
+* text=auto eol=lf
