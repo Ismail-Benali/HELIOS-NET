@@ -15,6 +15,7 @@ from __future__ import annotations
 import ctypes
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -45,7 +46,7 @@ class FakeLibrary:
             if selftest is _UNSET
             else selftest
         )
-        self._match = match
+        self._match: Any = match
         self._fingerprint = fingerprint
         self._open_ok = open_ok
 
@@ -55,6 +56,20 @@ class FakeLibrary:
         self.freed = 0
         self.fingerprinted: list[str] = []
         self._next = 0
+        #: Live allocations, keyed by the address handed to the caller. The
+        #: buffer is held here so `ctypes.string_at` can read real memory, which
+        #: is what the production path does, and dropped in hc_free so a stale
+        #: read or a double free is observable rather than silent.
+        self._heap: dict[int, ctypes.Array[ctypes.c_char]] = {}
+
+    def _alloc(self, payload: bytes | None) -> int:
+        """Hands back a real address for `payload`, as c_void_p would."""
+        if payload is None:
+            return 0
+        buf = ctypes.create_string_buffer(payload)
+        addr = ctypes.addressof(buf)
+        self._heap[addr] = buf
+        return addr
 
     # --- the flat C ABI -------------------------------------------------
 
@@ -84,19 +99,33 @@ class FakeLibrary:
         banner = text.decode("utf-8")
         self.scanned.append(banner)
         if callable(self._match):
-            return self._match(banner)
-        return self._match
+            return self._alloc(self._match(banner))
+        return self._alloc(self._match)
 
     def hc_dll_fp_json(self, text: bytes):
         banner = text.decode("utf-8")
         self.fingerprinted.append(banner)
-        return self._fingerprint
+        return self._alloc(self._fingerprint)
 
     def hc_dll_selftest_json(self):
-        return self._selftest
+        return self._alloc(self._selftest)
 
-    def hc_free(self, _ptr) -> None:
+    def hc_free(self, ptr) -> None:
+        # An address the library never handed out means the caller freed
+        # something it does not own, which is the bug this fake exists to catch:
+        # with a c_char_p restype the caller holds a Python bytes object, not
+        # the malloc'd block, and passing its address here is an invalid free.
+        addr = ptr.value if isinstance(ptr, ctypes.c_void_p) else int(ptr)
+        assert addr in self._heap, (
+            f"hc_free was given {addr:#x}, which was never allocated; the caller "
+            "passed an address the library does not own"
+        )
+        del self._heap[addr]
         self.freed += 1
+
+    @property
+    def live_allocations(self) -> int:
+        return len(self._heap)
 
 
 def _ok_match(banner: str) -> bytes:
@@ -272,7 +301,7 @@ def test_one_failed_banner_drops_the_whole_batch(signatures, monkeypatch):
     Python would produce a list that looks correct and is not: the entries would
     come from two implementations, and nothing in the result would say so.
     """
-    def mixed(banner: str) -> bytes:
+    def mixed(banner: str) -> bytes | None:
         if banner == "bad":
             return None
         return _ok_match(banner)
@@ -330,6 +359,31 @@ def test_every_returned_buffer_is_released(signatures):
 
     # One selftest, two match buffers, one fingerprint buffer.
     assert fake.freed == 4, f"expected every returned buffer to be freed, saw {fake.freed}"
+    # Counting frees is not enough: a caller could free one buffer twice and
+    # leak another, leaving the total right. Nothing may still be outstanding.
+    assert fake.live_allocations == 0, (
+        f"{fake.live_allocations} buffer(s) never reached hc_free"
+    )
+
+
+def test_a_caller_may_not_free_an_address_it_does_not_own(signatures):
+    """The regression this file exists for.
+
+    With a c_char_p restype ctypes copies the library's buffer into a Python
+    bytes and hands back that copy, discarding the malloc'd address. Freeing
+    what came back therefore passes the address of a Python object to free(),
+    which glibc rejects with `munmap_chunk(): invalid pointer` and aborts the
+    process. Declaring the exports c_void_p keeps the address intact, and the
+stand-in refuses any address it never handed out.
+    """
+    fake = _install(FakeLibrary(match=_ok_match))
+
+    assert bridge.scan_banners(["a", "b"], signatures) is not None
+    assert fake.live_allocations == 0
+
+    with pytest.raises(AssertionError, match="never allocated"):
+        foreign = ctypes.create_string_buffer(b"a buffer the library never returned")
+        fake.hc_free(ctypes.c_void_p(ctypes.addressof(foreign)))
 
 
 def test_fingerprint_prefers_the_library(signatures):
@@ -367,3 +421,26 @@ def test_cast_of_returned_pointer_is_pointer_sized():
     """Guards the binding: a truncated handle would be a wild pointer on x64."""
     pointer = ctypes.cast(ctypes.c_char_p(b"payload"), ctypes.c_void_p)
     assert ctypes.sizeof(pointer) == ctypes.sizeof(ctypes.c_void_p)
+
+
+def test_a_library_that_loads_but_fails_its_selftest_never_answers(signatures):
+    """Availability must gate serving, not just loading.
+
+    The library loading proves nothing about whether it is correct. A load that
+    succeeds and a selftest that fails means the project has already declared
+    this build untrustworthy, so answering a scan from it would contradict
+    native_path(), which reports "process" in exactly that state.
+    """
+    fake = _install(FakeLibrary(
+        match=_ok_match,
+        selftest=json.dumps(
+            {"status": "error", "mode": "selftest", "checks": 1, "failures": 1}
+        ).encode("utf-8"),
+    ))
+
+    assert bridge.ffi_available() is False
+    results = bridge.scan_banners(["a", "b"], signatures)
+
+    assert fake.scanned == [], "an untrusted library was asked to scan"
+    for row in results:
+        assert row.get("engine") != "c-native"

@@ -183,13 +183,13 @@ def _bind(lib: Any) -> None:
     lib.hc_dll_node_count.restype = ctypes.c_ulong
 
     lib.hc_dll_match_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-    lib.hc_dll_match_json.restype = ctypes.c_char_p
+    lib.hc_dll_match_json.restype = ctypes.c_void_p
 
     lib.hc_dll_fp_json.argtypes = [ctypes.c_char_p]
-    lib.hc_dll_fp_json.restype = ctypes.c_char_p
+    lib.hc_dll_fp_json.restype = ctypes.c_void_p
 
     lib.hc_dll_selftest_json.argtypes = []
-    lib.hc_dll_selftest_json.restype = ctypes.c_char_p
+    lib.hc_dll_selftest_json.restype = ctypes.c_void_p
 
 
 def _library() -> Any | None:
@@ -249,12 +249,19 @@ def _library_present() -> bool:
 
 
 def _ffi_call(fn_name: str, *args: Any) -> bytes | None:
-    """Calls a `char *`-returning export and takes ownership of the result.
+    """Calls a `char *`-returning export, copies it and releases the original.
 
-    Every buffer the library hands back must be released with hc_free; without
-    it each call leaks, and a long scan grows the process without bound. The
-    pointer is captured before the free so a decode failure cannot leak it
-    either.
+    These three exports are declared c_void_p rather than c_char_p, and the
+    distinction is the whole point. A c_char_p restype makes ctypes copy the
+    buffer into a Python bytes and hand back *that*, discarding the malloc'd
+    address; freeing whatever the call returned then hands the C library the
+    address of a Python object, which is not an allocation it owns. glibc
+    answers that with `munmap_chunk(): invalid pointer` and aborts the process.
+    So the address is carried as an integer, the bytes are copied out with
+    string_at, and hc_free() receives the pointer that malloc actually returned.
+
+    The free is in a finally rather than after the copy so a decoding failure
+    cannot leak the buffer.
     """
     lib = _library()
     if lib is None:
@@ -262,17 +269,10 @@ def _ffi_call(fn_name: str, *args: Any) -> bytes | None:
     raw = getattr(lib, fn_name)(*args)
     if not raw:
         return None
-    return bytes(raw)
-
-
-def _ffi_free(raw: bytes | None) -> None:
-    lib = _library()
-    if lib is None or raw is None:
-        return
-    # ctypes c_char_p hands back a Python bytes copy and the original buffer is
-    # ours to release; re-passing the address of the copy would free the wrong
-    # allocation, so the C side exposes hc_free() for exactly this.
-    lib.hc_free(ctypes.cast(ctypes.c_char_p(raw), ctypes.c_void_p))
+    try:
+        return ctypes.string_at(raw)
+    finally:
+        lib.hc_free(ctypes.c_void_p(raw))
 
 
 def _ffi_selftest() -> dict[str, Any] | None:
@@ -287,8 +287,6 @@ def _ffi_selftest() -> dict[str, Any] | None:
         parsed = json.loads(raw.decode(_IO_ENCODING))
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         return None
-    finally:
-        _ffi_free(raw)
     return parsed if isinstance(parsed, dict) else None
 
 
@@ -389,8 +387,6 @@ def _ffi_match(handle: Any, banner: str) -> dict[str, Any] | None:
         parsed = json.loads(raw.decode(_IO_ENCODING))
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         return None
-    finally:
-        _ffi_free(raw)
     if isinstance(parsed, dict) and parsed.get("status") == "ok":
         return parsed
     return None
@@ -407,8 +403,6 @@ def _ffi_fingerprint(banner: str) -> dict[str, str] | None:
         parsed = json.loads(raw.decode(_IO_ENCODING))
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         return None
-    finally:
-        _ffi_free(raw)
     if not isinstance(parsed, dict) or parsed.get("status") != "ok":
         return None
     return {
@@ -620,7 +614,11 @@ def scan_banners(
     if not sig_path.exists():
         return []
 
-    handle = _open_signatures(sig_path)
+    # Gated on ffi_available(), not merely on the library loading: a library that
+    # loads but fails its own selftest is not usable, and answering from it would
+    # report results the project has already declared untrustworthy. native_path()
+    # says "process" in that state, so this must agree.
+    handle = _open_signatures(sig_path) if ffi_available() else None
     if handle is not None:
         results: list[dict[str, Any]] = []
         for banner in banners:
