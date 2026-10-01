@@ -27,15 +27,10 @@
 
 #include "helios_batch.h"
 #include "helios_core.h"
+#include "helios_dll.h"
 
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef _WIN32
-#define HC_API __declspec(dllexport)
-#else
-#define HC_API __attribute__((visibility("default")))
-#endif
 
 /* Bounded so a hostile or accidental length cannot make the Python side
  * allocate without limit: the caller has to size a buffer, and if the encoder
