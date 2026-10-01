@@ -1,4 +1,4 @@
-name: HELIOS-NET CI/CD Build Pipeline
+﻿name: HELIOS-NET CI/CD Build Pipeline
 
 on:
   push:
@@ -32,8 +32,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-          cache: false
+          go-version-file: transport/goscan/go.mod
+          cache: true
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
