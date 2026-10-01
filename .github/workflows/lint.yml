@@ -21,12 +21,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -54,10 +54,10 @@ jobs:
           - transport/goscan
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: ${{ matrix.moddir }}/go.mod
           cache: true
@@ -74,7 +74,7 @@ jobs:
           fi
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.1.6
           working-directory: ${{ matrix.moddir }}
@@ -86,7 +86,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Rust (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -94,7 +94,7 @@ jobs:
           components: clippy,rustfmt
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -117,7 +117,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install analyzers
         run: |
