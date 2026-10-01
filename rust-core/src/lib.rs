@@ -297,7 +297,7 @@ pub unsafe extern "C" fn helios_fnv1a32(text: *const c_char) -> *mut c_char {
             let capped = (edge_count as usize).min(MAX_EDGES);
             let slice = std::slice::from_raw_parts(edges, capped * 2);
             list.reserve(capped);
-            for pair in slice.chunks_exact(2) {
+            for pair in slice.as_chunks::<2>().0 {
                 list.push((pair[0] as usize, pair[1] as usize));
             }
         }
