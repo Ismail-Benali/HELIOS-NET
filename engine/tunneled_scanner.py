@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import List
+from typing import List, Any
 
 
-async def tunneled_tcp_probe(target_host: str, target_port: int, proxy_host: str = "127.0.0.1", proxy_port: int = 1080, timeout: float = 3.0) -> dict:
+async def tunneled_tcp_probe(target_host: str, target_port: int, proxy_host: str = "127.0.0.1", proxy_port: int = 1080, timeout: float = 3.0) -> dict[str, Any]:
     """Probes an internal target port by tunneling through the pivot proxy."""
     start = time.time()
     try:
@@ -45,12 +45,12 @@ async def tunneled_tcp_probe(target_host: str, target_port: int, proxy_host: str
         }
 
 
-async def tunneled_subnet_scan(subnet_prefix: str, ports: List[int], proxy_host: str = "127.0.0.1", proxy_port: int = 1080, concurrency: int = 50) -> List[dict]:
+async def tunneled_subnet_scan(subnet_prefix: str, ports: List[int], proxy_host: str = "127.0.0.1", proxy_port: int = 1080, concurrency: int = 50) -> List[dict[str, Any]]:
     """Scans an entire internal CIDR subnet through the active pivot tunnel."""
     sem = asyncio.Semaphore(concurrency)
     tasks = []
 
-    async def bounded_scan(host: str, port: int):
+    async def bounded_scan(host: str, port: int) -> dict[str, Any]:
         async with sem:
             return await tunneled_tcp_probe(host, port, proxy_host, proxy_port)
 

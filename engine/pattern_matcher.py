@@ -1,8 +1,13 @@
 """HELIOS-NET :: engine/pattern_matcher.py
-Aho-Corasick Automaton with Dynamic JSON Signature Loading.
+Signature registry with dynamic JSON loading, backed by the native cores.
 
-Allows loading custom signatures and protocol vulnerability definitions
-at runtime from external configuration files without code modification.
+Signatures and protocol vulnerability definitions can be loaded at runtime from
+external configuration files without code modification. The automaton is the
+registry: it registers, deduplicates and enumerates patterns. The search is
+delegated to :mod:`core.accel`, so a caller here gets the same results, the same
+byte offsets and the same provenance as every other caller of the native cores,
+and the same answer whether the C core, the Rust core or the Python fallback
+served it.
 """
 
 from __future__ import annotations
@@ -10,11 +15,13 @@ from __future__ import annotations
 import json
 from collections import deque
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any
+
+from core import accel
 
 
 class ACNode:
-    def __init__(self):
+    def __init__(self) -> None:
         self.children: Dict[str, ACNode] = {}
         self.failure: ACNode | None = None
         self.outputs: List[str] = []
@@ -24,9 +31,12 @@ class ACNode:
 class AhoCorasickMatcher:
     """Enterprise Aho-Corasick Automaton with dynamic JSON loading."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.root = ACNode()
         self._signatures: dict[str, str] = {}
+        # Set by match() to explain why the python path was taken; empty when
+        # the native Rust core produced the results.
+        self.last_engine_reason: str = ""
 
     def add_pattern(self, pattern: str) -> None:
         node = self.root
@@ -83,42 +93,51 @@ class AhoCorasickMatcher:
         except Exception:
             return 0
 
-    def match(self, text: str) -> List[dict]:
-        # Try Rust FFI acceleration first for high-speed native pattern matching
-        try:
-            from core.rust_bridge import match_signatures_rust
-            rust_matches = match_signatures_rust(text)
-            if rust_matches:
-                hits = []
-                for m in rust_matches:
-                    hits.append({
-                        "signature": m,
-                        "matched": m,
-                        "position": text.lower().find(m.lower())
-                    })
-                return hits
-        except Exception:
-            pass
+    def all_patterns(self) -> List[str]:
+        """Collects every pattern currently registered in the automaton."""
+        patterns: List[str] = []
+        stack = [self.root]
+        while stack:
+            node = stack.pop()
+            for out in node.outputs:
+                if out not in patterns:
+                    patterns.append(out)
+            stack.extend(node.children.values())
+        return patterns
 
-        text_lower = text.lower()
-        node = self.root
-        hits = []
-        matched = set()
+    def match(self, text: str) -> List[dict[str, Any]]:
+        """Returns matches, each labelled with the engine that produced it.
 
-        for i, char in enumerate(text_lower):
-            while node and char not in node.children:
-                node = node.failure
-            if not node:
-                node = self.root
-                continue
-            node = node.children[char]
-            for pattern in node.outputs:
-                if pattern not in matched:
-                    matched.add(pattern)
-                    hits.append({
-                        "signature": pattern,
-                        "matched": pattern,
-                        "position": i - len(pattern) + 1
-                    })
+        The search itself is delegated to :mod:`core.accel`, which picks the
+        best available core. The automaton above is kept as the pattern
+        registry: it is how signatures are registered, deduplicated and
+        enumerated, and the matching it used to do here was a fourth
+        implementation of a job three cores already had.
 
-        return hits
+        Every returned dict carries an ``engine`` key. This was the one place in
+        the project that could lie: the Rust path and the Python path returned
+        dicts of identical shape, so a result produced while the Rust core was
+        blocked by host policy was indistinguishable from a native one, and a
+        report could not honestly say which engine had run.
+
+        ``last_engine_reason`` records why the chosen engine was chosen, so a
+        degraded run can be explained rather than merely detected.
+
+        ``position`` is a UTF-8 byte offset. It used to be a character index
+        computed with ``str.find()`` on a lowercased string, which disagreed
+        with the cores as soon as a banner contained a multi-byte character,
+        and the first occurrence only was reported, so a banner advertising
+        several versions of a service was reported once here and repeatedly by
+        the C core.
+        """
+        outcome = accel.match_signatures(text, self.all_patterns())
+        self.last_engine_reason = outcome.reason
+        return [
+            {
+                "signature": m.signature,
+                "matched": m.signature,
+                "position": m.position,
+                "engine": outcome.engine,
+            }
+            for m in outcome.matches
+        ]

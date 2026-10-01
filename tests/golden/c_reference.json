@@ -1,0 +1,432 @@
+{
+  "_comment": "The native C core's observable contract, captured as data so it can be verified on hosts that refuse to execute a native image. Regenerate with tools/gen_c_reference.py; CI re-runs the real C core over the same corpus.",
+  "established_by": "rust-native",
+  "match_cases": [
+    {
+      "name": "empty_banner",
+      "banner": "",
+      "patterns": [
+        "ssh"
+      ],
+      "matches": []
+    },
+    {
+      "name": "ascii_case_folding",
+      "banner": "SSH-2.0-OpenSSH_9.6p1",
+      "patterns": [
+        "SSH",
+        "openssh",
+        "OPEN"
+      ],
+      "matches": [
+        [
+          "OPEN",
+          8
+        ],
+        [
+          "SSH",
+          0
+        ],
+        [
+          "SSH",
+          12
+        ],
+        [
+          "openssh",
+          8
+        ]
+      ]
+    },
+    {
+      "name": "ascii_only_folding",
+      "banner": "Über Server",
+      "patterns": [
+        "über",
+        "Server"
+      ],
+      "matches": [
+        [
+          "Server",
+          6
+        ]
+      ]
+    },
+    {
+      "name": "multibyte_byte_offset",
+      "banner": "日本語SSH",
+      "patterns": [
+        "SSH"
+      ],
+      "matches": [
+        [
+          "SSH",
+          9
+        ]
+      ]
+    },
+    {
+      "name": "overlapping_hits",
+      "banner": "aaaa",
+      "patterns": [
+        "aa"
+      ],
+      "matches": [
+        [
+          "aa",
+          0
+        ],
+        [
+          "aa",
+          1
+        ],
+        [
+          "aa",
+          2
+        ]
+      ]
+    },
+    {
+      "name": "pattern_longer_than_text",
+      "banner": "ab",
+      "patterns": [
+        "abcd"
+      ],
+      "matches": []
+    },
+    {
+      "name": "prefix_family",
+      "banner": "abc",
+      "patterns": [
+        "abc",
+        "ab",
+        "a",
+        "b",
+        "c"
+      ],
+      "matches": [
+        [
+          "a",
+          0
+        ],
+        [
+          "ab",
+          0
+        ],
+        [
+          "abc",
+          0
+        ],
+        [
+          "b",
+          1
+        ],
+        [
+          "c",
+          2
+        ]
+      ]
+    },
+    {
+      "name": "repeated_pattern",
+      "banner": "abcabc",
+      "patterns": [
+        "abc"
+      ],
+      "matches": [
+        [
+          "abc",
+          0
+        ],
+        [
+          "abc",
+          3
+        ]
+      ]
+    },
+    {
+      "name": "single_char_pattern",
+      "banner": "aaa",
+      "patterns": [
+        "a"
+      ],
+      "matches": [
+        [
+          "a",
+          0
+        ],
+        [
+          "a",
+          1
+        ],
+        [
+          "a",
+          2
+        ]
+      ]
+    },
+    {
+      "name": "adjacent_suffix_family",
+      "banner": "ushers",
+      "patterns": [
+        "he",
+        "she",
+        "hers",
+        "his"
+      ],
+      "matches": [
+        [
+          "he",
+          2
+        ],
+        [
+          "hers",
+          2
+        ],
+        [
+          "she",
+          1
+        ]
+      ]
+    },
+    {
+      "name": "space_is_significant",
+      "banner": "x SSH y",
+      "patterns": [
+        " SSH",
+        "SSH "
+      ],
+      "matches": [
+        [
+          " SSH",
+          1
+        ],
+        [
+          "SSH ",
+          2
+        ]
+      ]
+    },
+    {
+      "name": "utf8_pattern_and_prefix",
+      "banner": "café",
+      "patterns": [
+        "café",
+        "caf"
+      ],
+      "matches": [
+        [
+          "caf",
+          0
+        ],
+        [
+          "café",
+          0
+        ]
+      ]
+    },
+    {
+      "name": "leading_high_byte",
+      "banner": "ÿSSH",
+      "patterns": [
+        "SSH"
+      ],
+      "matches": [
+        [
+          "SSH",
+          2
+        ]
+      ]
+    },
+    {
+      "name": "control_characters",
+      "banner": "a\u0001b",
+      "patterns": [
+        "a\u0001b",
+        "b"
+      ],
+      "matches": [
+        [
+          "a\u0001b",
+          0
+        ],
+        [
+          "b",
+          2
+        ]
+      ]
+    },
+    {
+      "name": "no_match",
+      "banner": "plain text",
+      "patterns": [
+        "absent"
+      ],
+      "matches": []
+    },
+    {
+      "name": "long_line",
+      "banner": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaneedle",
+      "patterns": [
+        "needle"
+      ],
+      "matches": [
+        [
+          "needle",
+          5000
+        ]
+      ]
+    },
+    {
+      "name": "many_patterns",
+      "banner": "alpha beta gamma delta",
+      "patterns": [
+        "alpha",
+        "beta",
+        "gamma",
+        "delta",
+        "alp",
+        "hha",
+        "zzz"
+      ],
+      "matches": [
+        [
+          "alp",
+          0
+        ],
+        [
+          "alpha",
+          0
+        ],
+        [
+          "beta",
+          6
+        ],
+        [
+          "delta",
+          17
+        ],
+        [
+          "gamma",
+          11
+        ]
+      ]
+    }
+  ],
+  "parse_cases": [
+    {
+      "name": "comments_and_blanks",
+      "expected": [
+        [
+          "ssh",
+          "ssh"
+        ]
+      ]
+    },
+    {
+      "name": "hash_inside_pattern",
+      "expected": [
+        [
+          "n",
+          "#hash"
+        ]
+      ]
+    },
+    {
+      "name": "tab_form",
+      "expected": [
+        [
+          "ssh",
+          "SSH-2.0"
+        ]
+      ]
+    },
+    {
+      "name": "whole_line_trim",
+      "expected": [
+        [
+          "spaced name",
+          "pattern"
+        ]
+      ]
+    },
+    {
+      "name": "pattern_space_preserved",
+      "expected": [
+        [
+          "name",
+          " SSH"
+        ]
+      ]
+    },
+    {
+      "name": "duplicate_line",
+      "expected": [
+        [
+          "a",
+          "x"
+        ]
+      ]
+    },
+    {
+      "name": "two_names_one_pattern",
+      "expected": [
+        [
+          "first",
+          "p"
+        ],
+        [
+          "second",
+          "p"
+        ]
+      ]
+    },
+    {
+      "name": "bom_prefix",
+      "expected": [
+        [
+          "first",
+          "p"
+        ]
+      ]
+    },
+    {
+      "name": "whitespace_only_rejected",
+      "expected": []
+    },
+    {
+      "name": "trailing_tab_is_trimmed",
+      "expected": [
+        [
+          "name",
+          "name"
+        ]
+      ]
+    },
+    {
+      "name": "no_trailing_newline",
+      "expected": [
+        [
+          "a",
+          "one"
+        ],
+        [
+          "b",
+          "two"
+        ]
+      ]
+    },
+    {
+      "name": "crlf_line_endings",
+      "expected": [
+        [
+          "a",
+          "one"
+        ],
+        [
+          "b",
+          "two"
+        ]
+      ]
+    }
+  ]
+}

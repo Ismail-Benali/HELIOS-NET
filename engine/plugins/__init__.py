@@ -1,10 +1,12 @@
 """HELIOS-NET :: engine/plugins/__init__.py
-The engine rules registry — an extension point without touching the core.
+The engine rules registry - an extension point without touching the core.
 
 Each entry here builds one Rule. They are loaded via VerdictEngine.load_plugins.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from ..verdict import Rule
 
@@ -16,12 +18,12 @@ def open_high_value_port() -> Rule:
         name="critical_port_open",
         weight=0.65,
         test=lambda f: str(f.get("port")) in critical or str(f.get("service", "")).lower() in critical.values(),
-        note="Critical port open — flagged for deep inspection.",
+        note="Critical port open - flagged for deep inspection.",
     )
 
 
 def web_presence() -> Rule:
-    """Rule: a web interface present — an indicator of an application attack surface."""
+    """Rule: a web interface present - an indicator of an application attack surface."""
     return Rule(
         name="web_surface",
         weight=0.5,
@@ -30,7 +32,7 @@ def web_presence() -> Rule:
     )
 
 
-def plugin_registry() -> dict:
+def plugin_registry() -> dict[str, Any]:
     return {
         "helios_critical_port": open_high_value_port,
         "helios_web_surface": web_presence,

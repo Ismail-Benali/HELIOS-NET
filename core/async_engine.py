@@ -9,6 +9,8 @@ Features:
 
 from __future__ import annotations
 
+from typing import Any, List
+
 import asyncio
 import random
 import time
@@ -17,7 +19,7 @@ import time
 async def jittered_backoff(base_delay: float = 0.05, max_delay: float = 1.0, attempt: int = 1) -> None:
     """Applies exponential backoff with random jitter to defeat IDS/SIEM periodicity detection."""
     delay = min(max_delay, base_delay * (2 ** max(0, attempt - 1)))
-    jitter = random.uniform(0, 0.5 * delay)
+    jitter = random.uniform(0, 0.5 * delay)  # nosec B311 - jitter on a retry delay, not a security value
     await asyncio.sleep(delay + jitter)
 
 
@@ -45,7 +47,7 @@ class AIMDController:
             return int(self.concurrency)
 
 
-async def adaptive_banner_probe(host: str, port: int, timeout: float = 2.0) -> dict:
+async def adaptive_banner_probe(host: str, port: int, timeout: float = 2.0) -> dict[str, Any]:
     start = time.time()
     try:
         reader, writer = await asyncio.wait_for(
@@ -67,19 +69,23 @@ async def adaptive_banner_probe(host: str, port: int, timeout: float = 2.0) -> d
         return {"host": host, "port": port, "open": False, "banner": "", "rtt": round(time.time() - start, 4)}
 
 
-async def enterprise_adaptive_recon(host: str, ports: List[int]) -> List[dict]:
+async def enterprise_adaptive_recon(host: str, ports: List[int]) -> List[dict[str, Any]]:
     """Executes an adaptive recon scan using a dynamic worker queue."""
     controller = AIMDController(initial_concurrency=15, max_c=50)
     results = []
-    queue = asyncio.Queue()
+    queue: asyncio.Queue[int] = asyncio.Queue()
     for p in ports:
         await queue.put(p)
 
-    async def worker():
+    async def worker() -> None:
         while not queue.empty():
             port = await queue.get()
             res = await adaptive_banner_probe(host, port, timeout=1.5)
-            if res["open"] or res["rtt"] > 0:
+            # Only an open port is a success. The old test also accepted
+            # res["rtt"] > 0, but rtt is elapsed wall-clock time and is
+            # therefore positive on every returned probe, so onError was
+            # unreachable and the controller could never back off.
+            if res["open"]:
                 await controller.onSuccess()
             else:
                 await controller.onError()

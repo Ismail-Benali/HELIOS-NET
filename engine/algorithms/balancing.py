@@ -1,16 +1,18 @@
 """HELIOS-NET :: engine/algorithms/balancing.py
-Balancing algorithm family — live examples of how the extensibility works.
+Balancing algorithm family - live examples of how the extensibility works.
 
 Exposes two contrasting classes behind the same interface:
   - lpt:      the current greedy distribution (Longest Processing Time).
   - brute:    optimal distribution via pruned depth-first search (slower, costlier).
 
 Both solve the same problem: distributing weighted jobs over a number of
-workers so the longest column (makespan) is minimized — a demonstration of
+workers so the longest column (makespan) is minimized - a demonstration of
 extensibility.
 """
 
 from __future__ import annotations
+
+from typing import Callable
 
 from dataclasses import dataclass, field
 
@@ -45,10 +47,10 @@ def _lpt(weights: list[float], workers: int) -> LoadResult:
 def _brute(weights: list[float], workers: int) -> LoadResult:
     """Depth-first search for optimal balancing (+ pruning + worker symmetry tiebreak).
 
-    Builds index buckets, keeping the link to the source intact. Costlier than LPT —
+    Builds index buckets, keeping the link to the source intact. Costlier than LPT -
     a live example that switching algorithms is functional, not cosmetic.
     """
-    best = (None, float("inf"))
+    best: tuple[list[list[int]] | None, float] = (None, float("inf"))
     buckets: list[list[int]] = [[] for _ in range(workers)]
 
     def dfs(i: int, loads: list[float]) -> None:
@@ -84,10 +86,11 @@ register_algo("balancing", "brute", _brute)
 
 def solve(kind: str = "lpt", weights: list[float] | None = None,
           workers: int = 3) -> LoadResult:
-    """The public gateway — invoked by the engine when switching algorithms."""
+    """The public gateway - invoked by the engine when switching algorithms."""
     from . import get_algo
     if not weights:
         return LoadResult(buckets=[[] for _ in range(workers)], makespan=0.0)
+    algo: Callable[[list[float], int], LoadResult]
     try:
         algo = get_algo("balancing", kind)
     except Exception:

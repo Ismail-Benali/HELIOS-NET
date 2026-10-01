@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 
 from core.async_engine import enterprise_adaptive_recon
-from core.mutation_engine import MutationEngine
 from core.wal import TransactionalWAL
 from engine.graph.core import AssetGraph
 from engine.killchain.pathfinder import KillChainEngine
@@ -33,7 +32,6 @@ class AutonomousDaemon:
         self.state_dir = Path(state_dir)
         self.interval = interval_seconds
         self.wal = TransactionalWAL(self.state_dir / "daemon_missions.wal")
-        self.mutator = MutationEngine(self.state_dir)
         self.pacer = Pacer(mean_dwell=self.interval, jitter=self.interval * 0.35)
         self._running = False
 
@@ -64,11 +62,9 @@ class AutonomousDaemon:
             engine = KillChainEngine(g)
             top_targets = g.top_targets(limit=3)
             
-            # 4. Check for anomalies / trap triggers
+            # 4. Record mission outcome
             if not active_services:
-                # Trigger self-healing mutation if target appears walled or honeyed
-                mutation_event = self.mutator.trigger_self_destruct_and_mutate()
-                self.wal.append("MUTATION_TRIGGERED", mutation_event)
+                self.wal.append("MISSION_WARNING", {"message": "No active services observed."})
             else:
                 self.wal.append("MISSION_SUCCESS", {"active_services": len(active_services), "top_targets": top_targets})
 

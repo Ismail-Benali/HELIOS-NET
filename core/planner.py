@@ -27,7 +27,7 @@ class PlanStep:
     params: dict[str, Any] = field(default_factory=dict)
     status: str = "pending"      # pending | ready | running | done | failed
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "step_id": self.step_id,
             "module": self.module,
@@ -58,7 +58,7 @@ class Planner:
         self._step_counter += 1
         return self._step_counter
 
-    def plan(self, intelligence: list[dict], target: str) -> list[PlanStep]:
+    def plan(self, intelligence: list[dict[str, Any]], target: str) -> list[PlanStep]:
         steps: list[PlanStep] = []
 
         discovery_items = [i for i in intelligence if i.get("module") == "discovery"]

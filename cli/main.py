@@ -1,5 +1,5 @@
 """HELIOS-NET :: cli/main.py
-Professional CLI Interface — Campaign execution from the terminal.
+Professional CLI Interface - Campaign execution from the terminal.
 
 Usage:
     python run.py recon --target example.test
@@ -11,6 +11,8 @@ Usage:
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import argparse
 import sys
@@ -36,7 +38,7 @@ def _build_orchestrator(data_dir: str) -> Orchestrator:
     return orch
 
 
-def cmd_recon(args) -> int:
+def cmd_recon(args: Any) -> int:
     orch = _build_orchestrator(args.data)
     state = orch.run_campaign(args.target)
     rep = orch.report(state)
@@ -47,7 +49,7 @@ def cmd_recon(args) -> int:
     return 0
 
 
-def cmd_judge(args) -> int:
+def cmd_judge(args: Any) -> int:
     from modules.discovery.service import discover_ports
 
     findings = discover_ports(args.target, ports=[22, 80, 443, 3306, 3389])
@@ -59,7 +61,7 @@ def cmd_judge(args) -> int:
     return 0
 
 
-def cmd_recover(args) -> int:
+def cmd_recover(args: Any) -> int:
     orch = _build_orchestrator(args.data)
     try:
         state = orch.recover(args.campaign_id)
@@ -72,7 +74,7 @@ def cmd_recover(args) -> int:
     return 0
 
 
-def cmd_info(args) -> int:
+def cmd_info(args: Any) -> int:
     """Displays extensible system components: algorithms, modules, rules."""
     import json
     from engine.algorithms import list_algos
@@ -80,8 +82,11 @@ def cmd_info(args) -> int:
 
     try:
         discover(ROOT / "modules" / "plugins")
-    except Exception:
-        pass
+    except Exception as exc:
+        # Silently listing fewer modules than exist is the one failure mode a
+        # user cannot notice, so the inventory says so instead.
+        print(f"[HELIOS] warning: plugin discovery failed ({exc}); "
+              "the module list below is incomplete.")
 
     payload = {
         "algorithms": list_algos(),
@@ -93,7 +98,7 @@ def cmd_info(args) -> int:
     return 0
 
 
-def cmd_status(args) -> int:
+def cmd_status(args: Any) -> int:
     orch = _build_orchestrator(args.data)
     states = orch.store.load_all()
     if not states:
@@ -104,7 +109,7 @@ def cmd_status(args) -> int:
     return 0
 
 
-def cmd_daemon(args) -> int:
+def cmd_daemon(args: Any) -> int:
     """Activates the Continuous Autonomous Mission Daemon."""
     import asyncio
     from core.daemon import AutonomousDaemon
@@ -120,7 +125,7 @@ def cmd_daemon(args) -> int:
     return 0
 
 
-def cmd_sim(args) -> int:
+def cmd_sim(args: Any) -> int:
     """Executes the full end-to-end framework simulation."""
     import run_simulation
     import asyncio
@@ -129,7 +134,7 @@ def cmd_sim(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="helios", description="HELIOS-NET — Autonomous Red Teaming & Attack Surface Management Orchestrator")
+    p = argparse.ArgumentParser(prog="helios", description="HELIOS-NET - Autonomous Red Teaming & Attack Surface Management Orchestrator")
     p.add_argument("--data", default=str(DEFAULT_DATA), help="Campaign data directory")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -164,4 +169,4 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.fn(args)
+    return int(args.fn(args))

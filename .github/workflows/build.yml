@@ -9,10 +9,16 @@ on:
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 40
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            fuzz_seconds: 20
+          - os: windows-latest
+            fuzz_seconds: 0
 
     steps:
       - name: Checkout Repository
@@ -29,21 +35,8 @@ jobs:
           go-version: '1.22'
           cache: false
 
-      - name: Set up Rust Toolchain
+      - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - name: Cache Cargo Registry & Target
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust-core/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-core/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
 
       - name: Diagnostic Toolchain Versions
         run: |
@@ -52,14 +45,268 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Run Rust Clippy Linter
+      - name: Install Development Dependencies (Mypy, Bandit, Pytest)
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy bandit pytest
+
+      # Both of these used to end in `|| true`, which discards the exit status.
+      # The pipeline therefore reported green no matter what the check said, and
+      # a green run claimed a type and security review that had not happened.
+      #
+      # Both are now enforced directly. mypy --strict reports zero errors across
+      # core/, engine/, modules/ and cli/ as of this commit, and bandit reports
+      # zero issues at every severity (the -ll threshold was dropped, so the low
+      # findings that used to be ignored are gated too). Intentional patterns
+      # carry a per-line # nosec with a reason.
+      - name: "Security Vulnerability Scan (Bandit, enforced)"
+        run: bandit -r core/ modules/ engine/ cli/
+
+      - name: "Static Type Check (Mypy strict, enforced)"
+        run: mypy --strict core/ engine/ modules/ cli/
+
+      - name: Go Vet
+        run: |
+          for d in transport/*/; do
+            if [ -f "$d/go.mod" ]; then
+              echo "::group::go vet $d"
+              (cd "$d" && go vet ./...)
+              echo "::endgroup::"
+            fi
+          done
+        shell: bash
+
+      - name: Go Test
+        run: |
+          for d in transport/*/; do
+            if [ -f "$d/go.mod" ]; then
+              echo "::group::go test $d"
+              (cd "$d" && go test -count=1 ./...)
+              echo "::endgroup::"
+            fi
+          done
+        shell: bash
+
+      # The scanner shares a semaphore across worker goroutines, so data races
+      # are a live concern rather than a theoretical one. build.py also runs
+      # this, but only when a C compiler is present; running it here as well
+      # makes the coverage explicit and fails loudly on Linux, where cgo is
+      # always available.
+      - name: Go Race Detector
+        if: runner.os == 'Linux'
+        run: |
+          for d in transport/*/; do
+            if [ -f "$d/go.mod" ]; then
+              echo "::group::go test -race $d"
+              (cd "$d" && CGO_ENABLED=1 go test -race -count=1 ./...)
+              echo "::endgroup::"
+            fi
+          done
+        shell: bash
+
+      - name: Go Format Check
+        run: |
+          unformatted=""
+          for d in transport/*/; do
+            if [ -f "$d/go.mod" ]; then
+              out=$(cd "$d" && gofmt -l .)
+              if [ -n "$out" ]; then unformatted="$unformatted $d:$out"; fi
+            fi
+          done
+          if [ -n "$unformatted" ]; then
+            echo "gofmt required:$unformatted"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Rust Lint (Clippy)
+        run: cargo clippy --release --all-targets -- -D warnings
+        working-directory: rust-core
+
+      # Builds every native core, then runs the Go, Rust and C suites, the
+      # deterministic C differential fuzzer, the Go race detector and the
+      # Code signing, and the reason this step exists rather than a packaging task
+      # at the end: a host application-control policy (Smart App Control, AppLocker,
+      # WDAC) refuses to execute a freshly built *unsigned* native image,
+      # permanently, with WinError 4551 and Code Integrity "did not meet the
+      # Enterprise signing level requirements". The refusal is not about the
+      # toolchain - a rustc-built cdylib minutes old is refused exactly like a
+      # MinGW binary - so on a developer's own Windows machine the C core, the
+      # C fuzzer and the Go test binaries can all be blocked for no reason
+      # connected to the code.
+      #
+      # build.py signs each artifact the moment it is built, so the credentials
+      # have to be present *before* the build runs, not after it.
+      #
+      # The certificate is a repository secret, base64-encoded because Actions
+      # cannot store a binary secret directly. Without these secrets the build
+      # still runs and honestly reports its artifacts as unsigned; it does not
+      # fail, because an unsigned build is a legitimate thing to produce and
+      # forcing a secret on every contributor would be worse than saying so.
+      #
+      # The emptiness check is inside the script, not in the step's `if`: a
+      # step-level `if` is evaluated before that step's own `env` is applied, so
+      # `env.HELIOS_SIGN_PFX_B64` there is always empty and the step would never
+      # run.
+      #
+      # Both values are written to GITHUB_ENV because build.py reads the password
+      # from the environment at signing time. GitHub masks registered secrets in
+      # the log, and the runner is ephemeral.
+      - name: Code Signing Credentials (Windows)
+        if: runner.os == 'Windows'
+        env:
+          HELIOS_SIGN_PFX_B64: ${{ secrets.HELIOS_SIGN_PFX_B64 }}
+          HELIOS_SIGN_PASSWORD: ${{ secrets.HELIOS_SIGN_PASSWORD }}
+        run: |
+          if (-not $env:HELIOS_SIGN_PFX_B64) {
+            Write-Output "No signing certificate configured; the build will be unsigned and will say so."
+            exit 0
+          }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\sign" | Out-Null
+          $pfx = "$env:RUNNER_TEMP\sign\code-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:HELIOS_SIGN_PFX_B64))
+          "HELIOS_SIGN_PFX=$pfx" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "HELIOS_SIGN_PASSWORD=$env:HELIOS_SIGN_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Remove-Item Env:HELIOS_SIGN_PFX_B64 -ErrorAction SilentlyContinue
+
+      # Signs every native artifact, then proves the signature is real. A
+      # signtool that exits zero is not accepted as proof on its own - build.py
+      # re-verifies each artifact with `signtool verify /pa` and fails the build
+      # if an image it reported as signed does not verify.
+      - name: Code Signing Status
+        if: runner.os == 'Windows'
+        run: |
+          if (-not $env:HELIOS_SIGN_PFX) {
+            Write-Output "::warning title=Unsigned build::HELIOS_SIGN_PFX is not set, so every native artifact is unsigned. A host application-control policy may refuse to execute them, and the C stages below are expected to report BLOCKED on a fresh runner."
+            exit 0
+          }
+          Write-Output "Signing is configured from a repository secret; artifacts will be signed and verified as they are built."
+
+      # unified core health probe. A core that is present but cannot execute is
+      # reported as FAILED and fails the job; a core that was never built on
+      # this runner is FALLBACK, because the Python path covers it.
+      #
+      # build.py exits non-zero when any stage fails, so this step is the gate.
+      # The race stage is skipped rather than failed when the runner has no C
+      # compiler, because a missing race detector is not a defect.
+      - name: Polyglot Build + All Core Test Suites + Core Health
+        run: python build.py --test --fuzz=${{ matrix.fuzz_seconds }}
+
+      # The C core has no libFuzzer and no libasan in the local MinGW toolchain,
+      # so runtime memory checking only happens here. ASan plus UBSan over both
+      # the hand-written suite and the differential fuzzer is what actually
+      # proves the guard-byte checks in the harness are not the only defence.
+      # GCC's -fanalyzer is a separate static pass and is not a substitute.
+      - name: C Sanitizers (ASan + UBSan)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          CC_BIN=clang
+          if ! command -v clang >/dev/null 2>&1; then CC_BIN=gcc; fi
+          echo "Using $CC_BIN: $($CC_BIN --version | head -1)"
+
+          SRC="transport/c_core/src/aho_corasick.c transport/c_core/src/boyer_moore.c \
+               transport/c_core/src/hashing.c transport/c_core/src/helios_core.c"
+          INC="transport/c_core/include"
+
+          mkdir -p /tmp/helios-san
+          echo "::group::build unit suite with sanitizers"
+          $CC_BIN -std=c11 -O1 -g -fsanitize=address,undefined \
+            -fno-omit-frame-pointer -fno-sanitize-recover=all \
+            -Wall -Wextra -Werror -I"$INC" \
+            $SRC transport/c_core/tests/test_core.c -o /tmp/helios-san/test_core
+          echo "::endgroup::"
+
+          echo "::group::run unit suite under ASan/UBSan"
+          ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 /tmp/helios-san/test_core
+          echo "::endgroup::"
+
+          echo "::group::build differential fuzzer with sanitizers"
+          $CC_BIN -std=c11 -O1 -g -fsanitize=address,undefined \
+            -fno-omit-frame-pointer -fno-sanitize-recover=all \
+            -Wall -Wextra -Werror -I"$INC" \
+            $SRC transport/c_core/tests/fuzz_harness.c -o /tmp/helios-san/fuzz_harness
+          echo "::endgroup::"
+
+          echo "::group::run differential fuzzer under ASan/UBSan"
+          ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 /tmp/helios-san/fuzz_harness
+          echo "::endgroup::"
+
+      # Closes the loop. Signing is only worth anything if it makes the native
+      # cores executable, so on a Windows runner that has a certificate this
+      # asserts the C stages actually produced evidence instead of reporting
+      # BLOCKED. Without the assertion, a silently expired or wrongly-issued
+      # certificate would let the build stay green while the C core stayed
+      # unrunnable - which is precisely the failure signing is meant to remove.
+      - name: Signed Build Actually Runs the C Core
+        if: runner.os == 'Windows' && env.HELIOS_SIGN_PFX != ''
+        run: python -c "import sys; from core.c_core_bridge import core_available, core_version; ok = core_available(); print('C core available:', ok, core_version()); sys.exit(0 if ok else 1)"
+
+      # The goldens in tests/golden/c_reference.json are what let a host whose
+      # application-control policy refuses to execute a native image still verify
+      # its own in-process matcher against the C core. That guarantee only holds
+      # while the goldens still describe the C core, and this is the step that
+      # proves it: here the C core is built and runnable, so it re-derives every
+      # recorded answer and the build fails if any of them moved.
+      - name: C Core Still Reproduces Its Recorded Contract (enforced)
+        run: python tools/gen_c_reference.py --check
+
+      # The in-process front end is the preferred one: it keeps the signature
+      # automaton built across batches instead of rebuilding it per subprocess.
+      # Nothing else in the pipeline can tell whether it works, because a host
+      # under an application-control policy refuses to *load* a freshly built
+      # library just as it refuses to execute a freshly built executable. This
+      # step therefore does not merely build the library - it loads it, runs the
+      # same consistency suite the CLI runs, and requires the FFI path to be the
+      # one actually serving, so the optimization cannot rot unnoticed behind a
+      # fallback that always answers anyway.
+      - name: In-Process Core (FFI) Actually Serves Requests (enforced)
         shell: bash
         run: |
-          cd rust-core
-          cargo clippy --all-targets -- -D warnings
+          set -euo pipefail
+          python build.py 2>&1 | tail -20
+          python - <<'PY'
+          import sys, tempfile, pathlib
+          from core import c_core_bridge as bridge
 
-      - name: Run Polyglot Build Script & Pre-flight Diagnostics
-        run: python build.py
+          print("library note :", bridge.library_note() or "(loaded cleanly)")
+          print("ffi available:", bridge.ffi_available())
+          print("core version :", bridge.core_version())
+          if not bridge.ffi_available():
+              sys.exit("the shared library did not load and pass its checks")
 
-      - name: Run Smoke Verification Tests
+          with tempfile.TemporaryDirectory() as tmp:
+              sigs = pathlib.Path(tmp) / "sigs.txt"
+              sigs.write_text("nginx\tnginx\napache\thttpd\n", encoding="utf-8")
+              banners = ["Server: nginx/1.24", "Server: Apache/2.4", "nothing here"]
+              results = bridge.scan_banners(banners, sigs)
+              if len(results) != len(banners):
+                  sys.exit(f"expected {len(banners)} results, got {len(results)}")
+              for banner, res in zip(banners, results):
+                  if res.get("banner") != banner:
+                      sys.exit(f"out-of-order or mismatched result: {res!r}")
+              hits = [r["banner"] for r in results if r.get("match_count")]
+              if hits != ["Server: nginx/1.24", "Server: Apache/2.4"]:
+                  sys.exit(f"in-process matching was wrong: {hits!r}")
+              if bridge.native_path() != "ffi":
+                  sys.exit(f"expected the FFI path to be serving, got {bridge.native_path()}")
+
+              # The point of the FFI: one automaton, many batches. Reopening the
+              # signature file per batch would mean the preference is cosmetic.
+              before = len(bridge._handles)
+              for _ in range(3):
+                  bridge.scan_banners(banners, sigs)
+              if len(bridge._handles) != before:
+                  sys.exit("the signature automaton was rebuilt instead of reused")
+
+          print("in-process core served every request")
+          PY
+
+      - name: Pytest Test Suite
+        run: pytest tests/ -v
+
+      - name: Smoke Test
         run: python tests/smoke.py
+
+      - name: Report Native Core Health
+        run: python -c "from core.cores import health_report, format_report; print(format_report(health_report()))"

@@ -1,4 +1,4 @@
-"""HELIOS-NET :: engine/algorithms — the swappable algorithm system.
+"""HELIOS-NET :: engine/algorithms - the swappable algorithm system.
 
 Imports the algorithm subclasses (balancing, fingerprint, ...) automatically
 so the central registry is populated as soon as the package is imported.
@@ -13,17 +13,17 @@ from __future__ import annotations
 
 import importlib
 
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, Any
 
 T = TypeVar("T")
 
 
 class AlgorithmError(Exception):
-    """Execution error of an algorithm — isolated so it cannot drop a campaign."""
+    """Execution error of an algorithm - isolated so it cannot drop a campaign."""
 
 
 # Central registry: algorithm kind -> {algorithm name -> factory/function}. Generic model.
-ALGO_REGISTRY: dict[str, dict[str, Callable[..., T]]] = {}
+ALGO_REGISTRY: dict[str, dict[str, Callable[..., Any]]] = {}
 DEFAULT_FALLBACK = "__default__"
 
 
@@ -35,7 +35,7 @@ def register_algo(kind: str, name: str, factory: Callable[..., T], default: bool
         bucket[DEFAULT_FALLBACK] = factory
 
 
-def get_algo(kind: str, name: str | None = None):
+def get_algo(kind: str, name: str | None = None) -> Any:
     """Retrieves an algorithm, with a safe fallback to the default when absent."""
     bucket = ALGO_REGISTRY.get(kind)
     if not bucket:
@@ -47,7 +47,7 @@ def get_algo(kind: str, name: str | None = None):
     return next(iter(bucket.values()))
 
 
-def list_algos(kind: str | None = None) -> dict:
+def list_algos(kind: str | None = None) -> dict[str, Any]:
     if kind is not None:
         return {kind: sorted(ALGO_REGISTRY.get(kind, {}).keys())}
     return {k: sorted(v.keys()) for k, v in ALGO_REGISTRY.items()}
@@ -57,5 +57,5 @@ def list_algos(kind: str | None = None) -> dict:
 for _m in ("balancing", "fingerprint"):
     try:
         importlib.import_module(f".{_m}", __name__)
-    except Exception:
+    except Exception:  # nosec B110 - optional algorithm module, absence is the normal case
         pass

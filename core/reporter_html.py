@@ -18,7 +18,14 @@ def generate_html_report(briefing_dict: Dict[str, Any], output_path: str | Path)
     campaign_id = html.escape(str(briefing_dict.get("campaign_id", "N/A")))
     target = html.escape(str(briefing_dict.get("target", "N/A")))
     status = html.escape(str(briefing_dict.get("status", "N/A")))
-    findings_count = briefing_dict.get("findings_count", 0)
+    # Every other field is escaped. This one used to be interpolated raw, so a
+    # string in it reached the page as live markup despite the XSS claim above.
+    # A count is coerced to a number instead of escaped, which is both safe and
+    # the correct rendering for a count.
+    try:
+        findings_count = int(briefing_dict.get("findings_count", 0))
+    except (TypeError, ValueError):
+        findings_count = 0
     events = briefing_dict.get("events", [])
     top_targets = briefing_dict.get("top_targets", [])
 
@@ -46,7 +53,7 @@ def generate_html_report(briefing_dict: Dict[str, Any], output_path: str | Path)
 </head>
 <body>
     <div class="container">
-        <h1>⚡ HELIOS-NET :: EXECUTIVE BRIEFING REPORT</h1>
+        <h1>HELIOS-NET :: EXECUTIVE BRIEFING REPORT</h1>
         <div class="meta">
             <div><strong>Campaign ID:</strong> <code>{campaign_id}</code></div>
             <div><strong>Target:</strong> <code>{target}</code></div>
@@ -54,12 +61,12 @@ def generate_html_report(briefing_dict: Dict[str, Any], output_path: str | Path)
             <div><strong>Findings Count:</strong> {findings_count}</div>
         </div>
 
-        <h2>🎯 Priority Assets (Centrality Ranked)</h2>
+        <h2>Priority Assets (Centrality Ranked)</h2>
         <ul>
             {targets_html}
         </ul>
 
-        <h2>⏱️ Campaign Timeline & Events</h2>
+        <h2>Campaign Timeline &amp; Events</h2>
         <ul>
             {events_html if events_html else "<li>No timeline events recorded.</li>"}
         </ul>
