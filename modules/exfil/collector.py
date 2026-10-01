@@ -9,6 +9,8 @@ Responsibilities:
 
 from __future__ import annotations
 
+from typing import Any
+
 import json
 import time
 import uuid
@@ -19,10 +21,10 @@ class Collector:
 
     def __init__(self, campaign_id: str | None = None):
         self.campaign_id = campaign_id or uuid.uuid4().hex
-        self._findings: list[dict] = []
-        self._dedupe: set[tuple] = set()
+        self._findings: list[dict[str, Any]] = []
+        self._dedupe: set[tuple[Any, ...]] = set()
 
-    def add(self, finding: dict) -> bool:
+    def add(self, finding: dict[str, Any]) -> bool:
         """Adds a finding (with simple deduplication by a natural id)."""
         natural_id = (finding.get("module"), finding.get("host"), finding.get("port"), finding.get("service"))
         if natural_id in self._dedupe:
@@ -34,13 +36,13 @@ class Collector:
         self._findings.append(rec)
         return True
 
-    def extend(self, findings: list[dict]) -> int:
+    def extend(self, findings: list[dict[str, Any]]) -> int:
         n = 0
         for f in findings:
             n += int(self.add(f))
         return n
 
-    def all(self) -> list[dict]:
+    def all(self) -> list[dict[str, Any]]:
         return list(self._findings)
 
     def to_json(self, indent: int | None = 2) -> str:

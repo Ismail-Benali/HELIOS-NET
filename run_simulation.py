@@ -11,6 +11,8 @@ Executes a cohesive end-to-end ASM pipeline connecting:
 
 from __future__ import annotations
 
+from typing import Any
+
 import asyncio
 import tempfile
 from pathlib import Path
@@ -24,7 +26,7 @@ from engine.killchain.pathfinder import KillChainEngine
 from engine.verdict import VerdictEngine, default_rules
 
 
-async def simulate_engagement():
+async def simulate_engagement() -> None:
     print("=" * 65)
     print("[HELIOS-NET] INITIATING UNIFIED ASM & SCANNING PIPELINE DEMONSTRATION...")
     print("=" * 65)
@@ -71,7 +73,8 @@ async def simulate_engagement():
         top_targets = g.top_targets(limit=5)
         print(f"    -> Centrality Ranked Top Targets: {top_targets}")
 
-        path, cost = [], 0.0
+        path: list[str] = []
+        cost: float = 0.0
         if active_services:
             target_svc = f"svc:{target}:{active_services[0]['port']}/tcp"
             path, cost = engine.find_attack_path(host_node, target_svc)

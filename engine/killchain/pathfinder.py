@@ -10,7 +10,7 @@ Features:
 from __future__ import annotations
 
 import heapq
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 from engine.graph.core import AssetGraph
 
 
@@ -68,7 +68,7 @@ class KillChainEngine:
 
         return [], float("inf")
 
-    def simulate_chaining(self, path: List[str]) -> List[dict]:
+    def simulate_chaining(self, path: List[str]) -> List[dict[str, Any]]:
         """Models a step-by-step engagement route based on the computed path."""
         chain = []
         for i in range(len(path) - 1):

@@ -10,13 +10,13 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, Any
 
 STATUS_CHOICES = {"idle", "planning", "scanning", "analyzing", "executing", "done", "failed", "aborted"}
 
 
 class CampaignState:
-    def __init__(self, target: str, campaign_id: str | None = None, meta: dict | None = None):
+    def __init__(self, target: str, campaign_id: str | None = None, meta: dict[str, Any] | None = None):
         if not target or not str(target).strip():
             raise ValueError("target cannot be empty")
         self.campaign_id = campaign_id or uuid.uuid4().hex
@@ -27,7 +27,7 @@ class CampaignState:
         self.updated_at = self.created_at
         self.completed_at: float | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "campaign_id": self.campaign_id,
             "target": self.target,
@@ -39,7 +39,7 @@ class CampaignState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CampaignState":
+    def from_dict(cls, data: dict[str, Any]) -> "CampaignState":
         obj = cls(target=data["target"], campaign_id=data.get("campaign_id"), meta=data.get("meta", {}))
         obj.status = data.get("status", "idle")
         obj.created_at = data.get("created_at", time.time())
@@ -64,8 +64,8 @@ class StorageBackend(Protocol):
     def load(self, campaign_id: str) -> CampaignState: ...
     def load_all(self) -> list[CampaignState]: ...
     def delete(self, campaign_id: str) -> None: ...
-    def log_event(self, state: CampaignState, event: str, **payload) -> None: ...
-    def read_log(self, campaign_id: str) -> list[dict]: ...
+    def log_event(self, state: CampaignState, event: str, **payload: Any) -> None: ...
+    def read_log(self, campaign_id: str) -> list[dict[str, Any]]: ...
 
 
 class StateStore:
@@ -114,13 +114,13 @@ class StateStore:
                 if p.exists():
                     p.unlink()
 
-    def log_event(self, state: CampaignState, event: str, **payload) -> None:
+    def log_event(self, state: CampaignState, event: str, **payload: Any) -> None:
         record = {"ts": time.time(), "campaign_id": state.campaign_id, "event": event, **payload}
         with self._lock:
             with self._log_path(state.campaign_id).open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record) + "\n")
 
-    def read_log(self, campaign_id: str) -> list[dict]:
+    def read_log(self, campaign_id: str) -> list[dict[str, Any]]:
         p = self._log_path(campaign_id)
         if not p.exists():
             return []

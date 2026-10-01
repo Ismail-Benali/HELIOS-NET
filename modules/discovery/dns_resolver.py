@@ -10,7 +10,7 @@ Features:
 from __future__ import annotations
 
 import asyncio
-import random
+import secrets
 import struct
 import time
 from typing import Dict, List, Tuple
@@ -25,7 +25,11 @@ class EliteDNSResolver:
         self._cache: Dict[str, Tuple[float, List[str]]] = {}
 
     def _build_edns_query(self, domain: str, qtype: int = 1) -> bytes:
-        tx_id = random.randint(0, 65535)
+        # A transaction ID chosen by a predictable PRNG can be guessed, which
+        # is what makes off-path response spoofing practical. This is the one
+        # place in the module that needs unpredictability rather than a spread
+        # of values, so it uses the system CSPRNG.
+        tx_id = secrets.randbits(16)
         # header: QDCOUNT=1, ARCOUNT=1 (to add the EDNS0 OPT record)
         header = struct.pack("!HHHHHH", tx_id, 0x0100, 1, 0, 0, 1)
         

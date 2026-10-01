@@ -10,11 +10,13 @@ reports, covering:
 
 from __future__ import annotations
 
+from typing import Any
+
 import json
 from .state import CampaignState
 
 
-def generate_executive_briefing(state: CampaignState, report_data: dict) -> str:
+def generate_executive_briefing(state: CampaignState, report_data: dict[str, Any]) -> str:
     """Emits a clean Markdown intelligence report."""
     lines = [
         f"# HELIOS-NET :: BRIEFING REPORT",

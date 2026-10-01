@@ -285,7 +285,7 @@ def test_attack_surface_drift_and_html_report():
         res = generate_html_report(briefing, out_file)
         assert res.exists()
         html_text = res.read_text(encoding="utf-8")
-        assert "⚡ HELIOS-NET" in html_text
+        assert "HELIOS-NET :: EXECUTIVE BRIEFING REPORT" in html_text
         assert "test-123" in html_text
 
     print("drift_and_html_report: OK (Attack surface diff & HTML executive reporting verified)")

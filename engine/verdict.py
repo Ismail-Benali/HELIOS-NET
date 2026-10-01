@@ -3,7 +3,7 @@ Smart if/then rules that classify risks and preliminary decisions.
 
 Responsibilities:
   - Convert finding sheets into a verdict with a weight and severity.
-  - Rules are extensible (plugins) and testable — no scattered logic in modules.
+  - Rules are extensible (plugins) and testable - no scattered logic in modules.
   - The verdict stays grounded in recorded findings, not on out-of-scope guessing.
 
 Standing security note:
@@ -14,6 +14,8 @@ Standing security note:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -23,10 +25,10 @@ class Rule:
     """A single classification rule."""
     name: str
     weight: float                 # severity weight (0..1)
-    test: Callable[[dict], bool]  # does it apply to this finding?
+    test: Callable[[dict[str, Any]], bool]  # does it apply to this finding?
     note: str = ""
 
-    def applies(self, finding: dict) -> bool:
+    def applies(self, finding: dict[str, Any]) -> bool:
         try:
             return bool(self.test(finding))
         except Exception:
@@ -36,11 +38,11 @@ class Rule:
 @dataclass
 class Verdict:
     """The classified result for a single finding."""
-    finding: dict
+    finding: dict[str, Any]
     rules_hit: list[str] = field(default_factory=list)
     max_weight: float = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "source": self.finding.get("module", "unknown"),
             "target": self.finding.get("target"),
@@ -52,7 +54,7 @@ class Verdict:
 
 
 class VerdictEngine:
-    """The rules engine — every rule is a growable plugin component."""
+    """The rules engine - every rule is a growable plugin component."""
 
     def __init__(self, rules: list[Rule] | None = None):
         self._rules: list[Rule] = list(rules or [])
@@ -61,13 +63,12 @@ class VerdictEngine:
         self._rules.append(rule)
 
     def load_plugins(self, registry: dict[str, Callable[[], Rule]]) -> None:
-        """Imports rules from the plugins/ registry — extensible without touching the core."""
+        """Imports rules from the plugins/ registry - extensible without touching the core."""
         for name, factory in registry.items():
             self._rules.append(factory())
 
     def load_from_json(self, json_path: str | Path) -> int:
         """Dynamically loads rules from an external JSON file (Dynamic DSL)."""
-        from pathlib import Path
         import json
         path = Path(json_path)
         if not path.exists():
@@ -89,7 +90,7 @@ class VerdictEngine:
         except Exception:
             return 0
 
-    def judge(self, finding: dict) -> Verdict:
+    def judge(self, finding: dict[str, Any]) -> Verdict:
         v = Verdict(finding=finding)
         for r in self._rules:
             if r.applies(finding):
@@ -97,12 +98,12 @@ class VerdictEngine:
                 v.max_weight = max(v.max_weight, r.weight)
         return v
 
-    def judge_all(self, findings: list[dict]) -> list[Verdict]:
+    def judge_all(self, findings: list[dict[str, Any]]) -> list[Verdict]:
         return [self.judge(f) for f in findings]
 
 
 # ----------------------------------------------------------------------------
-# Ready-made default rules — loaded by default.
+# Ready-made default rules - loaded by default.
 # ----------------------------------------------------------------------------
 def default_rules() -> list[Rule]:
     return [
@@ -122,7 +123,7 @@ def default_rules() -> list[Rule]:
             name="admin_interface",
             weight=0.7,
             test=lambda f: any(k in str(f.get("service", "")).lower() for k in ("admin", "management", "ssh", "rdp")),
-            note="Admin/management interface — priority for inspection.",
+            note="Admin/management interface - priority for inspection.",
         ),
         Rule(
             name="default_credentials_hint",

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def compute_surface_drift(previous_findings: List[dict], current_findings: List[dict]) -> Dict[str, Any]:
+def compute_surface_drift(previous_findings: List[dict[str, Any]], current_findings: List[dict[str, Any]]) -> Dict[str, Any]:
     """Compares two sets of discovered findings/services and computes delta drift."""
     prev_set = {(f.get("host"), f.get("port")) for f in previous_findings}
     curr_set = {(f.get("host"), f.get("port")) for f in current_findings}

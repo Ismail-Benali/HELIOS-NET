@@ -1,0 +1,12 @@
+[package]
+name = "helios-rust-core"
+# Must track the version advertised by `helios_rust_version`, which derives its
+# string from CARGO_PKG_VERSION. A test asserts the two agree.
+version = "3.0.0"
+edition = "2021"
+
+[lib]
+name = "helios_rust_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]

@@ -1,5 +1,53 @@
-data/campaigns/
-data/*.jsonl
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+*.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# Go
 *.exe
+*.dll
+*.so
+*.dylib
+bin/
+vendor/
+
+# Rust
+target/
+Cargo.lock
+
+# Data and logs
+data/campaigns/
+data/*.html
+data/*.json
+data/*.log.jsonl
+*.log
+*.tmp
+
+# C core build output
+transport/c_core/build/

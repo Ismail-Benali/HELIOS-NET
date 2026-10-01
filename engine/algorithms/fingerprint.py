@@ -4,7 +4,7 @@ Swappable fingerprint algorithm family.
 Shows how "identification" evolves from a fixed TTL rule into multiple models:
   - ttl_flat:    the current fixed estimator (fast, low context).
   - bayes:       probabilistic discrimination combining several signals
-                 (TTL + Window + IP ID) via pseudo-log-likelihood — smarter,
+                 (TTL + Window + IP ID) via pseudo-log-likelihood - smarter,
                  marginally heavier.
 
 Each model is registered in the central registry and switched by name. The core
@@ -12,6 +12,8 @@ is never touched.
 """
 
 from __future__ import annotations
+
+from typing import Any, Callable
 
 from . import register_algo
 
@@ -25,8 +27,8 @@ PROFILES = {
 }
 
 
-def _ttl_flat(sig: dict) -> dict:
-    """Fixed estimator — the common TTL function."""
+def _ttl_flat(sig: dict[str, Any]) -> dict[str, Any]:
+    """Fixed estimator - the common TTL function."""
     ttl = sig.get("ttl", 64)
     if ttl <= 64:
         fam = "linux"
@@ -37,7 +39,7 @@ def _ttl_flat(sig: dict) -> dict:
     return {"guess": fam, "confidence": 1.0, "method": "ttl_flat"}
 
 
-def _bayes(sig: dict) -> dict:
+def _bayes(sig: dict[str, Any]) -> dict[str, Any]:
     """Pseudo-Bayesian discrimination over multiple signals.
 
     Computes a score for each family from the deviation of the observed signals
@@ -67,9 +69,10 @@ register_algo("fingerprint", "ttl_flat", _ttl_flat, default=True)
 register_algo("fingerprint", "bayes", _bayes)
 
 
-def fingerprint_sig(sig: dict, kind: str = "ttl_flat") -> dict:
-    """The public gateway — invoked by the recon engine when switching models."""
+def fingerprint_sig(sig: dict[str, Any], kind: str = "ttl_flat") -> dict[str, Any]:
+    """The public gateway - invoked by the recon engine when switching models."""
     from . import get_algo
+    algo: Callable[[dict[str, Any]], dict[str, Any]]
     try:
         algo = get_algo("fingerprint", kind)
     except Exception:

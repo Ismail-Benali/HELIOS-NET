@@ -8,6 +8,8 @@ pattern.
 
 from __future__ import annotations
 
+from typing import Any
+
 import math
 import random
 
@@ -15,10 +17,11 @@ import random
 class Pacer:
     """An advanced probabilistic pacing runner."""
 
-    def __init__(self, mean_dwell: float = 0.3, jitter: float = 0.15, rng=None):
+    def __init__(self, mean_dwell: float = 0.3, jitter: float = 0.15,
+                 rng: Any = None) -> None:
         self.mean_dwell = max(0.01, mean_dwell)
         self.jitter = max(0.0, jitter)
-        self._rng = rng or random.Random()
+        self._rng = rng or random.Random()  # nosec B311 - timing jitter, not a security value
 
     def dwell(self, mode: str = "exponential") -> float:
         """Computes the next time gap with a realistic probabilistic distribution.

@@ -1,5 +1,5 @@
 """HELIOS-NET :: modules/core.py
-Module spawner system — extending modules without touching the core.
+Module spawner system - extending modules without touching the core.
 
 Philosophy:
   Instead of a fixed manual registration list, each standalone module registers
@@ -19,9 +19,9 @@ import inspect
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Any
 
-Runner = Callable[..., dict]
+Runner = Callable[..., dict[str, Any]]
 
 
 @dataclass
@@ -30,14 +30,14 @@ class ModuleSpec:
     name: str
     kind: str
     runner: Runner
-    params: dict = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
 
 
-# The global registry — unique per process.
+# The global registry - unique per process.
 _MODULES: dict[str, ModuleSpec] = {}
 
 
-def module(name: str, kind: str = "generic", **params):
+def module(name: str, kind: str = "generic", **params: Any) -> Callable[..., Any]:
     """Decorator for a module: registers it in the registry on import.
 
     Example:
@@ -86,6 +86,6 @@ def discover(scan_dir: Path) -> int:
             continue
         try:
             importlib.import_module(py.stem)
-        except Exception:
-            continue  # a broken module is skipped — it does not drop discovery.
+        except Exception:  # nosec B112 - one broken plugin must not drop the rest of discovery
+            continue  # a broken module is skipped - it does not drop discovery.
     return len(set(_MODULES) - before)

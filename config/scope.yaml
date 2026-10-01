@@ -1,0 +1,20 @@
+# HELIOS-NET :: Attack Surface Management Scope Configuration
+# Authorized target scopes for engagement and reconnaissance execution.
+
+scope:
+  domains:
+    - "example.test"
+    - "lab.test"
+  cidrs:
+    - "127.0.0.0/24"
+  ports:
+    - 21
+    - 22
+    - 80
+    - 443
+    - 3306
+    - 5432
+  rate_limit:
+    initial_concurrency: 20
+    max_concurrency: 100
+    timeout_seconds: 2.0

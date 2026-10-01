@@ -1,5 +1,5 @@
 """HELIOS-NET :: core/orchestrator.py
-Central Master Mind — Orchestrates campaign lifecycle from planning to reporting.
+Central Master Mind - Orchestrates campaign lifecycle from planning to reporting.
 
 Responsibilities:
   - Drives the closed-loop intelligence cycle: recon -> planning -> execution -> feedback.
@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Any
 
 from .planner import PlanStep, Planner
 from .state import CampaignState, StateStore
 
-ModuleRunner = Callable[[PlanStep, dict], dict]
+ModuleRunner = Callable[[PlanStep, dict[str, Any]], dict[str, Any]]
 
 
 class Orchestrator:
@@ -29,14 +29,14 @@ class Orchestrator:
         self.planner = Planner(max_concurrency=max_workers)
         self.max_workers = max_workers
         self._registry: dict[str, ModuleRunner] = dict(reg or {})
-        self._context: dict = {"timestamps": {}, "findings": [], "reports": [], "meta": {}}
+        self._context: dict[str, Any] = {"timestamps": {}, "findings": [], "reports": [], "meta": {}}
 
     def register(self, name: str, runner: ModuleRunner) -> None:
         if not callable(runner):
             raise TypeError(f"runner for {name!r} must be callable")
         self._registry[name] = runner
 
-    def run_campaign(self, target: str, intelligence: list[dict] | None = None) -> CampaignState:
+    def run_campaign(self, target: str, intelligence: list[dict[str, Any]] | None = None) -> CampaignState:
         """Executes a full campaign against the specified target."""
         state = CampaignState(target=target)
         state.transition("planning")
@@ -79,6 +79,10 @@ class Orchestrator:
             state.meta["graph_nodes"] = len(g.nodes)
             state.meta["graph_edges"] = len(g.adj)
             state.meta["top_targets"] = g.top_targets(limit=8)
+            # Which core produced that ranking. A campaign resumed on a host
+            # without the Rust library scores the same graph differently in
+            # ordering, so the fact belongs with the result rather than in a log.
+            state.meta["graph_engines"] = g.graph_report()["engines"]
         except Exception as exc:
             state.meta["graph_error"] = str(exc)
 
@@ -102,7 +106,7 @@ class Orchestrator:
                     self.store.log_event(state, "step_failed",
                                          module=step.module, action=step.action, error=str(exc))
 
-    def _safe_run(self, state: CampaignState, step: PlanStep) -> dict | None:
+    def _safe_run(self, state: CampaignState, step: PlanStep) -> dict[str, Any] | None:
         """Safely executes a module step, isolating failures."""
         runner = self._registry.get(step.module)
         if runner is None:
@@ -127,7 +131,7 @@ class Orchestrator:
         self.store.log_event(state, "campaign_recovered")
         return state
 
-    def report(self, state: CampaignState) -> dict:
+    def report(self, state: CampaignState) -> dict[str, Any]:
         """Generates a structured audit report from campaign state and logs."""
         events = self.store.read_log(state.campaign_id)
         return {

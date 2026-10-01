@@ -23,8 +23,8 @@ class EpsilonGreedyBandit:
 
     def select_arm(self) -> int:
         """Selects optimal scan rate using Epsilon-Greedy strategy."""
-        if random.random() < self.epsilon:
-            return random.randint(0, len(self.arms) - 1)
+        if random.random() < self.epsilon:  # nosec B311 - epsilon-greedy exploration, not a security value
+            return random.randint(0, len(self.arms) - 1)  # nosec B311 - epsilon-greedy exploration, not a security value
         return self.values.index(max(self.values))
 
     def update(self, arm_index: int, reward: float) -> None:
