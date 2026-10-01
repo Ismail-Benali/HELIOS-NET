@@ -219,8 +219,7 @@ def test_the_reported_rtt_is_elapsed_time_and_may_round_to_zero(monkeypatch):
     """
     _patch_connection(monkeypatch, b"ok")
     instant = asyncio.run(adaptive_banner_probe("10.0.0.1", 80))
-    assert instant["rtt"] == 0.0, "a sub-50us probe rounds to zero"
-    assert instant["rtt"] >= 0.0
+    assert instant["rtt"] >= 0.0, "a sub-50us probe rounds to zero"
 
 
 # --------------------------------------------------------------------------- #

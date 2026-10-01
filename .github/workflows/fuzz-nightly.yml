@@ -1,0 +1,75 @@
+# .github/workflows/fuzz-nightly.yml
+name: Fuzz (Nightly)
+
+on:
+  schedule:
+    - cron: '0 3 * * 2' # Tuesdays 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-fuzz-long:
+    name: Go Fuzz (extended 10m/target)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - FuzzParsePorts
+          - FuzzSanitizeBanner
+          - FuzzGuessServiceFromBanner
+          - FuzzResolveService
+          - FuzzPortResultJSON
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: transport/goscan/go.mod
+          cache: true
+
+      - name: Run extended Go fuzz
+        working-directory: transport/goscan
+        run: |
+          mkdir -p testdata/fuzz/${{ matrix.target }}
+          go test -fuzz=${{ matrix.target }} -fuzztime=600s ./...
+
+  c-fuzz:
+    name: C Differential Fuzz (fuzz_harness)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up build deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential
+
+      - name: Build fuzz harness (with sanitizers)
+        run: |
+          mkdir -p transport/c_core/build
+          gcc -std=c11 -O2 -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Itransport/c_core/include \
+            transport/c_core/tests/fuzz_harness.c \
+            transport/c_core/src/aho_corasick.c \
+            transport/c_core/src/boyer_moore.c \
+            transport/c_core/src/hashing.c \
+            transport/c_core/src/helios_batch.c \
+            transport/c_core/src/helios_core.c \
+            transport/c_core/src/helios_dll.c \
+            -o transport/c_core/build/fuzz_harness
+
+      - name: Run fuzz (600s)
+        run: |
+          transport/c_core/build/fuzz_harness 600 2>&1 | tail -30

@@ -1,27 +1,29 @@
-name: HELIOS-NET Binary Release & Container Pipeline
+# .github/workflows/release.yml
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 permissions:
   contents: write
-  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  release-build:
-    name: Build & Release (${{ matrix.os }})
+  build-artifacts:
+    name: Build Polyglot Artifacts
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_name: helios-net-linux-x64.tar.gz
-            asset_name: helios-net-linux-x64.tar.gz
-          - os: windows-latest
-            artifact_name: helios-net-win-x64.zip
-            asset_name: helios-net-win-x64.zip
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout Repository
@@ -35,100 +37,98 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-          cache: false
+          go-version-file: transport/goscan/go.mod
 
-      - name: Set up Rust Toolchain
+      - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Cargo Registry & Target
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust-core/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-core/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Run Polyglot Build Script
-        run: python build.py
-
-      - name: Run Smoke Verification Tests
-        run: python tests/smoke.py
-
-      - name: Package Artifact (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p dist
-          tar -czf dist/helios-net-linux-x64.tar.gz *.py core/ engine/ modules/ transport/ rust-core/target/release/
-
-      - name: Package Artifact (Windows)
+      - name: Code Signing Credentials (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        id: signing
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Compress-Archive -Path *.py, core, engine, modules, transport, rust-core\target\release -DestinationPath dist\helios-net-win-x64.zip
+          if [ -n "${{ secrets.HELIOS_SIGN_PFX_B64 }}" ] && [ -n "${{ secrets.HELIOS_SIGN_PASSWORD }}" ]; then
+            echo "HELIOS_SIGN_PFX_B64=${{ secrets.HELIOS_SIGN_PFX_B64 }}" >> "$GITHUB_ENV"
+            echo "HELIOS_SIGN_PASSWORD=${{ secrets.HELIOS_SIGN_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
+      - name: Code Signing Status
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
+            echo "[+] Authenticode signing credentials present (out-of-band)."
+          else
+            echo "[*] No signing secrets provided for this tag build; artifacts will remain unsigned (documented gap)."
+          fi
+
+      - name: Polyglot Build + Test Suites
+        run: |
+          python build.py --test --fuzz=10
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: dist/*
+          name: helios-net-${{ runner.os }}-${{ github.ref_name }}
+          path: |
+            transport/c_core/build/**
+            transport/goscan/goscan*
+            rust-core/target/release/*.so
+            rust-core/target/release/*.dylib
+            rust-core/target/release/*.dll
+            rust-core/target/release/*.rlib
+          if-no-files-found: warn
+          retention-days: 14
 
-  docker-publish:
-    name: Build & Push Docker Image
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-${{ runner.os }}.cdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ runner.os }}-${{ github.ref_name }}
+          path: sbom-${{ runner.os }}.cdx.json
+          retention-days: 30
+
+  release:
+    name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: release-build
+    needs: [build-artifacts]
+    timeout-minutes: 20
     permissions:
-      contents: read
-      packages: write
-
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          path: dist
+          merge-multiple: false
 
-      - name: Extract Metadata (Tags, Labels)
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Attest build provenance (SLSA)
+        uses: actions/attest-build-provenance@v2
         with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-
-      - name: Build and Push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  github-release-notes:
-    name: Create GitHub Release with Exact Notes
-    runs-on: ubuntu-latest
-    needs: [release-build, docker-publish]
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+          subject-path: |
+            dist/**/*.so
+            dist/**/*.dll
+            dist/**/*.dylib
+            dist/**/*.exe
+            dist/**/goscan*
+            dist/**/*.cdx.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: HELIOS-NET v1.3.0 -- Strategic Pathfinding & Advanced Evasion Integration
-          body: |
-            What's New:
-            - Rust A* Pathfinder Core: Implemented a new strategic routing engine that calculates the safest path based on multi-factor risk scoring (EDR presence, firewall levels, honeypot probability) rather than shortest distance alone.
-            - Enhanced C Evasion Suite: Integrated advanced stealth techniques including memory sleep masking, ETW patching, and AMSI bypass, with full support for indirect system calls (Indirect Syscalls).
-            - Standardized Communication (SEE & NDJSON): Unified error and result outputs across all system components (Python, Go, C, Rust) to ensure closed-loop intelligence reliability.
-            - CI/CD Stabilization: Optimized automated build pipelines, fixed deployment steps, and ensured smoke testing stability across multi-platform environments.
-          draft: false
-          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
