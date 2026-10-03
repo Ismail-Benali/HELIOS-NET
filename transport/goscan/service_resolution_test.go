@@ -49,7 +49,7 @@ func silentServer(t *testing.T) net.Listener {
 			}
 			go func(c net.Conn) {
 				time.Sleep(2 * bannerTimeout)
-				c.Close()
+				_ = c.Close()
 			}(conn)
 		}
 	}()
@@ -80,7 +80,7 @@ func scanSingle(t *testing.T, ln net.Listener) PortResult {
 
 func TestSilentServiceFallsBackToThePortHint(t *testing.T) {
 	ln := silentServer(t)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	res := scanSingle(t, ln)
 	if res.Service == "" {
@@ -93,7 +93,7 @@ func TestSilentServiceStillSerialisesTheServiceKey(t *testing.T) {
 	// The bridge reads `service`. With `omitempty` an empty string removes the
 	// key, so the fallback has to be non-empty for the field to survive NDJSON.
 	ln := silentServer(t)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	res := scanSingle(t, ln)
 	encoded, err := json.Marshal(res)
