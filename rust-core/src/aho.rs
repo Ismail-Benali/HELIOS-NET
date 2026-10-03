@@ -351,45 +351,45 @@ mod tests {
         assert_eq!(hits.iter().map(|h| h.1).collect::<Vec<_>>(), vec![0, 3, 6]);
     }
 
-#[test]
-fn ignores_empty_and_duplicate_patterns() {
-    let mut a = AhoCorasick::new();
-    assert!(!a.add(""));
-    assert!(!a.add("   "));
-    assert!(a.add("alpha"));
-    assert!(!a.add("ALPHA"), "duplicate needle must be stored once");
-    assert_eq!(a.len(), 1);
-}
+    #[test]
+    fn ignores_empty_and_duplicate_patterns() {
+        let mut a = AhoCorasick::new();
+        assert!(!a.add(""));
+        assert!(!a.add("   "));
+        assert!(a.add("alpha"));
+        assert!(!a.add("ALPHA"), "duplicate needle must be stored once");
+        assert_eq!(a.len(), 1);
+    }
 
-#[test]
-fn a_pattern_keeps_the_spaces_it_was_given() {
-    // The C core trims the signature line, never the pattern, so these are three
-    // distinct signatures. Trimming them here made this core report ' SSH' at
-    // offset 3 where the C core reported it at 2.
-    let mut a = AhoCorasick::new();
-    assert!(a.add(" SSH"));
-    assert!(a.add("SSH"));
-    assert!(a.add("SSH "));
-    assert_eq!(a.len(), 3, "the three patterns are not the same needle");
-    a.build();
+    #[test]
+    fn a_pattern_keeps_the_spaces_it_was_given() {
+        // The C core trims the signature line, never the pattern, so these are three
+        // distinct signatures. Trimming them here made this core report ' SSH' at
+        // offset 3 where the C core reported it at 2.
+        let mut a = AhoCorasick::new();
+        assert!(a.add(" SSH"));
+        assert!(a.add("SSH"));
+        assert!(a.add("SSH "));
+        assert_eq!(a.len(), 3, "the three patterns are not the same needle");
+        a.build();
 
-    assert_eq!(
-        sorted(a.scan(b"xx SSHyy")),
-        sorted(vec![(" SSH".to_string(), 2), ("SSH".to_string(), 3)])
-    );
-}
+        assert_eq!(
+            sorted(a.scan(b"xx SSHyy")),
+            sorted(vec![(" SSH".to_string(), 2), ("SSH".to_string(), 3)])
+        );
+    }
 
-#[test]
-fn a_whitespace_only_pattern_is_still_rejected() {
-    // Rejecting a blank pattern and preserving the spaces in a non-blank one
-    // are two different rules; fixing the second must not lose the first.
-    let mut a = AhoCorasick::new();
-    assert!(!a.add(""));
-    assert!(!a.add("   "));
-    assert!(!a.add("\t\n"));
-    assert!(a.add("  x  "));
-    assert_eq!(a.len(), 1);
-}
+    #[test]
+    fn a_whitespace_only_pattern_is_still_rejected() {
+        // Rejecting a blank pattern and preserving the spaces in a non-blank one
+        // are two different rules; fixing the second must not lose the first.
+        let mut a = AhoCorasick::new();
+        assert!(!a.add(""));
+        assert!(!a.add("   "));
+        assert!(!a.add("\t\n"));
+        assert!(a.add("  x  "));
+        assert_eq!(a.len(), 1);
+    }
 
     #[test]
     fn empty_automaton_matches_nothing() {
@@ -405,7 +405,10 @@ fn a_whitespace_only_pattern_is_still_rejected() {
             "aaaaaaaaaaaaaaaaaaaac",
             "aaaaaaaaaaaaaaaaaaaad",
         ]);
-        assert_eq!(labels(&a.scan(b"aaaaaaaaaaaaaaaaaaaac")), vec!["aaaaaaaaaaaaaaaaaaaac"]);
+        assert_eq!(
+            labels(&a.scan(b"aaaaaaaaaaaaaaaaaaaac")),
+            vec!["aaaaaaaaaaaaaaaaaaaac"]
+        );
     }
 
     #[test]
@@ -416,7 +419,10 @@ fn a_whitespace_only_pattern_is_still_rejected() {
         assert_eq!(a.scan(b"alpha").len(), 1);
         a.add("beta");
         a.build();
-        assert_eq!(labels(&a.scan(b"alpha beta alpha")), vec!["alpha", "beta", "alpha"]);
+        assert_eq!(
+            labels(&a.scan(b"alpha beta alpha")),
+            vec!["alpha", "beta", "alpha"]
+        );
     }
 
     #[test]
