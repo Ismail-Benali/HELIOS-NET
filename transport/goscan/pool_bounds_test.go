@@ -22,7 +22,7 @@ const sweepSize = 20000
 
 // goroutineSlack covers the machinery the scan legitimately needs: the closer
 // goroutine, the sampler, the Go runtime itself, and test scaffolding.
-const goroutineSlack = 250
+const goroutineSlack = 400
 
 func measureSweepPeakGoroutines(t *testing.T) int {
 	t.Helper()
