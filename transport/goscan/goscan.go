@@ -422,7 +422,7 @@ func scanPort(ip string, port int, timeout time.Duration, results chan<- PortRes
 	latency := time.Since(start).Milliseconds()
 
 	if err == nil {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		banner, service := grabBanner(conn)
 		results <- PortResult{
 			Port:      port,
