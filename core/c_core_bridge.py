@@ -621,13 +621,14 @@ def scan_banners(
     handle = _open_signatures(sig_path) if ffi_available() else None
     if handle is not None:
         results: list[dict[str, Any]] = []
+        ok = True
         for banner in banners:
             parsed = _ffi_match(handle, banner)
             if parsed is None:
-                results = []
+                ok = False
                 break
             results.append(parsed)
-        if results:
+        if ok and len(results) == len(banners):
             return results
 
     if _BINARY is not None:
