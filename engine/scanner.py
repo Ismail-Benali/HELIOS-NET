@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
-from typing import Callable, Iterable, Any
+from dataclasses import dataclass
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +27,12 @@ log = logging.getLogger(__name__)
 @dataclass
 class ScanTask:
     """A single scan task."""
+
     name: str
     fn: Callable[[], dict[str, Any]]
-    weight: float = 1.0      # relative weight for balancing (may be an estimated task duration).
+    weight: float = (
+        1.0  # relative weight for balancing (may be an estimated task duration).
+    )
     result: dict[str, Any] | None = None
     error: str | None = None
     started: float | None = None
@@ -57,15 +61,21 @@ class ScanTask:
 class Scanner:
     """Distributed scan executor with guaranteed load balancing."""
 
-    def __init__(self, max_workers: int = 8, min_interval: float = 0.0,
-                 balancing_algo: str | None = None):
+    def __init__(
+        self,
+        max_workers: int = 8,
+        min_interval: float = 0.0,
+        balancing_algo: str | None = None,
+    ):
         self.max_workers = max_workers
         self.min_interval = min_interval
         self.balancing_algo = balancing_algo
         self._last_start: dict[str, float] = {}
 
     # -- load balancing basis: cost weight --------------------------------------
-    def balanced_batches(self, tasks: list[ScanTask], max_workers: int) -> list[list[ScanTask]]:
+    def balanced_batches(
+        self, tasks: list[ScanTask], max_workers: int
+    ) -> list[list[ScanTask]]:
         """Distributes tasks into batches balancing their weights (as close as possible).
 
         Delegates the decision to the swappable algorithm gateway - so switching
@@ -76,8 +86,9 @@ class Scanner:
 
         weights = [t.weight for t in tasks]
         try:
-            result = algo_solve(kind=self.balancing_algo or "lpt", weights=weights,
-                                workers=max_workers)
+            result = algo_solve(
+                kind=self.balancing_algo or "lpt", weights=weights, workers=max_workers
+            )
             idx_buckets = result.index_buckets()
         except Exception:
             idx_buckets = self._lpt_idx(weights, max_workers)
@@ -141,6 +152,7 @@ class Scanner:
         the user's granted scope. It is used as an experimental lab component.
         """
         import socket
+
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
         try:

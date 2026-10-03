@@ -12,22 +12,20 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any
-
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.orchestrator import Orchestrator  # noqa: E402
-from core.state import StateStore                   # noqa: E402
+from core.state import StateStore  # noqa: E402
+from engine.plugins import plugin_registry  # noqa: E402
 from engine.verdict import VerdictEngine, default_rules  # noqa: E402
-from engine.plugins import plugin_registry          # noqa: E402
-from modules.registry import default_registry       # noqa: E402
-
+from modules.registry import default_registry  # noqa: E402
 
 DEFAULT_DATA = ROOT / "data"
 
@@ -43,7 +41,11 @@ def cmd_recon(args: Any) -> int:
     state = orch.run_campaign(args.target)
     rep = orch.report(state)
     print(f"[HELIOS] campaign {state.campaign_id} -> {state.status}")
-    print(orch.planner.to_json(orch._context["plan"]) if orch._context.get("plan") else "(no plan)")
+    print(
+        orch.planner.to_json(orch._context["plan"])
+        if orch._context.get("plan")
+        else "(no plan)"
+    )
     summary = state.meta.get("findings_count", 0)
     print(f"[HELIOS] findings collected: {summary}")
     return 0
@@ -56,7 +58,9 @@ def cmd_judge(args: Any) -> int:
     ve = VerdictEngine(rules=default_rules())
     ve.load_plugins(plugin_registry())
     for v in ve.judge_all(findings):
-        print(f"  {v.finding.get('host')}:{v.finding.get('port')} <- {v.finding.get('service')}")
+        print(
+            f"  {v.finding.get('host')}:{v.finding.get('port')} <- {v.finding.get('service')}"
+        )
         print(f"    severity={v.to_dict()['severity']} rules={v.rules_hit}")
     return 0
 
@@ -77,6 +81,7 @@ def cmd_recover(args: Any) -> int:
 def cmd_info(args: Any) -> int:
     """Displays extensible system components: algorithms, modules, rules."""
     import json
+
     from engine.algorithms import list_algos
     from modules.core import discover, list_modules
 
@@ -85,8 +90,10 @@ def cmd_info(args: Any) -> int:
     except Exception as exc:
         # Silently listing fewer modules than exist is the one failure mode a
         # user cannot notice, so the inventory says so instead.
-        print(f"[HELIOS] warning: plugin discovery failed ({exc}); "
-              "the module list below is incomplete.")
+        print(
+            f"[HELIOS] warning: plugin discovery failed ({exc}); "
+            "the module list below is incomplete."
+        )
 
     payload = {
         "algorithms": list_algos(),
@@ -105,19 +112,24 @@ def cmd_status(args: Any) -> int:
         print("[HELIOS] no campaigns recorded.")
         return 0
     for s in sorted(states, key=lambda x: x.created_at, reverse=True):
-        print(f"  {s.campaign_id} {s.status:9s} target={s.target} findings={s.meta.get('findings_count', 0)}")
+        print(
+            f"  {s.campaign_id} {s.status:9s} target={s.target} findings={s.meta.get('findings_count', 0)}"
+        )
     return 0
 
 
 def cmd_daemon(args: Any) -> int:
     """Activates the Continuous Autonomous Mission Daemon."""
     import asyncio
+
     from core.daemon import AutonomousDaemon
 
     print(f"[DEMIURG-DAEMON] Activating autonomous agent for target: {args.target}")
     print("[DEMIURG-DAEMON] Press Ctrl+C to terminate the living daemon loop.")
-    
-    daemon = AutonomousDaemon(target=args.target, state_dir=Path(args.data), interval_seconds=args.interval)
+
+    daemon = AutonomousDaemon(
+        target=args.target, state_dir=Path(args.data), interval_seconds=args.interval
+    )
     try:
         asyncio.run(daemon.start())
     except KeyboardInterrupt:
@@ -127,14 +139,19 @@ def cmd_daemon(args: Any) -> int:
 
 def cmd_sim(args: Any) -> int:
     """Executes the full end-to-end framework simulation."""
-    import run_simulation
     import asyncio
+
+    import run_simulation
+
     asyncio.run(run_simulation.simulate_engagement())
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="helios", description="HELIOS-NET - Autonomous Red Teaming & Attack Surface Management Orchestrator")
+    p = argparse.ArgumentParser(
+        prog="helios",
+        description="HELIOS-NET - Autonomous Red Teaming & Attack Surface Management Orchestrator",
+    )
     p.add_argument("--data", default=str(DEFAULT_DATA), help="Campaign data directory")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -158,7 +175,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     dm = sub.add_parser("daemon", help="Run continuous autonomous mission daemon")
     dm.add_argument("--target", required=True, help="Target host")
-    dm.add_argument("--interval", type=float, default=15.0, help="Loop interval in seconds")
+    dm.add_argument(
+        "--interval", type=float, default=15.0, help="Loop interval in seconds"
+    )
     dm.set_defaults(fn=cmd_daemon)
 
     sim = sub.add_parser("sim", help="Run end-to-end simulation demonstration")

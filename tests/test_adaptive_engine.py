@@ -52,7 +52,9 @@ class FakeWriter:
         return None
 
 
-def _patch_connection(monkeypatch, reader_payload=b"", exception=None) -> list[FakeWriter]:
+def _patch_connection(
+    monkeypatch, reader_payload=b"", exception=None
+) -> list[FakeWriter]:
     made: list[FakeWriter] = []
 
     async def fake_open_connection(host, port, **kwargs):
@@ -69,6 +71,7 @@ def _patch_connection(monkeypatch, reader_payload=b"", exception=None) -> list[F
 # --------------------------------------------------------------------------- #
 # AIMD controller
 # --------------------------------------------------------------------------- #
+
 
 def test_success_grows_the_window_additively():
     controller = AIMDController(initial_concurrency=10, min_c=2, max_c=20)
@@ -102,7 +105,9 @@ def test_the_controller_reports_a_whole_number():
     controller = AIMDController(initial_concurrency=10)
     assert asyncio.run(controller.get()) == 10
     asyncio.run(controller.onSuccess())
-    assert asyncio.run(controller.get()) == 10, "0.5 steps truncate, they do not round up"
+    assert asyncio.run(controller.get()) == 10, (
+        "0.5 steps truncate, they do not round up"
+    )
 
 
 def test_concurrent_updates_do_not_lose_a_step(monkeypatch):
@@ -121,6 +126,7 @@ def test_concurrent_updates_do_not_lose_a_step(monkeypatch):
 # jittered backoff
 # --------------------------------------------------------------------------- #
 
+
 def test_backoff_doubles_per_attempt(monkeypatch):
     slept: list[float] = []
 
@@ -136,7 +142,7 @@ def test_backoff_doubles_per_attempt(monkeypatch):
     asyncio.run(run())
     # Each call sleeps base * 2**(attempt-1) plus a jitter of up to half of it.
     for index, actual in enumerate(slept):
-        expected = 0.1 * (2 ** index)
+        expected = 0.1 * (2**index)
         assert expected <= actual <= expected * 1.5, (expected, actual)
 
 
@@ -158,6 +164,7 @@ def test_backoff_is_capped(monkeypatch):
 # --------------------------------------------------------------------------- #
 # adaptive_banner_probe
 # --------------------------------------------------------------------------- #
+
 
 def test_an_open_port_is_probed_with_a_head_request(monkeypatch):
     made = _patch_connection(monkeypatch, b"HTTP/1.1 200 OK\r\n")
@@ -188,6 +195,7 @@ def test_a_read_failure_does_not_downgrade_an_open_port(monkeypatch):
     Simulated by failing the read rather than wait_for, because wait_for also
     wraps the connect and that would change what is under test.
     """
+
     async def fake_open_connection(host, port, **kwargs):
         return ExplodingReader(), FakeWriter()
 
@@ -226,10 +234,16 @@ def test_the_reported_rtt_is_elapsed_time_and_may_round_to_zero(monkeypatch):
 # enterprise_adaptive_recon
 # --------------------------------------------------------------------------- #
 
+
 def test_recon_returns_only_the_open_ports(monkeypatch):
     async def fake_probe(host, port, timeout=2.0):
-        return {"host": host, "port": port, "open": port in (22, 443),
-                "banner": "", "rtt": 0.001}
+        return {
+            "host": host,
+            "port": port,
+            "open": port in (22, 443),
+            "banner": "",
+            "rtt": 0.001,
+        }
 
     monkeypatch.setattr(async_engine, "adaptive_banner_probe", fake_probe)
     results = asyncio.run(enterprise_adaptive_recon("10.0.0.1", [22, 80, 443]))
@@ -319,6 +333,7 @@ def test_no_ports_means_no_results(monkeypatch):
 # AutonomousDaemon
 # --------------------------------------------------------------------------- #
 
+
 @pytest.fixture()
 def services(monkeypatch):
     """Lets each test decide what the recon sweep finds."""
@@ -341,13 +356,16 @@ def _replayed_ops(tmp_path) -> list[str]:
     """
     from core.wal import TransactionalWAL
 
-    return [str(record.get("op")) for record in
-            TransactionalWAL(tmp_path / "daemon_missions.wal").replay()]
+    return [
+        str(record.get("op"))
+        for record in TransactionalWAL(tmp_path / "daemon_missions.wal").replay()
+    ]
 
 
 def test_a_cycle_with_findings_is_committed(tmp_path, services):
-    services["active"] = [{"host": "10.0.0.1", "port": 22, "open": True,
-                           "banner": "", "rtt": 0.0}]
+    services["active"] = [
+        {"host": "10.0.0.1", "port": 22, "open": True, "banner": "", "rtt": 0.0}
+    ]
     daemon = AutonomousDaemon("10.0.0.1", tmp_path)
     asyncio.run(daemon.run_mission_cycle())
 
@@ -360,8 +378,9 @@ def test_a_committed_cycle_is_recoverable_after_a_restart(tmp_path, services):
     """A daemon that is killed and restarted must find its last cycle."""
     from core.wal import TransactionalWAL
 
-    services["active"] = [{"host": "10.0.0.1", "port": 22, "open": True,
-                           "banner": "", "rtt": 0.0}]
+    services["active"] = [
+        {"host": "10.0.0.1", "port": 22, "open": True, "banner": "", "rtt": 0.0}
+    ]
     asyncio.run(AutonomousDaemon("10.0.0.1", tmp_path).run_mission_cycle())
 
     records = TransactionalWAL(tmp_path / "daemon_missions.wal").replay()
@@ -380,7 +399,9 @@ def test_a_cycle_with_nothing_found_is_a_warning_not_a_success(tmp_path, service
     assert "MISSION_SUCCESS" not in ops
 
 
-def test_a_failing_cycle_rolls_back_instead_of_committing(tmp_path, monkeypatch, services):
+def test_a_failing_cycle_rolls_back_instead_of_committing(
+    tmp_path, monkeypatch, services
+):
     """Nothing may survive a cycle that raised, not even its MISSION_START."""
     import core.daemon as daemon_module
 
@@ -405,7 +426,7 @@ def test_a_failing_cycle_does_not_propagate(tmp_path, monkeypatch, services):
 
     monkeypatch.setattr(daemon_module, "enterprise_adaptive_recon", boom)
     daemon = AutonomousDaemon("10.0.0.1", tmp_path)
-    asyncio.run(daemon.run_mission_cycle())       # must not raise
+    asyncio.run(daemon.run_mission_cycle())  # must not raise
 
 
 def test_the_pacer_is_built_from_the_interval(tmp_path, services):
@@ -420,7 +441,7 @@ def test_stop_ends_the_loop(tmp_path, services, monkeypatch):
 
     async def counting_cycle() -> None:
         cycles.append(1)
-        daemon.stop()               # ask the loop to end after one cycle
+        daemon.stop()  # ask the loop to end after one cycle
 
     async def instant_sleep(seconds: float) -> None:
         return None

@@ -8,17 +8,15 @@ core/orchestrator without touching the core.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from pathlib import Path
-
 from core.planner import PlanStep
-
-from modules.core import ModuleSpec, discover, get_module, list_modules
+from modules.core import discover, list_modules
 from modules.discovery.service import discover_ports, native_connect_probe
-from modules.recon.fingerprint import banner_grab, fingerprint_host
-from modules.stealth.pacer import Pacer
 from modules.exfil.collector import Collector
+from modules.recon.fingerprint import fingerprint_host
+from modules.stealth.pacer import Pacer
 
 
 def discovery_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
@@ -37,9 +35,13 @@ def discovery_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
         if native_note.get("open"):
             ctx.setdefault("findings", []).append(native_note)
 
-    return {"module": "discovery", "host": step.target,
-            "open_ports": [f["port"] for f in found], "count": len(found),
-            "native": native_note}
+    return {
+        "module": "discovery",
+        "host": step.target,
+        "open_ports": [f["port"] for f in found],
+        "count": len(found),
+        "native": native_note,
+    }
 
 
 def recon_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
@@ -73,7 +75,11 @@ def exfil_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
     col = Collector()
     added = col.extend(ctx.get("findings", []))
     ctx["collected"] = added
-    return {"module": "exfil", "collected": added, "total": len(ctx.get("findings", []))}
+    return {
+        "module": "exfil",
+        "collected": added,
+        "total": len(ctx.get("findings", [])),
+    }
 
 
 # Unified registry - passed to Orchestrator.register per module.

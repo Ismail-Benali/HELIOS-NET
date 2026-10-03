@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import os
@@ -51,6 +52,7 @@ def test_wal_rollback():
 # affected: replay() returned an empty list and the sequence number restarted
 # at zero on every start.
 # --------------------------------------------------------------------------- #
+
 
 def _commit(wal_path: Path, op: str, data: dict | None = None) -> None:
     wal = TransactionalWAL(wal_path)
@@ -103,7 +105,7 @@ def test_the_key_is_never_written_into_the_log(tmp_path):
     raw = wal_path.read_bytes()
     assert b"SECRET_OP" not in raw
     assert b"hunter2" not in raw
-    assert b"op" not in raw.split(b"\x00")[0] or True   # header/ciphertext, not JSON
+    assert b"op" not in raw.split(b"\x00")[0] or True  # header/ciphertext, not JSON
 
 
 def test_the_key_file_is_owner_only_on_posix(tmp_path):
@@ -112,7 +114,9 @@ def test_the_key_file_is_owner_only_on_posix(tmp_path):
     key = TransactionalWAL(wal_path).key_path
 
     if os.name == "posix":
-        assert key.stat().st_mode & 0o077 == 0, "the key must not be group or world readable"
+        assert key.stat().st_mode & 0o077 == 0, (
+            "the key must not be group or world readable"
+        )
     else:
         assert key.exists(), "the key file must still be created off POSIX"
 
@@ -170,7 +174,7 @@ def test_a_corrupt_key_file_is_replaced_when_the_log_is_empty(tmp_path):
     wal_path.write_bytes(b"")
     TransactionalWAL(wal_path).key_path.write_bytes(b"ab")
 
-    wal = TransactionalWAL(wal_path)          # no records to lose
+    wal = TransactionalWAL(wal_path)  # no records to lose
     wal.begin()
     wal.append("FRESH", {})
     wal.commit()

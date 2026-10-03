@@ -18,21 +18,24 @@ import pytest
 from core import accel
 from core.c_core_bridge import _load_signatures, _python_fallback
 
-
 # ------------------------------------------------------------------ fixtures
+
 
 @pytest.fixture
 def sig_file(tmp_path):
     """Writes a signature file and returns its path."""
+
     def write(content: str):
         path = tmp_path / "sigs.txt"
         path.write_bytes(content.encode("utf-8"))
         return path
+
     return write
 
 
 def c_core_usable() -> bool:
     from core import c_core_bridge
+
     return c_core_bridge.core_available()
 
 
@@ -54,6 +57,7 @@ def signature_set(hits):
 
 # --------------------------------------------- the fallback is a real substitute
 
+
 @needs_c
 def test_fallback_reports_every_occurrence_not_just_the_first(sig_file):
     """A banner advertising several SSH versions is one detection per version.
@@ -65,7 +69,7 @@ def test_fallback_reports_every_occurrence_not_just_the_first(sig_file):
     banner = "SSH-1.5 ... SSH-2.0 ... SSH-2.0"
 
     native = _python_c_native(sig, banner)
-    assert signature_set(native) == [( "ssh", 0), ("ssh", 12), ("ssh", 24)]
+    assert signature_set(native) == [("ssh", 0), ("ssh", 12), ("ssh", 24)]
 
     fallback = _python_fallback([banner], sig)[0]["matches"]
     assert signature_set(fallback) == signature_set(native)
@@ -132,7 +136,9 @@ def test_fallback_preserves_a_pattern_that_begins_with_a_space(sig_file):
     banner = "xx SSHxx"
 
     native = _python_c_native(sig, banner)
-    assert signature_set(native) == [("n", 2)], "precondition: the space is part of the pattern"
+    assert signature_set(native) == [("n", 2)], (
+        "precondition: the space is part of the pattern"
+    )
 
     fallback = _python_fallback([banner], sig)[0]["matches"]
     assert signature_set(fallback) == signature_set(native)
@@ -193,7 +199,10 @@ def test_signature_loading_deduplicates_an_identical_line(sig_file):
 
 def test_signature_loading_keeps_one_pattern_under_two_names(sig_file):
     """Two names sharing a pattern are two signatures, and the core keeps both."""
-    assert _load_signatures(sig_file("a\tfoo\nb\tfoo\n")) == [("a", "foo"), ("b", "foo")]
+    assert _load_signatures(sig_file("a\tfoo\nb\tfoo\n")) == [
+        ("a", "foo"),
+        ("b", "foo"),
+    ]
 
 
 # --------------------------------------------------- all backends, one answer
@@ -207,7 +216,7 @@ CROSS_BACKEND_CASES = [
     ("non_ascii_pattern", "SSHD-\u4e2d\u6587", ["\u4e2d\u6587", "SSHD"]),
     ("non_ascii_prefix", "\u00dcberSSH-2.0", ["SSH-2.0"]),
     ("non_ascii_case_is_not_folded", "\u00dcBER 1.0", ["\u00fcber", "ber"]),
-    ("astral_plane", "ok-\U0001F600-tail", ["\U0001F600", "tail"]),
+    ("astral_plane", "ok-\U0001f600-tail", ["\U0001f600", "tail"]),
     ("pattern_with_leading_space", "xx SSHxx", [" SSH"]),
     ("duplicate_pattern_listed_twice", "foofoo", ["foo", "foo"]),
 ]
@@ -247,6 +256,7 @@ def test_positions_are_byte_offsets_on_every_backend():
 
 # --------------------------------------------------------- one call, one core
 
+
 def test_a_result_is_never_a_mixture_of_backends():
     """One request is served by one backend, so it corresponds to one opinion."""
     outcome = accel.match_signatures("xxFOOyyBARzz", ["foo", "bar"])
@@ -284,6 +294,7 @@ def test_an_unknown_backend_name_is_refused():
 
 
 # ------------------------------------------------------------- fingerprints
+
 
 def test_fingerprints_agree_across_backends():
     """The digests are the same numbers whichever core computes them."""
@@ -338,6 +349,7 @@ def test_an_empty_string_has_no_digest():
 
 # --------------------------------------------------- the shared matcher path
 
+
 def test_the_registry_delegates_to_the_unified_layer():
     """A caller of the matcher gets the cores' answer, not a fourth opinion."""
     from engine.pattern_matcher import AhoCorasickMatcher
@@ -346,8 +358,9 @@ def test_the_registry_delegates_to_the_unified_layer():
     matcher.load_defaults()
     hits = matcher.match("banner with openssh and redis inside")
 
-    direct = accel.match_signatures("banner with openssh and redis inside",
-                                    matcher.all_patterns())
+    direct = accel.match_signatures(
+        "banner with openssh and redis inside", matcher.all_patterns()
+    )
     assert [(h["signature"], h["position"]) for h in hits] == [
         (m.signature, m.position) for m in direct.matches
     ]
@@ -369,7 +382,9 @@ def test_the_registry_reports_byte_offsets_for_a_non_ascii_banner():
 
 # ------------------------------------------------------------------ helpers
 
+
 def _python_c_native(sig, banner):
     """Runs the C core over a signature file, for a side-by-side comparison."""
     from core import c_core_bridge
+
     return c_core_bridge.scan_banners([banner], sig)[0]["matches"]

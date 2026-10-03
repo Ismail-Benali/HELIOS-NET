@@ -4,8 +4,6 @@ Integration tests for the native cores: Rust (ctypes) and C (subprocess).
 
 from __future__ import annotations
 
-import pytest
-
 from core.envelope import parse_envelope
 from core.rust_bridge import match_signatures_rust, rust_available, rust_version
 from engine.pattern_matcher import AhoCorasickMatcher
@@ -18,7 +16,9 @@ def test_rust_library_is_loaded():
 
 
 def test_rust_signature_matching():
-    hits = match_signatures_rust("SSH-2.0-OpenSSH_9.6 on ubuntu", ["openssh", "apache", "nginx"])
+    hits = match_signatures_rust(
+        "SSH-2.0-OpenSSH_9.6 on ubuntu", ["openssh", "apache", "nginx"]
+    )
     assert "openssh" in hits
     assert "apache" not in hits
 
@@ -69,7 +69,9 @@ def test_pattern_matcher_labels_the_engine_that_produced_each_match(monkeypatch)
     native = matcher.match(banner)
     assert native, "expected the default signatures to match"
     assert {m["engine"] for m in native} <= {
-        "c-native", "rust-native", "python-fallback"
+        "c-native",
+        "rust-native",
+        "python-fallback",
     }
     assert all("engine" in m for m in native)
 
@@ -114,7 +116,9 @@ def test_pattern_matcher_does_not_dress_python_results_as_native(monkeypatch):
     hits = matcher.match("banner with openssh inside")
     assert hits, "the fallback must still work when the native call raises"
     assert {h["engine"] for h in hits} == {"python-fallback"}, hits
-    assert "runtimeerror" in matcher.last_engine_reason.lower(), matcher.last_engine_reason
+    assert "runtimeerror" in matcher.last_engine_reason.lower(), (
+        matcher.last_engine_reason
+    )
 
 
 def test_error_envelope_parser():

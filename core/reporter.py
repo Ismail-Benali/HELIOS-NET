@@ -12,14 +12,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import json
 from .state import CampaignState
 
 
-def generate_executive_briefing(state: CampaignState, report_data: dict[str, Any]) -> str:
+def generate_executive_briefing(
+    state: CampaignState, report_data: dict[str, Any]
+) -> str:
     """Emits a clean Markdown intelligence report."""
     lines = [
-        f"# HELIOS-NET :: BRIEFING REPORT",
+        "# HELIOS-NET :: BRIEFING REPORT",
         f"**Campaign ID:** `{state.campaign_id}`",
         f"**Target:** `{state.target}`",
         f"**Status:** `{state.status.upper()}`",
@@ -36,13 +37,17 @@ def generate_executive_briefing(state: CampaignState, report_data: dict[str, Any
     else:
         lines.append("- (No high-centrality assets isolated)")
 
-    lines.extend([
-        "",
-        "## Campaign Timeline / Events",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Campaign Timeline / Events",
+        ]
+    )
 
     timeline = report_data.get("timeline", [])
     for ev in timeline[-10:]:  # last 10 events
-        lines.append(f"- `[{round(ev.get('ts', 0), 2)}]` **{ev.get('event')}**: `{ev.get('module', 'core')}`")
+        lines.append(
+            f"- `[{round(ev.get('ts', 0), 2)}]` **{ev.get('event')}**: `{ev.get('module', 'core')}`"
+        )
 
     return "\n".join(lines)

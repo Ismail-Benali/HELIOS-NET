@@ -8,17 +8,17 @@ pattern.
 
 from __future__ import annotations
 
-from typing import Any
-
 import math
 import random
+from typing import Any
 
 
 class Pacer:
     """An advanced probabilistic pacing runner."""
 
-    def __init__(self, mean_dwell: float = 0.3, jitter: float = 0.15,
-                 rng: Any = None) -> None:
+    def __init__(
+        self, mean_dwell: float = 0.3, jitter: float = 0.15, rng: Any = None
+    ) -> None:
         self.mean_dwell = max(0.01, mean_dwell)
         self.jitter = max(0.0, jitter)
         self._rng = rng or random.Random()  # nosec B311 - timing jitter, not a security value
@@ -36,10 +36,13 @@ class Pacer:
             val = -self.mean_dwell * math.log(u)
             return max(0.01, val + self._rng.uniform(-self.jitter, self.jitter))
         else:
-            return max(0.0, self.mean_dwell + self._rng.uniform(-self.jitter, self.jitter))
+            return max(
+                0.0, self.mean_dwell + self._rng.uniform(-self.jitter, self.jitter)
+            )
 
     def wait(self, mode: str = "exponential") -> float:
         import time
+
         d = self.dwell(mode)
         time.sleep(d)
         return d

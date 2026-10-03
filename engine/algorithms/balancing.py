@@ -12,9 +12,8 @@ extensibility.
 
 from __future__ import annotations
 
-from typing import Callable
-
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from . import register_algo
 
@@ -22,6 +21,7 @@ from . import register_algo
 @dataclass
 class LoadResult:
     """Load distribution result: index buckets into the original list + makespan."""
+
     buckets: list[list[int]]
     makespan: float
 
@@ -41,7 +41,9 @@ def _lpt(weights: list[float], workers: int) -> LoadResult:
         i = min(range(workers), key=lambda k: loads[k])
         buckets[i].append(idx)
         loads[i] += w
-    return LoadResult(buckets=[b for b in buckets if b], makespan=max(loads) if loads else 0.0)
+    return LoadResult(
+        buckets=[b for b in buckets if b], makespan=max(loads) if loads else 0.0
+    )
 
 
 def _brute(weights: list[float], workers: int) -> LoadResult:
@@ -84,10 +86,12 @@ register_algo("balancing", "lpt", _lpt, default=True)
 register_algo("balancing", "brute", _brute)
 
 
-def solve(kind: str = "lpt", weights: list[float] | None = None,
-          workers: int = 3) -> LoadResult:
+def solve(
+    kind: str = "lpt", weights: list[float] | None = None, workers: int = 3
+) -> LoadResult:
     """The public gateway - invoked by the engine when switching algorithms."""
     from . import get_algo
+
     if not weights:
         return LoadResult(buckets=[[] for _ in range(workers)], makespan=0.0)
     algo: Callable[[list[float], int], LoadResult]

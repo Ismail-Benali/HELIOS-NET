@@ -11,8 +11,6 @@ Executes a cohesive end-to-end ASM pipeline connecting:
 
 from __future__ import annotations
 
-from typing import Any
-
 import asyncio
 import tempfile
 from pathlib import Path
@@ -38,27 +36,46 @@ async def simulate_engagement() -> None:
         wal_path = state_dir / "engagement.wal"
         wal = TransactionalWAL(wal_path)
         wal.begin()
-        wal.append("ASM_ENGAGEMENT_INIT", {"operator": "HELIOS-ENGINE", "target": "127.0.0.1"})
+        wal.append(
+            "ASM_ENGAGEMENT_INIT", {"operator": "HELIOS-ENGINE", "target": "127.0.0.1"}
+        )
         wal.commit()
-        print("[+] [Step 1] Secure Encrypted WAL initialized and transaction committed.")
+        print(
+            "[+] [Step 1] Secure Encrypted WAL initialized and transaction committed."
+        )
 
         # 2. Execute Async Recon & AIMD Flow Control
         target = "127.0.0.1"
         ports = [80, 443, 3306, 5432, 22, 445]
-        print(f"[+] [Step 2] Executing asynchronous AIMD-paced recon against {target}...")
+        print(
+            f"[+] [Step 2] Executing asynchronous AIMD-paced recon against {target}..."
+        )
         active_services = await enterprise_adaptive_recon(target, ports)
         print(f"    -> Discovered active services: {active_services}")
 
         # 3. Verdict & Rule Evaluation
         print("[+] [Step 3] Evaluating findings through Verdict Engine rules...")
         ve = VerdictEngine(rules=default_rules())
-        findings_for_verdict = [{"module": "discovery", "host": target, "port": s["port"], "service": "tcp-service", "open": True} for s in active_services]
+        findings_for_verdict = [
+            {
+                "module": "discovery",
+                "host": target,
+                "port": s["port"],
+                "service": "tcp-service",
+                "open": True,
+            }
+            for s in active_services
+        ]
         verdicts = ve.judge_all(findings_for_verdict)
         for v in verdicts:
-            print(f"    -> Port {v.finding.get('port')} | Severity: {v.to_dict()['severity']} | Rules Hit: {v.rules_hit}")
+            print(
+                f"    -> Port {v.finding.get('port')} | Severity: {v.to_dict()['severity']} | Rules Hit: {v.rules_hit}"
+            )
 
         # 4. Construct Asset Graph & Dijkstra Risk Ranking
-        print("[+] [Step 4] Constructing Asset Graph & calculating Dijkstra risk path...")
+        print(
+            "[+] [Step 4] Constructing Asset Graph & calculating Dijkstra risk path..."
+        )
         g = AssetGraph()
         host_node = f"host:{target}"
         g.add_node(host_node, "host", ip=target)
@@ -66,7 +83,12 @@ async def simulate_engagement() -> None:
         for svc in active_services:
             p = svc["port"]
             svc_node = f"svc:{target}:{p}/tcp"
-            g.add_node(svc_node, "service", port=p, name="web-service" if p in [80, 443] else "infrastructure")
+            g.add_node(
+                svc_node,
+                "service",
+                port=p,
+                name="web-service" if p in [80, 443] else "infrastructure",
+            )
             g.add_edge(host_node, svc_node, "runs")
 
         engine = KillChainEngine(g)
@@ -78,7 +100,9 @@ async def simulate_engagement() -> None:
         if active_services:
             target_svc = f"svc:{target}:{active_services[0]['port']}/tcp"
             path, cost = engine.find_attack_path(host_node, target_svc)
-            print(f"    -> Calculated Engagement Route: {path} (Resistance Cost: {cost})")
+            print(
+                f"    -> Calculated Engagement Route: {path} (Resistance Cost: {cost})"
+            )
 
         # 5. Generate Self-Contained Executive HTML Briefing Report
         print("[+] [Step 5] Compiling Executive Briefing Report...")
@@ -98,10 +122,14 @@ async def simulate_engagement() -> None:
             "top_targets": top_targets,
             "events": [
                 {"ts": 1788403200.0, "event": "engagement_start", "module": "core"},
-                {"ts": 1788403201.5, "event": "aimd_recon_complete", "module": "async_engine"},
+                {
+                    "ts": 1788403201.5,
+                    "event": "aimd_recon_complete",
+                    "module": "async_engine",
+                },
                 {"ts": 1788403202.0, "event": "verdict_evaluated", "module": "verdict"},
-                {"ts": 1788403202.5, "event": "path_computed", "module": "pathfinder"}
-            ]
+                {"ts": 1788403202.5, "event": "path_computed", "module": "pathfinder"},
+            ],
         }
         report_path = generate_html_report(briefing, out_file)
         print(f"    -> Executive HTML Report successfully generated at: {report_path}")

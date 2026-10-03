@@ -28,14 +28,15 @@ from __future__ import annotations
 
 import platform
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 # Core health states.
-OK = "ok"          # present, loadable, and self-tested successfully
-FALLBACK = "fallback"   # not usable; the caller runs the pure-Python path
-FAILED = "failed"   # present and loadable, but its self test failed
-BLOCKED = "blocked"     # present, but the host refused to execute it
+OK = "ok"  # present, loadable, and self-tested successfully
+FALLBACK = "fallback"  # not usable; the caller runs the pure-Python path
+FAILED = "failed"  # present and loadable, but its self test failed
+BLOCKED = "blocked"  # present, but the host refused to execute it
 
 
 @dataclass
@@ -249,7 +250,9 @@ def health_report() -> dict[str, Any]:
 
     native = [c for c in cores if c.name != "python"]
     return {
-        "status": "ok" if all(c.state in (OK, BLOCKED, FALLBACK) for c in cores) else "degraded",
+        "status": "ok"
+        if all(c.state in (OK, BLOCKED, FALLBACK) for c in cores)
+        else "degraded",
         "platform": f"{platform.system()} {platform.release()} ({platform.machine()})",
         "python": sys.version.split()[0],
         "cores": [c.to_dict() for c in cores],
@@ -281,8 +284,6 @@ def format_report(report: dict[str, Any]) -> str:
         lines.append(
             " Cores below OK run their pure-Python fallback. A FAILED or BLOCKED"
         )
-        lines.append(
-            " core means the binary exists but was never proven to work."
-        )
+        lines.append(" core means the binary exists but was never proven to work.")
     lines.append("=" * 78)
     return "\n".join(lines)

@@ -17,7 +17,6 @@ or signed-but-unverifiable, while reporting nothing about either.
 from __future__ import annotations
 
 import importlib.util
-import subprocess
 import sys
 from pathlib import Path
 
@@ -27,7 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_build():
-    spec = importlib.util.spec_from_file_location("helios_build_signing", ROOT / "build.py")
+    spec = importlib.util.spec_from_file_location(
+        "helios_build_signing", ROOT / "build.py"
+    )
     module = importlib.util.module_from_spec(spec)
     sys.modules["helios_build_signing"] = module
     spec.loader.exec_module(module)
@@ -100,11 +101,15 @@ def test_a_real_certificate_is_accepted(tmp_path):
     cert, password, timestamp = config
     assert cert == pfx
     assert password == ""
-    assert timestamp.startswith("http"), "a timestamp service is required for a durable signature"
+    assert timestamp.startswith("http"), (
+        "a timestamp service is required for a durable signature"
+    )
 
 
 # ------------------------------------------------------ signing and verifying
-def test_a_successful_signing_is_verified_not_assumed(monkeypatch, tmp_path, cert, fake_signtool):
+def test_a_successful_signing_is_verified_not_assumed(
+    monkeypatch, tmp_path, cert, fake_signtool
+):
     monkeypatch.setenv(build._SIGN_CERT_ENV, str(cert))
     monkeypatch.setenv(build._SIGN_PASS_ENV, "hunter2")
 
@@ -121,7 +126,9 @@ def test_a_successful_signing_is_verified_not_assumed(monkeypatch, tmp_path, cer
     assert build.sign_artifact(target) == "signed"
     assert len(seen) == 2, "the artifact must be verified after being signed"
     assert seen[0][0].endswith("signtool.exe") and seen[0][1] == "sign"
-    assert seen[1][1] == "verify", "a zero exit from signtool is not proof of a signature"
+    assert seen[1][1] == "verify", (
+        "a zero exit from signtool is not proof of a signature"
+    )
     assert build.signing_tally()[0] == 1
 
 
@@ -130,8 +137,11 @@ def test_the_password_is_passed_but_never_printed(monkeypatch, tmp_path, cert, c
     monkeypatch.setenv(build._SIGN_PASS_ENV, "swordfish")
     captured: list[list[str]] = []
     monkeypatch.setattr(build, "_find_signtool", lambda: "signtool")
-    monkeypatch.setattr(build.subprocess, "run",
-                        lambda cmd, **kw: captured.append(list(cmd)) or _Completed(0))
+    monkeypatch.setattr(
+        build.subprocess,
+        "run",
+        lambda cmd, **kw: captured.append(list(cmd)) or _Completed(0),
+    )
     target = tmp_path / "core.exe"
     target.write_bytes(b"MZ")
 
@@ -142,13 +152,19 @@ def test_the_password_is_passed_but_never_printed(monkeypatch, tmp_path, cert, c
     )
 
 
-def test_a_signed_but_unverifiable_artifact_is_a_failure(monkeypatch, tmp_path, cert, capsys):
+def test_a_signed_but_unverifiable_artifact_is_a_failure(
+    monkeypatch, tmp_path, cert, capsys
+):
     """signtool reported success and the image still does not carry a signature."""
     monkeypatch.setenv(build._SIGN_CERT_ENV, str(cert))
     monkeypatch.setattr(build, "_find_signtool", lambda: "signtool")
 
     def fake_run(cmd, **kwargs):
-        return _Completed(0) if cmd[1] == "sign" else _Completed(1, "", "does not contain a signature")
+        return (
+            _Completed(0)
+            if cmd[1] == "sign"
+            else _Completed(1, "", "does not contain a signature")
+        )
 
     monkeypatch.setattr(build.subprocess, "run", fake_run)
     target = tmp_path / "core.exe"
@@ -156,13 +172,17 @@ def test_a_signed_but_unverifiable_artifact_is_a_failure(monkeypatch, tmp_path, 
 
     assert build.sign_artifact(target) == "failed"
     assert "does not verify" in capsys.readouterr().out
-    assert build.signing_tally()[2] == 1, "a failed signature must be counted, not absorbed"
+    assert build.signing_tally()[2] == 1, (
+        "a failed signature must be counted, not absorbed"
+    )
 
 
 def test_a_signing_failure_never_claims_success(monkeypatch, tmp_path, cert):
     monkeypatch.setenv(build._SIGN_CERT_ENV, str(cert))
     monkeypatch.setattr(build, "_find_signtool", lambda: "signtool")
-    monkeypatch.setattr(build.subprocess, "run", lambda cmd, **kw: _Completed(1, "", "no key"))
+    monkeypatch.setattr(
+        build.subprocess, "run", lambda cmd, **kw: _Completed(1, "", "no key")
+    )
     target = tmp_path / "core.exe"
     target.write_bytes(b"MZ")
 
@@ -171,7 +191,8 @@ def test_a_signing_failure_never_claims_success(monkeypatch, tmp_path, cert):
 
 
 def test_a_missing_signtool_leaves_the_artifact_unsigned_and_says_why(
-        monkeypatch, tmp_path, cert, capsys):
+    monkeypatch, tmp_path, cert, capsys
+):
     monkeypatch.setenv(build._SIGN_CERT_ENV, str(cert))
     monkeypatch.setattr(build, "_find_signtool", lambda: None)
     target = tmp_path / "core.exe"
@@ -190,7 +211,7 @@ def test_every_native_build_path_is_signed():
     # The C core, the Rust cdylib and the Go scanners are the three native image
     # producers. Each is named here as it appears in the build script, so a
     # future artifact added without a signing call fails this test.
-    for marker in ('helios_core{', '"target" / "release"', "sub / out_name"):
+    for marker in ("helios_core{", '"target" / "release"', "sub / out_name"):
         assert marker in source, f"{marker} is no longer part of the build"
     assert source.count("_sign_and_report(") >= 4, (
         "every native artifact - C core, Rust cdylib, Go scanner - must be routed "
@@ -203,11 +224,15 @@ def test_the_final_report_states_the_signing_outcome():
     source = (ROOT / "build.py").read_text(encoding="utf-8")
     assert "signing_tally()" in source, "the summary must read the signing tally"
     assert "UNSIGNED" in source, "an unsigned artifact must be labelled as such"
-    assert build._SIGN_CERT_ENV in source, "the summary must name the variable that fixes it"
+    assert build._SIGN_CERT_ENV in source, (
+        "the summary must name the variable that fixes it"
+    )
 
 
 def test_no_credential_is_ever_hardcoded():
     """The certificate is out of band; nothing secret belongs in the tree."""
     source = (ROOT / "build.py").read_text(encoding="utf-8")
-    for forbidden in ("password=", "pfx\"", "BEGIN PRIVATE KEY", ".pfx\""):
-        assert forbidden not in source, f"{forbidden!r} must not appear in the build script"
+    for forbidden in ("password=", 'pfx"', "BEGIN PRIVATE KEY", '.pfx"'):
+        assert forbidden not in source, (
+            f"{forbidden!r} must not appear in the build script"
+        )
