@@ -21,10 +21,10 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -37,7 +37,7 @@ jobs:
           pip install pytest-cov
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v5
         with:
           go-version-file: transport/goscan/go.mod
           cache: true
@@ -54,7 +54,7 @@ jobs:
           pytest --cov=. --cov-report=xml:coverage.xml --cov-report=term-missing -q
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
           fail_ci_if_error: false
