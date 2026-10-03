@@ -307,6 +307,7 @@ def test_one_failed_banner_drops_the_whole_batch(signatures, monkeypatch):
         return _ok_match(banner)
 
     _install(FakeLibrary(match=mixed))
+    monkeypatch.setattr(bridge, "_BINARY", None)
     monkeypatch.setattr(
         bridge, "_python_fallback",
         lambda banners, _path: [{"status": "ok", "banner": f"py:{b}"} for b in banners],
