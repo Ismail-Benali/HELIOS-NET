@@ -10,10 +10,10 @@ from __future__ import annotations
 import platform
 import socket
 import subprocess  # nosec B404 - reads the local routing table via the OS utility
-from typing import List, Any
+from typing import Any
 
 
-def get_local_interfaces() -> List[dict[str, Any]]:
+def get_local_interfaces() -> list[dict[str, Any]]:
     """Retrieves active network interfaces and IP configurations."""
     interfaces = []
     hostname = socket.gethostname()
@@ -25,11 +25,11 @@ def get_local_interfaces() -> List[dict[str, Any]]:
     return interfaces
 
 
-def extract_internal_subnets() -> List[str]:
+def extract_internal_subnets() -> list[str]:
     """Parses system routing tables to identify internal private CIDR prefixes."""
     subnets = []
     sys_platform = platform.system().lower()
-    
+
     try:
         # The encoding is pinned rather than left to the console codepage:
         # errors="ignore" with a locale decoder silently drops bytes, and a
@@ -52,7 +52,10 @@ def extract_internal_subnets() -> List[str]:
             for argv in (["netstat", "-rn"], ["ip", "route"]):
                 try:
                     output = subprocess.check_output(  # nosec B603 - fixed argv, no shell, no external input
-                        argv, text=True, encoding="utf-8", errors="replace",
+                        argv,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
                     )
                 except (OSError, subprocess.SubprocessError):
                     continue

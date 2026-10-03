@@ -6,15 +6,16 @@ Generates self-contained, professional dark-mode HTML executive briefing reports
 from __future__ import annotations
 
 import html
-import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 
-def generate_html_report(briefing_dict: Dict[str, Any], output_path: str | Path) -> Path:
+def generate_html_report(
+    briefing_dict: dict[str, Any], output_path: str | Path
+) -> Path:
     """Generates a standalone dark-mode HTML executive report from a briefing dictionary with XSS protection."""
     out = Path(output_path)
-    
+
     campaign_id = html.escape(str(briefing_dict.get("campaign_id", "N/A")))
     target = html.escape(str(briefing_dict.get("target", "N/A")))
     status = html.escape(str(briefing_dict.get("status", "N/A")))
@@ -29,8 +30,15 @@ def generate_html_report(briefing_dict: Dict[str, Any], output_path: str | Path)
     events = briefing_dict.get("events", [])
     top_targets = briefing_dict.get("top_targets", [])
 
-    events_html = "".join(f"<li><code>[{round(e.get('ts', 0), 2)}]</code> <strong>{html.escape(str(e.get('event', 'EVENT')))}</strong>: <code>{html.escape(str(e.get('module', 'core')))}</code></li>" for e in events)
-    targets_html = "".join(f"<li><code>{html.escape(str(t))}</code></li>" for t in top_targets) if top_targets else "<li>(No high-centrality assets isolated)</li>"
+    events_html = "".join(
+        f"<li><code>[{round(e.get('ts', 0), 2)}]</code> <strong>{html.escape(str(e.get('event', 'EVENT')))}</strong>: <code>{html.escape(str(e.get('module', 'core')))}</code></li>"
+        for e in events
+    )
+    targets_html = (
+        "".join(f"<li><code>{html.escape(str(t))}</code></li>" for t in top_targets)
+        if top_targets
+        else "<li>(No high-centrality assets isolated)</li>"
+    )
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">

@@ -9,16 +9,15 @@ Features:
 
 from __future__ import annotations
 
-from typing import Any
-
 import hashlib
 import hmac
 import json
+import logging
 import os
 import struct
 import threading
-import logging
 from pathlib import Path
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +118,7 @@ class TransactionalWAL:
             handle.write(key)
 
     def _adopt_concurrent_key(self) -> bytes:
-        raced = self.key_path.read_bytes()      # verbatim, never stripped
+        raced = self.key_path.read_bytes()  # verbatim, never stripped
         if len(raced) < self.MIN_KEY_BYTES:
             raise ValueError(
                 f"key file {self.key_path} was created concurrently but is "
@@ -141,15 +140,21 @@ class TransactionalWAL:
             log.warning(
                 "key file %s is readable by group/other (mode %o); at-rest "
                 "protection of %s depends on that being tightened",
-                self.key_path, mode, self.path,
+                self.key_path,
+                mode,
+                self.path,
             )
 
-    def _generate_keystream(self, derived_key: bytes, salt: bytes, length: int) -> bytes:
+    def _generate_keystream(
+        self, derived_key: bytes, salt: bytes, length: int
+    ) -> bytes:
         """Generates a cryptographic keystream of arbitrary length using counter-mode SHA-256 (no repeating keystream vulnerability)."""
         keystream = bytearray()
         counter = 0
         while len(keystream) < length:
-            block = hashlib.sha256(derived_key + salt + struct.pack("!I", counter)).digest()
+            block = hashlib.sha256(
+                derived_key + salt + struct.pack("!I", counter)
+            ).digest()
             keystream.extend(block)
             counter += 1
         return bytes(keystream[:length])
@@ -158,14 +163,14 @@ class TransactionalWAL:
         """Authenticated encryption using HMAC-SHA256, PBKDF2 (100,000 iterations), and counter-mode stream cipher."""
         salt = os.urandom(16)
         derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 32)
-        
+
         # Cryptographic stream cipher with full-length keystream expansion
         stream = self._generate_keystream(derived_key, salt, len(plaintext))
         ciphertext = bytearray(b ^ stream[i] for i, b in enumerate(plaintext))
-        
+
         # Calculate HMAC signature for integrity
         sig = hmac.new(derived_key, salt + bytes(ciphertext), hashlib.sha256).digest()
-        
+
         return sig + salt + bytes(ciphertext)
 
     def _decrypt(self, raw_data: bytes) -> bytes | None:
@@ -178,7 +183,7 @@ class TransactionalWAL:
 
         derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 32)
         expected_sig = hmac.new(derived_key, salt + ciphertext, hashlib.sha256).digest()
-        
+
         if not hmac.compare_digest(sig, expected_sig):
             return None  # Tampered or corrupted data
 
@@ -203,9 +208,9 @@ class TransactionalWAL:
             payload = {"lsn": self._lsn, "op": op, "data": data}
             raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             encrypted_payload = self._encrypt(raw)
-            
+
             header = struct.pack("!I", len(encrypted_payload))
-            
+
             if self._active_txn:
                 self._txn_buffer.append(header + encrypted_payload)
             else:
@@ -237,22 +242,21 @@ class TransactionalWAL:
             return []
 
         valid_records = []
-        with self._lock:
-            with self.path.open("rb") as fh:
-                while True:
-                    header = fh.read(4)
-                    if len(header) < 4:
-                        break
-                    length = struct.unpack("!I", header)[0]
-                    encrypted_payload = fh.read(length)
-                    if len(encrypted_payload) < length:
-                        break
-                    
-                    plain = self._decrypt(encrypted_payload)
-                    if plain:
-                        try:
-                            record = json.loads(plain.decode("utf-8"))
-                            valid_records.append(record)
-                        except json.JSONDecodeError:
-                            continue
+        with self._lock, self.path.open("rb") as fh:
+            while True:
+                header = fh.read(4)
+                if len(header) < 4:
+                    break
+                length = struct.unpack("!I", header)[0]
+                encrypted_payload = fh.read(length)
+                if len(encrypted_payload) < length:
+                    break
+
+                plain = self._decrypt(encrypted_payload)
+                if plain:
+                    try:
+                        record = json.loads(plain.decode("utf-8"))
+                        valid_records.append(record)
+                    except json.JSONDecodeError:
+                        continue
         return valid_records

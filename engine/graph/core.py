@@ -18,18 +18,17 @@ Remarks:
 
 from __future__ import annotations
 
-from typing import Any
-
 import json
 from collections import defaultdict, deque
+from typing import Any
 
 
 class AssetGraph:
     """A documented graph of assets and relationships."""
 
     def __init__(self) -> None:
-        self.nodes: dict[str, dict[str, Any]] = {}      # node_id -> meta
-        self.adj: dict[str, set[str]] = defaultdict(set)   # node_id -> neighboring ids
+        self.nodes: dict[str, dict[str, Any]] = {}  # node_id -> meta
+        self.adj: dict[str, set[str]] = defaultdict(set)  # node_id -> neighboring ids
         self._edges: set[tuple[str, str]] = set()
         # Which engine answered each analysis, and why. Written by `core.accel`
         # through `_last_engine`, read by `graph_report()` and the reporter.
@@ -68,7 +67,11 @@ class AssetGraph:
         """
         index = self._index()
         return sorted(
-            (nb for nb in self.adj.get(node_id, ()) if nb != node_id and nb in self.nodes),
+            (
+                nb
+                for nb in self.adj.get(node_id, ())
+                if nb != node_id and nb in self.nodes
+            ),
             key=lambda nb: index.get(nb, len(index)),
         )
 
@@ -121,7 +124,9 @@ class AssetGraph:
         # instead of accidentally reproducible, which is what the `_neighbours`
         # ordering in the Python path depends on.
         edges: list[tuple[int, int]] = []
-        for a, b in sorted(self._edges, key=lambda e: (index_of.get(e[0], 0), index_of.get(e[1], 0))):
+        for a, b in sorted(
+            self._edges, key=lambda e: (index_of.get(e[0], 0), index_of.get(e[1], 0))
+        ):
             ia, ib = index_of.get(a), index_of.get(b)
             if ia is not None and ib is not None and ia != ib:
                 edges.append((ia, ib))
@@ -164,8 +169,11 @@ class AssetGraph:
         count, edges, index_of = self._native_graph()
         outcome = graph_degree_centrality(count, edges)
         self._last_engine("degree", outcome.engine, outcome.reason)
-        if outcome.engine != "none" and isinstance(outcome.value, list) \
-                and len(outcome.value) == count:
+        if (
+            outcome.engine != "none"
+            and isinstance(outcome.value, list)
+            and len(outcome.value) == count
+        ):
             reverse = {i: nid for nid, i in index_of.items()}
             # Re-sort by name rather than by integer index so that ties
             # resolve identically in both implementations.
@@ -210,8 +218,11 @@ class AssetGraph:
         count, edges, index_of = self._native_graph()
         outcome = graph_betweenness(count, edges)
         self._last_engine("betweenness", outcome.engine, outcome.reason)
-        if outcome.engine != "none" and isinstance(outcome.value, list) \
-                and len(outcome.value) == count:
+        if (
+            outcome.engine != "none"
+            and isinstance(outcome.value, list)
+            and len(outcome.value) == count
+        ):
             reverse = {i: nid for nid, i in index_of.items()}
             pairs = [(reverse[i], round(v, 6)) for i, v in enumerate(outcome.value)]
             pairs.sort(key=lambda x: (-x[1], x[0]))

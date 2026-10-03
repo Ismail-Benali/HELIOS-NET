@@ -9,11 +9,10 @@ Responsibilities:
 
 from __future__ import annotations
 
-from typing import Any
-
 import json
 import time
 import uuid
+from typing import Any
 
 
 class Collector:
@@ -26,7 +25,12 @@ class Collector:
 
     def add(self, finding: dict[str, Any]) -> bool:
         """Adds a finding (with simple deduplication by a natural id)."""
-        natural_id = (finding.get("module"), finding.get("host"), finding.get("port"), finding.get("service"))
+        natural_id = (
+            finding.get("module"),
+            finding.get("host"),
+            finding.get("port"),
+            finding.get("service"),
+        )
         if natural_id in self._dedupe:
             return False
         self._dedupe.add(natural_id)

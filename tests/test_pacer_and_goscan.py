@@ -58,6 +58,7 @@ class ScriptedRNG:
 # Pacer: the constructor clamps
 # --------------------------------------------------------------------------- #
 
+
 def test_a_zero_or_negative_mean_is_raised_to_the_floor():
     assert Pacer(mean_dwell=0.0).mean_dwell == 0.01
     assert Pacer(mean_dwell=-3.0).mean_dwell == 0.01
@@ -78,6 +79,7 @@ def test_a_negative_jitter_is_clamped_to_zero():
 # Pacer: the formulas
 # --------------------------------------------------------------------------- #
 
+
 def test_exponential_dwell_follows_the_documented_formula():
     """dwell = -mean * ln(u) + jitter, with the jitter drawn as a uniform."""
     rng = ScriptedRNG([0.5, 0.0])
@@ -90,6 +92,7 @@ def test_exponential_dwell_follows_the_documented_formula():
 
 def test_exponential_dwell_adds_the_jitter():
     import math
+
     rng = ScriptedRNG([0.5], uniform_value=0.2)
     pacer = Pacer(mean_dwell=2.0, jitter=0.4, rng=rng)
 
@@ -104,6 +107,7 @@ def test_a_zero_from_the_rng_becomes_the_longest_wait_not_a_crash():
     the log runs on the guarded value, so the clamp has to be on the low side.
     """
     import math
+
     rng = ScriptedRNG([0.0])
     pacer = Pacer(mean_dwell=1.0, jitter=0.0, rng=rng)
 
@@ -135,14 +139,12 @@ def test_dwell_never_returns_a_negative_or_zero_gap():
 
 def test_the_exponential_floor_is_one_hundredth():
     """A zero-length wait would turn pacing into a busy loop."""
-    import math
     rng = ScriptedRNG([0.9999999])
     pacer = Pacer(mean_dwell=0.001, jitter=0.0, rng=rng)
     assert pacer.dwell("exponential") == pytest.approx(0.01, abs=1e-9)
 
 
 def test_the_uniform_mode_can_reach_zero_but_not_below():
-    import math
     rng = ScriptedRNG([0.5])
     pacer = Pacer(mean_dwell=1.0, jitter=5.0, rng=rng)
     # midpoint of (-5, 5) is 0, so the value lands on the mean exactly.
@@ -152,6 +154,7 @@ def test_the_uniform_mode_can_reach_zero_but_not_below():
 # --------------------------------------------------------------------------- #
 # Pacer: the distribution
 # --------------------------------------------------------------------------- #
+
 
 def test_the_exponential_mean_is_the_configured_dwell():
     """A rate-1/mean exponential has mean == mean, which is what makes the
@@ -193,6 +196,7 @@ def test_jitter_widens_the_schedule():
 # Pacer: schedule and wait
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.parametrize("mode", ["exponential", "uniform"])
 def test_schedule_returns_one_gap_per_step(mode):
     pacer = Pacer(rng=random.Random(1))
@@ -232,6 +236,7 @@ def test_wait_uses_the_requested_mode(monkeypatch):
 # strip_artifacts
 # --------------------------------------------------------------------------- #
 
+
 def test_the_default_artifacts_are_removed_case_insensitively():
     text = "helios scan\nHELIOS-NET banner\nH3l!0s gone\nssh banner"
     assert strip_artifacts(text).splitlines() == ["ssh banner"]
@@ -258,7 +263,7 @@ def test_text_with_no_artifacts_is_returned_unchanged():
 
 def test_empty_and_missing_text_do_not_raise():
     assert strip_artifacts("") == ""
-    assert strip_artifacts(None) == ""      # type: ignore[arg-type]
+    assert strip_artifacts(None) == ""  # type: ignore[arg-type]
 
 
 def test_artifact_matching_ignores_case_on_both_sides():
@@ -273,6 +278,7 @@ def test_every_line_is_inspected_independently():
 # --------------------------------------------------------------------------- #
 # Go bridge: fake process plumbing
 # --------------------------------------------------------------------------- #
+
 
 class FakeStream:
     """A pipe that yields the given lines, then EOF."""
@@ -294,13 +300,24 @@ class FakeProc:
         return self._returncode
 
 
-def _install_fake_core(monkeypatch, *, available=True, stdout=None, stderr=None,
-                       returncode=0, exec_error=None):
+def _install_fake_core(
+    monkeypatch,
+    *,
+    available=True,
+    stdout=None,
+    stderr=None,
+    returncode=0,
+    exec_error=None,
+):
     """Puts a scripted Go core in place of the real binary and process spawn."""
-    monkeypatch.setattr(goscan_bridge, "GOSCAN_BIN",
-                        goscan_bridge.ROOT / "transport" / "goscan" / "goscan_fake")
-    monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists",
-                        lambda self: available)
+    monkeypatch.setattr(
+        goscan_bridge,
+        "GOSCAN_BIN",
+        goscan_bridge.ROOT / "transport" / "goscan" / "goscan_fake",
+    )
+    monkeypatch.setattr(
+        goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: available
+    )
 
     async def fake_exec(*args, **kwargs):
         if exec_error is not None:
@@ -316,8 +333,12 @@ def _ndjson(**fields) -> bytes:
 
 
 def _envelope(code: str = "EDR_BLOCKED", message: str = "blocked by policy") -> bytes:
-    return (json.dumps({"status": "error", "code": code, "message": message,
-                        "component": "goscan"}) + "\n").encode("utf-8")
+    return (
+        json.dumps(
+            {"status": "error", "code": code, "message": message, "component": "goscan"}
+        )
+        + "\n"
+    ).encode("utf-8")
 
 
 @pytest.fixture(autouse=True)
@@ -334,8 +355,11 @@ def _reset_bridge_globals():
 # availability and version
 # --------------------------------------------------------------------------- #
 
+
 def test_a_missing_binary_is_reported_as_unavailable(monkeypatch):
-    monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: False)
+    monkeypatch.setattr(
+        goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: False
+    )
     assert goscan_bridge.core_available() is False
     assert goscan_bridge.core_version() == "unavailable"
     assert goscan_bridge.selftest() is None
@@ -357,8 +381,9 @@ def test_a_failing_version_command_says_unavailable_not_unknown(monkeypatch):
     import subprocess
 
     monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: True)
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("denied")))
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError("denied"))
+    )
     assert goscan_bridge.core_version() == "unavailable"
 
 
@@ -392,6 +417,7 @@ def test_a_silent_version_command_is_unknown(monkeypatch):
 # selftest
 # --------------------------------------------------------------------------- #
 
+
 def _selftest_result(monkeypatch, *, stdout="", returncode=0, error=None):
     import subprocess
 
@@ -402,7 +428,9 @@ def _selftest_result(monkeypatch, *, stdout="", returncode=0, error=None):
 
     monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: True)
     if error is not None:
-        monkeypatch.setattr(subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(error))
+        monkeypatch.setattr(
+            subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(error)
+        )
     else:
         monkeypatch.setattr(subprocess, "run", lambda *a, **k: Result())
     return goscan_bridge.selftest()
@@ -417,14 +445,18 @@ def test_the_selftest_reads_the_last_line_only(monkeypatch):
     """The core logs progress and prints the report last, so a naive parse of
     the whole buffer would fail on any progress line."""
     report = _selftest_result(
-        monkeypatch, stdout='scanning case 1\nscanning case 2\n{"status": "ok", "cases": 3}\n')
+        monkeypatch,
+        stdout='scanning case 1\nscanning case 2\n{"status": "ok", "cases": 3}\n',
+    )
     assert report == {"status": "ok", "cases": 3}
 
 
 def test_a_progress_line_after_the_report_is_not_trusted(monkeypatch):
     """Pinned: splitlines()[-1] is the last line, not the last JSON object."""
-    assert _selftest_result(
-        monkeypatch, stdout='{"status": "ok"}\ntrailing garbage\n') is None
+    assert (
+        _selftest_result(monkeypatch, stdout='{"status": "ok"}\ntrailing garbage\n')
+        is None
+    )
 
 
 def test_a_silent_selftest_yields_nothing(monkeypatch):
@@ -442,7 +474,10 @@ def test_a_json_array_is_not_a_selftest_report(monkeypatch):
 
 def test_a_timed_out_selftest_yields_nothing(monkeypatch):
     import subprocess
-    result = _selftest_result(monkeypatch, error=subprocess.TimeoutExpired("goscan", 120))
+
+    result = _selftest_result(
+        monkeypatch, error=subprocess.TimeoutExpired("goscan", 120)
+    )
     assert result is None
 
 
@@ -454,7 +489,6 @@ def test_a_policy_refusal_propagates_out_of_selftest(monkeypatch):
     so a machine policy failed the build as though the code were at fault.
     Letting it out is what lets the caller say BLOCKED instead.
     """
-    import subprocess
 
     class PolicyRefusal(OSError):
         winerror = 4551
@@ -470,28 +504,48 @@ def test_a_policy_refusal_propagates_out_of_selftest(monkeypatch):
 # run_go_scan_async: the success path
 # --------------------------------------------------------------------------- #
 
+
 def test_an_open_port_is_reported_with_everything_the_core_said(monkeypatch):
-    _install_fake_core(monkeypatch, stdout=[
-        _ndjson(port=22, service="ssh", banner="SSH-2.0-OpenSSH_9.6",
-                latency_ms=3.1, time="2026-09-28T10:00:00Z", open=True),
-    ])
+    _install_fake_core(
+        monkeypatch,
+        stdout=[
+            _ndjson(
+                port=22,
+                service="ssh",
+                banner="SSH-2.0-OpenSSH_9.6",
+                latency_ms=3.1,
+                time="2026-09-28T10:00:00Z",
+                open=True,
+            ),
+        ],
+    )
 
     results = asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1", "22,80"))
 
-    assert results == [{
-        "module": "discovery", "host": "10.0.0.1", "port": 22,
-        "service": "ssh", "banner": "SSH-2.0-OpenSSH_9.6",
-        "latency_ms": 3.1, "time": "2026-09-28T10:00:00Z", "open": True,
-        "source": "native(Go-Goroutines-NDJSON)",
-    }]
+    assert results == [
+        {
+            "module": "discovery",
+            "host": "10.0.0.1",
+            "port": 22,
+            "service": "ssh",
+            "banner": "SSH-2.0-OpenSSH_9.6",
+            "latency_ms": 3.1,
+            "time": "2026-09-28T10:00:00Z",
+            "open": True,
+            "source": "native(Go-Goroutines-NDJSON)",
+        }
+    ]
     assert goscan_bridge.LAST_ERROR is None
 
 
 def test_a_closed_port_is_not_a_finding(monkeypatch):
-    _install_fake_core(monkeypatch, stdout=[
-        _ndjson(port=22, service="ssh", open=True),
-        _ndjson(port=23, service="telnet", open=False),
-    ])
+    _install_fake_core(
+        monkeypatch,
+        stdout=[
+            _ndjson(port=22, service="ssh", open=True),
+            _ndjson(port=23, service="telnet", open=False),
+        ],
+    )
 
     results = asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1"))
     assert [r["port"] for r in results] == [22]
@@ -499,10 +553,13 @@ def test_a_closed_port_is_not_a_finding(monkeypatch):
 
 def test_an_unidentified_service_is_empty_not_invented(monkeypatch):
     """The bridge must not label a service it did not detect."""
-    _install_fake_core(monkeypatch, stdout=[
-        _ndjson(port=4444, open=True),
-        _ndjson(port=4445, service="", open=True),
-    ])
+    _install_fake_core(
+        monkeypatch,
+        stdout=[
+            _ndjson(port=4444, open=True),
+            _ndjson(port=4445, service="", open=True),
+        ],
+    )
 
     results = asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1"))
     assert [r["service"] for r in results] == ["", ""]
@@ -516,15 +573,18 @@ def test_the_host_on_every_result_is_the_requested_target(monkeypatch):
 
 
 def test_garbage_between_records_does_not_abort_the_stream(monkeypatch):
-    _install_fake_core(monkeypatch, stdout=[
-        _ndjson(port=22, open=True),
-        b"this is not json\n",
-        b"\n",
-        b"   \n",
-        b"[1,2,3]\n",
-        b'"a bare string"\n',
-        _ndjson(port=80, open=True),
-    ])
+    _install_fake_core(
+        monkeypatch,
+        stdout=[
+            _ndjson(port=22, open=True),
+            b"this is not json\n",
+            b"\n",
+            b"   \n",
+            b"[1,2,3]\n",
+            b'"a bare string"\n',
+            _ndjson(port=80, open=True),
+        ],
+    )
 
     results = asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1"))
     assert [r["port"] for r in results] == [22, 80], (
@@ -555,6 +615,7 @@ def test_the_error_state_is_reset_at_the_start_of_each_scan(monkeypatch):
 # run_go_scan_async: the failure paths
 # --------------------------------------------------------------------------- #
 
+
 def test_a_missing_binary_names_the_path_it_looked_for(monkeypatch):
     _install_fake_core(monkeypatch, available=False)
 
@@ -571,8 +632,9 @@ def test_a_missing_binary_raises_in_strict_mode(monkeypatch):
 
 
 def test_a_non_zero_exit_records_the_envelope_message(monkeypatch):
-    _install_fake_core(monkeypatch, stderr=[_envelope(message="all probes refused")],
-                       returncode=3)
+    _install_fake_core(
+        monkeypatch, stderr=[_envelope(message="all probes refused")], returncode=3
+    )
 
     results = asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1"))
     assert results == []
@@ -597,6 +659,7 @@ def test_a_crash_without_an_envelope_still_explains_itself(monkeypatch):
 
 def test_a_policy_refusal_is_recorded_with_its_winerror(monkeypatch):
     """WinError 4551 has to be recognisable from LAST_ERROR alone."""
+
     class PolicyRefusal(OSError):
         winerror = 4551
 
@@ -635,7 +698,7 @@ def test_an_unexpected_fault_raises_in_strict_mode(monkeypatch):
 def test_a_process_with_no_stdout_pipe_yields_no_results(monkeypatch):
     async def fake_exec(*args, **kwargs):
         proc = FakeProc(stdout=[_ndjson(port=22, open=True)], returncode=0)
-        proc.stdout = None           # no stdout pipe at all
+        proc.stdout = None  # no stdout pipe at all
         return proc
 
     _install_fake_core(monkeypatch)
@@ -652,6 +715,7 @@ def test_a_cancelled_scan_is_recorded_rather_than_raised(monkeypatch):
     """CancelledError is a BaseException, so letting it escape would bypass
     LAST_ERROR entirely and the caller would see a bare traceback with no
     indication of which target or port set was abandoned."""
+
     async def cancel(*args, **kwargs):
         raise asyncio.CancelledError
 
@@ -675,8 +739,11 @@ def test_a_cancelled_scan_raises_a_goscan_error_in_strict_mode(monkeypatch):
 
 
 def test_stderr_lines_that_are_not_envelopes_are_ignored(monkeypatch):
-    _install_fake_core(monkeypatch, stdout=[_ndjson(port=22, open=True)],
-                       stderr=[b"a plain warning line\n", b"\n", b"{not json}\n"])
+    _install_fake_core(
+        monkeypatch,
+        stdout=[_ndjson(port=22, open=True)],
+        stderr=[b"a plain warning line\n", b"\n", b"{not json}\n"],
+    )
 
     results = asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1"))
     assert [r["port"] for r in results] == [22]
@@ -693,12 +760,16 @@ def test_only_real_envelopes_reach_the_mutation_engine(monkeypatch):
             seen.append(envelope)
 
     goscan_bridge.attach_mutation_engine(Engine())
-    _install_fake_core(monkeypatch, stderr=[
-        b"deprecation: use --jitter\n",
-        b"{not json}\n",
-        _envelope(code="EDR_BLOCKED", message="EDR quarantined the image"),
-        b"trailing noise\n",
-    ], returncode=1)
+    _install_fake_core(
+        monkeypatch,
+        stderr=[
+            b"deprecation: use --jitter\n",
+            b"{not json}\n",
+            _envelope(code="EDR_BLOCKED", message="EDR quarantined the image"),
+            b"trailing noise\n",
+        ],
+        returncode=1,
+    )
 
     asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1"))
     assert [e["code"] for e in seen] == ["EDR_BLOCKED"]
@@ -710,7 +781,7 @@ def test_only_real_envelopes_reach_the_mutation_engine(monkeypatch):
 def test_a_scan_survives_a_process_with_no_stderr(monkeypatch):
     async def fake_exec(*args, **kwargs):
         proc = FakeProc(stdout=[_ndjson(port=22, open=True)], returncode=0)
-        proc.stderr = None            # some platforms give no stderr pipe
+        proc.stderr = None  # some platforms give no stderr pipe
         return proc
 
     _install_fake_core(monkeypatch, stdout=[])
@@ -724,6 +795,7 @@ def test_a_scan_survives_a_process_with_no_stderr(monkeypatch):
 # the mutation hook
 # --------------------------------------------------------------------------- #
 
+
 def test_a_bound_mutation_engine_sees_the_envelope(monkeypatch):
     seen: list[dict] = []
 
@@ -732,8 +804,9 @@ def test_a_bound_mutation_engine_sees_the_envelope(monkeypatch):
             seen.append(envelope)
 
     goscan_bridge.attach_mutation_engine(Engine())
-    _install_fake_core(monkeypatch, stderr=[_envelope(code="RATE_LIMITED")],
-                       returncode=1)
+    _install_fake_core(
+        monkeypatch, stderr=[_envelope(code="RATE_LIMITED")], returncode=1
+    )
 
     asyncio.run(goscan_bridge.run_go_scan_async("10.0.0.1"))
     assert [e["code"] for e in seen] == ["RATE_LIMITED"]
@@ -772,6 +845,7 @@ def test_attaching_replaces_a_previously_bound_engine(monkeypatch):
 # the synchronous wrapper
 # --------------------------------------------------------------------------- #
 
+
 def test_the_sync_wrapper_delegates(monkeypatch):
     _install_fake_core(monkeypatch, stdout=[_ndjson(port=22, open=True)])
     results = goscan_bridge.run_go_scan("10.0.0.1", "22")
@@ -796,6 +870,7 @@ def _dead_event_loop(monkeypatch):
     The coroutine is closed explicitly, otherwise pytest is right to warn that
     it was never awaited, and that warning would drown out the real ones.
     """
+
     def fake_run(coro, *args, **kwargs):
         coro.close()
         raise RuntimeError("no event loop")

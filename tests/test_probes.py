@@ -9,8 +9,6 @@ check exactly that.
 
 from __future__ import annotations
 
-import socket as socket_module
-
 import pytest
 
 from modules.discovery import service
@@ -39,7 +37,7 @@ class FakeSocket:
         if self.outcome == "refused":
             raise ConnectionRefusedError(f"{address[0]}:{address[1]} refused")
         if self.outcome == "filtered":
-            raise socket_module.timeout("timed out")
+            raise TimeoutError("timed out")
 
     def sendall(self, payload: bytes) -> None:
         self.sent += payload
@@ -67,6 +65,7 @@ def _patch_socket(monkeypatch, outcome, reply=b"", error=None) -> list[FakeSocke
 # discover_ports
 # --------------------------------------------------------------------------- #
 
+
 def test_only_open_ports_are_reported(monkeypatch):
     _patch_socket(monkeypatch, "open")
     results = service.discover_ports("10.0.0.1", ports=[22, 80, 443])
@@ -93,8 +92,10 @@ def test_results_are_sorted_by_port(monkeypatch):
 
 def test_a_known_port_carries_its_service_name(monkeypatch):
     _patch_socket(monkeypatch, "open")
-    by_port = {r["port"]: r["service"] for r in
-               service.discover_ports("10.0.0.1", ports=[22, 80])}
+    by_port = {
+        r["port"]: r["service"]
+        for r in service.discover_ports("10.0.0.1", ports=[22, 80])
+    }
     assert by_port == {22: "SSH", 80: "HTTP"}
 
 
@@ -117,7 +118,9 @@ def test_the_default_port_set_is_the_common_one(monkeypatch):
 def test_every_socket_is_closed_even_when_the_probe_fails(monkeypatch):
     made = _patch_socket(monkeypatch, "refused")
     service.discover_ports("10.0.0.1", ports=[22, 80])
-    assert made and all(s.closed for s in made), "a failed probe must not leak its socket"
+    assert made and all(s.closed for s in made), (
+        "a failed probe must not leak its socket"
+    )
 
 
 def test_the_probe_connects_to_the_requested_host(monkeypatch):
@@ -136,6 +139,7 @@ def test_the_timeout_is_passed_to_the_socket(monkeypatch):
 # native_connect_probe: the honest-reporting contract
 # --------------------------------------------------------------------------- #
 
+
 def _go_available(monkeypatch) -> None:
     """Marks the Go backend usable.
 
@@ -153,9 +157,19 @@ def test_a_go_hit_is_reported_as_open_with_its_own_source(monkeypatch):
     from modules.discovery import goscan_bridge
 
     _go_available(monkeypatch)
-    monkeypatch.setattr(goscan_bridge, "run_go_scan", lambda *a, **k: [
-        {"port": 22, "service": "ssh", "banner": "SSH-2.0-OpenSSH_9.6",
-         "latency_ms": 3, "source": "native(Go)"}])
+    monkeypatch.setattr(
+        goscan_bridge,
+        "run_go_scan",
+        lambda *a, **k: [
+            {
+                "port": 22,
+                "service": "ssh",
+                "banner": "SSH-2.0-OpenSSH_9.6",
+                "latency_ms": 3,
+                "source": "native(Go)",
+            }
+        ],
+    )
 
     result = service.native_connect_probe("10.0.0.1", 22)
     assert result["open"] is True
@@ -186,8 +200,11 @@ def test_a_failed_go_core_falls_back_and_says_so(monkeypatch):
     from modules.discovery import goscan_bridge
 
     _go_available(monkeypatch)
-    monkeypatch.setattr(goscan_bridge, "run_go_scan",
-                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no go core")))
+    monkeypatch.setattr(
+        goscan_bridge,
+        "run_go_scan",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no go core")),
+    )
     made = _patch_socket(monkeypatch, "open")
 
     result = service.native_connect_probe("10.0.0.1", 22)
@@ -225,9 +242,13 @@ def test_a_go_core_that_could_not_run_is_not_reported_as_closed(monkeypatch):
 
 def test_the_deprecated_syn_alias_delegates_and_does_not_claim_a_syn_probe(monkeypatch):
     calls: list[tuple] = []
-    monkeypatch.setattr(service, "native_connect_probe",
-                        lambda host, port, timeout: calls.append((host, port, timeout))
-                        or {"state": "open"})
+    monkeypatch.setattr(
+        service,
+        "native_connect_probe",
+        lambda host, port, timeout: (
+            calls.append((host, port, timeout)) or {"state": "open"}
+        ),
+    )
 
     result = service.native_syn_probe("10.0.0.1", 22, 1.5)
     assert calls == [("10.0.0.1", 22, 1.5)]
@@ -238,15 +259,19 @@ def test_the_deprecated_syn_alias_delegates_and_does_not_claim_a_syn_probe(monke
 # TTL heuristic
 # --------------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("ttl,expected", [
-    (None, "Unknown (no TTL observed)"),
-    (0, "Linux/Unix-like (TTL<=64)"),
-    (64, "Linux/Unix-like (TTL<=64)"),
-    (65, "Linux/Unix-like (TTL 65-128)"),
-    (128, "Linux/Unix-like (TTL 65-128)"),
-    (129, "Windows-like (TTL>128)"),
-    (255, "Windows-like (TTL>128)"),
-])
+
+@pytest.mark.parametrize(
+    "ttl,expected",
+    [
+        (None, "Unknown (no TTL observed)"),
+        (0, "Linux/Unix-like (TTL<=64)"),
+        (64, "Linux/Unix-like (TTL<=64)"),
+        (65, "Linux/Unix-like (TTL 65-128)"),
+        (128, "Linux/Unix-like (TTL 65-128)"),
+        (129, "Windows-like (TTL>128)"),
+        (255, "Windows-like (TTL>128)"),
+    ],
+)
 def test_the_ttl_bands_match_their_documented_thresholds(ttl, expected):
     assert fingerprint._ttl_family(ttl) == expected
 
@@ -254,6 +279,7 @@ def test_the_ttl_bands_match_their_documented_thresholds(ttl, expected):
 # --------------------------------------------------------------------------- #
 # fingerprint_host
 # --------------------------------------------------------------------------- #
+
 
 def test_the_default_signal_resolves_to_linux():
     result = fingerprint.fingerprint_host("10.0.0.1")
@@ -265,7 +291,8 @@ def test_the_default_signal_resolves_to_linux():
 
 def test_a_windows_signal_is_identified_as_windows():
     result = fingerprint.fingerprint_host(
-        "10.0.0.1", {"ttl": 128, "window": 65535, "tcp_options_len": 40})
+        "10.0.0.1", {"ttl": 128, "window": 65535, "tcp_options_len": 40}
+    )
     assert result["os_guess"].startswith("Windows")
 
 
@@ -307,6 +334,7 @@ def test_a_numeric_ttl_still_uses_the_bayesian_path():
 # banner_grab
 # --------------------------------------------------------------------------- #
 
+
 def test_a_banner_is_returned_decoded_and_trimmed(monkeypatch):
     _patch_socket(monkeypatch, "open", reply=b"  SSH-2.0-OpenSSH_9.6\r\n  ")
     result = fingerprint.banner_grab("10.0.0.1", 22)
@@ -338,7 +366,9 @@ def test_a_silent_service_yields_an_empty_banner(monkeypatch):
     assert fingerprint.banner_grab("10.0.0.1", 22)["banner"] == ""
 
 
-def test_the_banner_is_capped_so_a_dumping_service_cannot_blow_up_the_sheet(monkeypatch):
+def test_the_banner_is_capped_so_a_dumping_service_cannot_blow_up_the_sheet(
+    monkeypatch,
+):
     _patch_socket(monkeypatch, "open", reply=b"A" * 5000)
     result = fingerprint.banner_grab("10.0.0.1", 80)
     assert len(result["banner"]) == 200

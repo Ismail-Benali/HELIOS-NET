@@ -21,7 +21,6 @@ import pytest
 
 from core import c_core_bridge as bridge
 
-
 #: Distinguishes "caller said nothing" from "caller said None". Without it,
 #: `selftest=None` would be indistinguishable from the default healthy result and
 #: the "library returned no usable selftest" case could not be expressed.
@@ -197,11 +196,13 @@ def test_ffi_is_reported_as_the_path_when_it_answers():
 
 def test_library_failing_its_own_checks_is_not_available():
     """Loading is not health. A library that fails its suite stays out."""
-    _install(FakeLibrary(
-        selftest=json.dumps(
-            {"status": "error", "mode": "selftest", "checks": 21, "failures": 3}
-        ).encode("utf-8")
-    ))
+    _install(
+        FakeLibrary(
+            selftest=json.dumps(
+                {"status": "error", "mode": "selftest", "checks": 21, "failures": 3}
+            ).encode("utf-8")
+        )
+    )
     assert bridge.ffi_available() is False
     assert "consistency checks" in str(bridge._probe_cache.get("ffi_reason", ""))
 
@@ -283,7 +284,8 @@ def test_unreadable_signature_file_yields_nothing(tmp_path):
 def test_failed_open_falls_through_to_the_next_front_end(signatures, monkeypatch):
     fake = _install(FakeLibrary(match=_ok_match, open_ok=False))
     monkeypatch.setattr(
-        bridge, "_python_fallback",
+        bridge,
+        "_python_fallback",
         lambda banners, _path: [{"status": "ok", "banner": b} for b in banners],
     )
     results = bridge.scan_banners(["a", "b"], signatures)
@@ -301,6 +303,7 @@ def test_one_failed_banner_drops_the_whole_batch(signatures, monkeypatch):
     Python would produce a list that looks correct and is not: the entries would
     come from two implementations, and nothing in the result would say so.
     """
+
     def mixed(banner: str) -> bytes | None:
         if banner == "bad":
             return None
@@ -309,7 +312,8 @@ def test_one_failed_banner_drops_the_whole_batch(signatures, monkeypatch):
     _install(FakeLibrary(match=mixed))
     monkeypatch.setattr(bridge, "_BINARY", None)
     monkeypatch.setattr(
-        bridge, "_python_fallback",
+        bridge,
+        "_python_fallback",
         lambda banners, _path: [{"status": "ok", "banner": f"py:{b}"} for b in banners],
     )
     results = bridge.scan_banners(["good", "bad", "also-good"], signatures)
@@ -341,25 +345,29 @@ def test_every_returned_buffer_is_released(signatures):
     process without bound - a failure that shows up as memory exhaustion in a
     campaign, far from the call that caused it.
     """
-    fake = _install(FakeLibrary(
-        match=_ok_match,
-        fingerprint=json.dumps(
-            {
-                "status": "ok",
-                "input": "x",
-                "length": 1,
-                "fp_fnv1a32": "0x1",
-                "fp_fnv1a64": "0x2",
-                "fp_crc32": "0x3",
-            }
-        ).encode("utf-8"),
-    ))
+    fake = _install(
+        FakeLibrary(
+            match=_ok_match,
+            fingerprint=json.dumps(
+                {
+                    "status": "ok",
+                    "input": "x",
+                    "length": 1,
+                    "fp_fnv1a32": "0x1",
+                    "fp_fnv1a64": "0x2",
+                    "fp_crc32": "0x3",
+                }
+            ).encode("utf-8"),
+        )
+    )
 
     bridge.scan_banners(["a", "b"], signatures)
     bridge.fingerprint("a")
 
     # One selftest, two match buffers, one fingerprint buffer.
-    assert fake.freed == 4, f"expected every returned buffer to be freed, saw {fake.freed}"
+    assert fake.freed == 4, (
+        f"expected every returned buffer to be freed, saw {fake.freed}"
+    )
     # Counting frees is not enough: a caller could free one buffer twice and
     # leak another, leaving the total right. Nothing may still be outstanding.
     assert fake.live_allocations == 0, (
@@ -370,12 +378,12 @@ def test_every_returned_buffer_is_released(signatures):
 def test_a_caller_may_not_free_an_address_it_does_not_own(signatures):
     """The regression this file exists for.
 
-    With a c_char_p restype ctypes copies the library's buffer into a Python
-    bytes and hands back that copy, discarding the malloc'd address. Freeing
-    what came back therefore passes the address of a Python object to free(),
-    which glibc rejects with `munmap_chunk(): invalid pointer` and aborts the
-    process. Declaring the exports c_void_p keeps the address intact, and the
-stand-in refuses any address it never handed out.
+        With a c_char_p restype ctypes copies the library's buffer into a Python
+        bytes and hands back that copy, discarding the malloc'd address. Freeing
+        what came back therefore passes the address of a Python object to free(),
+        which glibc rejects with `munmap_chunk(): invalid pointer` and aborts the
+        process. Declaring the exports c_void_p keeps the address intact, and the
+    stand-in refuses any address it never handed out.
     """
     fake = _install(FakeLibrary(match=_ok_match))
 
@@ -388,34 +396,40 @@ stand-in refuses any address it never handed out.
 
 
 def test_fingerprint_prefers_the_library(signatures):
-    fake = _install(FakeLibrary(
-        match=_ok_match,
-        fingerprint=json.dumps(
-            {
-                "status": "ok",
-                "input": "Server: nginx",
-                "length": 14,
-                "fp_fnv1a32": "0xAAAAAAAA",
-                "fp_fnv1a64": "0xBBBBBBBBBBBBBBBB",
-                "fp_crc32": "0xCCCCCCCC",
-            }
-        ).encode("utf-8"),
-    ))
+    fake = _install(
+        FakeLibrary(
+            match=_ok_match,
+            fingerprint=json.dumps(
+                {
+                    "status": "ok",
+                    "input": "Server: nginx",
+                    "length": 14,
+                    "fp_fnv1a32": "0xAAAAAAAA",
+                    "fp_fnv1a64": "0xBBBBBBBBBBBBBBBB",
+                    "fp_crc32": "0xCCCCCCCC",
+                }
+            ).encode("utf-8"),
+        )
+    )
     digests = bridge.fingerprint("Server: nginx")
     assert digests["fp_fnv1a32"] == "0xAAAAAAAA"
     assert fake.fingerprinted == ["Server: nginx"]
 
 
 def test_availability_reset_forgets_a_failed_probe():
-    _install(FakeLibrary(
-        selftest=json.dumps(
-            {"status": "error", "mode": "selftest", "checks": 1, "failures": 1}
-        ).encode("utf-8")
-    ))
+    _install(
+        FakeLibrary(
+            selftest=json.dumps(
+                {"status": "error", "mode": "selftest", "checks": 1, "failures": 1}
+            ).encode("utf-8")
+        )
+    )
     assert bridge.ffi_available() is False
     bridge.reset_availability()
     _install(FakeLibrary())
-    assert bridge.ffi_available() is True, "a cached negative probe outlived its library"
+    assert bridge.ffi_available() is True, (
+        "a cached negative probe outlived its library"
+    )
 
 
 def test_cast_of_returned_pointer_is_pointer_sized():
@@ -432,12 +446,14 @@ def test_a_library_that_loads_but_fails_its_selftest_never_answers(signatures):
     this build untrustworthy, so answering a scan from it would contradict
     native_path(), which reports "process" in exactly that state.
     """
-    fake = _install(FakeLibrary(
-        match=_ok_match,
-        selftest=json.dumps(
-            {"status": "error", "mode": "selftest", "checks": 1, "failures": 1}
-        ).encode("utf-8"),
-    ))
+    fake = _install(
+        FakeLibrary(
+            match=_ok_match,
+            selftest=json.dumps(
+                {"status": "error", "mode": "selftest", "checks": 1, "failures": 1}
+            ).encode("utf-8"),
+        )
+    )
 
     assert bridge.ffi_available() is False
     results = bridge.scan_banners(["a", "b"], signatures)

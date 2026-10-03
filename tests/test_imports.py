@@ -19,8 +19,6 @@ regression guard in the repository: it costs a fraction of a second and turns
 from __future__ import annotations
 
 import importlib
-import pkgutil
-import sys
 from pathlib import Path
 
 import pytest
@@ -31,13 +29,16 @@ ROOT = Path(__file__).resolve().parents[1]
 # entry points rather than libraries.
 SKIP_PREFIXES = ("tests.",)
 
+
 def _discover_modules() -> list[str]:
     """Yields every importable dotted module name in the project."""
     names: list[str] = []
     for path in sorted(ROOT.rglob("*.py")):
         rel = path.relative_to(ROOT)
-        if any(p in {"__pycache__", "build", "target", ".git", "rust-core"}
-               for p in rel.parts):
+        if any(
+            p in {"__pycache__", "build", "target", ".git", "rust-core"}
+            for p in rel.parts
+        ):
             continue
         # build.py is a script, not a library: importing it is harmless thanks
         # to its __main__ guard, but it is not part of the package surface.
@@ -62,8 +63,13 @@ MODULES = _discover_modules()
 def test_the_walker_actually_finds_modules():
     """Guard against the discovery itself silently returning nothing."""
     assert len(MODULES) > 20, f"discovery found only {len(MODULES)} modules"
-    for expected in ("core.cores", "modules.discovery.service", "modules.recon.fingerprint",
-                     "transport", "engine.graph.core"):
+    for expected in (
+        "core.cores",
+        "modules.discovery.service",
+        "modules.recon.fingerprint",
+        "transport",
+        "engine.graph.core",
+    ):
         assert expected in MODULES, f"discovery missed {expected}"
 
 
@@ -101,7 +107,10 @@ def test_subprocess_pipes_pin_an_explicit_encoding():
     offenders: list[str] = []
     for path in sorted(ROOT.rglob("*.py")):
         rel = path.relative_to(ROOT)
-        if any(p in {"__pycache__", "build", "target", ".git", "rust-core"} for p in rel.parts):
+        if any(
+            p in {"__pycache__", "build", "target", ".git", "rust-core"}
+            for p in rel.parts
+        ):
             continue
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -116,11 +125,19 @@ def test_subprocess_pipes_pin_an_explicit_encoding():
             if name not in {"run", "Popen", "check_output", "communicate"}:
                 continue
             # Only subprocess module calls matter.
-            if not isinstance(func, ast.Attribute) and name not in {"run", "Popen", "check_output"}:
+            if not isinstance(func, ast.Attribute) and name not in {
+                "run",
+                "Popen",
+                "check_output",
+            }:
                 continue
-            if not any(isinstance(a, ast.Attribute) and a.attr == name
-                       and isinstance(a.value, ast.Name) and a.value.id == "subprocess"
-                       for a in [getattr(node, "func", None)]):
+            if not any(
+                isinstance(a, ast.Attribute)
+                and a.attr == name
+                and isinstance(a.value, ast.Name)
+                and a.value.id == "subprocess"
+                for a in [getattr(node, "func", None)]
+            ):
                 continue
 
             kwargs = {k.arg for k in node.keywords if k.arg}

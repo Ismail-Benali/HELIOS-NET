@@ -5,18 +5,31 @@ Manages the campaign state and the swappable distributed store.
 from __future__ import annotations
 
 import json
-import os
 import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Protocol, Any
+from typing import Any, Protocol
 
-STATUS_CHOICES = {"idle", "planning", "scanning", "analyzing", "executing", "done", "failed", "aborted"}
+STATUS_CHOICES = {
+    "idle",
+    "planning",
+    "scanning",
+    "analyzing",
+    "executing",
+    "done",
+    "failed",
+    "aborted",
+}
 
 
 class CampaignState:
-    def __init__(self, target: str, campaign_id: str | None = None, meta: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        target: str,
+        campaign_id: str | None = None,
+        meta: dict[str, Any] | None = None,
+    ):
         if not target or not str(target).strip():
             raise ValueError("target cannot be empty")
         self.campaign_id = campaign_id or uuid.uuid4().hex
@@ -39,8 +52,12 @@ class CampaignState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CampaignState":
-        obj = cls(target=data["target"], campaign_id=data.get("campaign_id"), meta=data.get("meta", {}))
+    def from_dict(cls, data: dict[str, Any]) -> CampaignState:
+        obj = cls(
+            target=data["target"],
+            campaign_id=data.get("campaign_id"),
+            meta=data.get("meta", {}),
+        )
         obj.status = data.get("status", "idle")
         obj.created_at = data.get("created_at", time.time())
         obj.updated_at = data.get("updated_at", obj.created_at)
@@ -60,6 +77,7 @@ class CampaignState:
 
 class StorageBackend(Protocol):
     """Distributed store contract for scalability (Local / Redis / Postgres)."""
+
     def save(self, state: CampaignState) -> None: ...
     def load(self, campaign_id: str) -> CampaignState: ...
     def load_all(self) -> list[CampaignState]: ...
@@ -103,7 +121,9 @@ class StateStore:
             if p.name.endswith(".tmp"):
                 continue
             try:
-                out.append(CampaignState.from_dict(json.loads(p.read_text(encoding="utf-8"))))
+                out.append(
+                    CampaignState.from_dict(json.loads(p.read_text(encoding="utf-8")))
+                )
             except (json.JSONDecodeError, KeyError, ValueError):
                 continue
         return out
@@ -115,7 +135,12 @@ class StateStore:
                     p.unlink()
 
     def log_event(self, state: CampaignState, event: str, **payload: Any) -> None:
-        record = {"ts": time.time(), "campaign_id": state.campaign_id, "event": event, **payload}
+        record = {
+            "ts": time.time(),
+            "campaign_id": state.campaign_id,
+            "event": event,
+            **payload,
+        }
         with self._lock:
             with self._log_path(state.campaign_id).open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record) + "\n")

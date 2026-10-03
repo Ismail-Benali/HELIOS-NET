@@ -9,21 +9,35 @@ Contract:
 
 from __future__ import annotations
 
-from typing import Any
-
 import socket
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 # Common ports for a quick observation pass - extensible from outside.
 COMMON_PORTS = {
-    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
-    80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB",
-    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL", 8080: "HTTP-alt",
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    445: "SMB",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    8080: "HTTP-alt",
 }
 
 
-def discover_ports(host: str, ports: list[int] | None = None,
-                   timeout: float = 2.0, max_workers: int = 64) -> list[dict[str, Any]]:
+def discover_ports(
+    host: str,
+    ports: list[int] | None = None,
+    timeout: float = 2.0,
+    max_workers: int = 64,
+) -> list[dict[str, Any]]:
     """Discovers open ports on a host in the lab.
 
     Args:
@@ -51,13 +65,15 @@ def discover_ports(host: str, ports: list[int] | None = None,
             s.close()
         if open_port:
             with lock:
-                results.append({
-                    "module": "discovery",
-                    "host": host,
-                    "port": p,
-                    "service": COMMON_PORTS.get(p, "unknown"),
-                    "open": True,
-                })
+                results.append(
+                    {
+                        "module": "discovery",
+                        "host": host,
+                        "port": p,
+                        "service": COMMON_PORTS.get(p, "unknown"),
+                        "open": True,
+                    }
+                )
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         list(pool.map(probe, ports))
@@ -91,15 +107,22 @@ def native_connect_probe(host: str, port: int, timeout: float = 5.0) -> dict[str
         # No backend could run at all: nothing was probed, so nothing is known.
         if outcome.engine == "none":
             return {
-                "module": "discovery", "host": host, "port": port,
-                "open": False, "state": "unknown",
-                "source": "none", "engine": "none", "note": outcome.reason,
+                "module": "discovery",
+                "host": host,
+                "port": port,
+                "open": False,
+                "state": "unknown",
+                "source": "none",
+                "engine": "none",
+                "note": outcome.reason,
             }
         # A backend ran and reported the port closed. That is only a real
         # "closed" verdict when the Go core said so: a socket probe returning
         # nothing proves less, so it stays "unknown" with the reason attached.
         return {
-            "module": "discovery", "host": host, "port": port,
+            "module": "discovery",
+            "host": host,
+            "port": port,
             "open": False,
             "state": "closed" if native else "unknown",
             "source": "native(Go)" if native else "fallback(socket)",
@@ -110,7 +133,9 @@ def native_connect_probe(host: str, port: int, timeout: float = 5.0) -> dict[str
 
     row = dict(outcome.rows[0])
     return {
-        "module": "discovery", "host": host, "port": port,
+        "module": "discovery",
+        "host": host,
+        "port": port,
         "open": True,
         # `open` is the factual claim and holds whichever core observed it. The
         # `state` field is the qualified one, and only the Go core can tell a

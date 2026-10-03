@@ -15,16 +15,16 @@ from __future__ import annotations
 import json
 from collections import deque
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any
 
 from core import accel
 
 
 class ACNode:
     def __init__(self) -> None:
-        self.children: Dict[str, ACNode] = {}
+        self.children: dict[str, ACNode] = {}
         self.failure: ACNode | None = None
-        self.outputs: List[str] = []
+        self.outputs: list[str] = []
         self.is_end: bool = False
 
 
@@ -69,8 +69,15 @@ class AhoCorasickMatcher:
 
     def load_defaults(self) -> None:
         defaults = [
-            "openssh", "apache", "nginx", "microsoft-iis", 
-            "mariadb", "postgres", "redis", "vsftpd", "dropbear"
+            "openssh",
+            "apache",
+            "nginx",
+            "microsoft-iis",
+            "mariadb",
+            "postgres",
+            "redis",
+            "vsftpd",
+            "dropbear",
         ]
         for p in defaults:
             self.add_pattern(p)
@@ -93,9 +100,9 @@ class AhoCorasickMatcher:
         except Exception:
             return 0
 
-    def all_patterns(self) -> List[str]:
+    def all_patterns(self) -> list[str]:
         """Collects every pattern currently registered in the automaton."""
-        patterns: List[str] = []
+        patterns: list[str] = []
         stack = [self.root]
         while stack:
             node = stack.pop()
@@ -105,7 +112,7 @@ class AhoCorasickMatcher:
             stack.extend(node.children.values())
         return patterns
 
-    def match(self, text: str) -> List[dict[str, Any]]:
+    def match(self, text: str) -> list[dict[str, Any]]:
         """Returns matches, each labelled with the engine that produced it.
 
         The search itself is delegated to :mod:`core.accel`, which picks the
