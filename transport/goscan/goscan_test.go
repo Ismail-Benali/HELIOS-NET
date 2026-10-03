@@ -225,13 +225,13 @@ func TestSanitizeBannerOfPureControlIsEmpty(t *testing.T) {
 // TestGrabBannerReadsGreeting exercises the real socket path.
 func TestGrabBannerReadsGreeting(t *testing.T) {
 	ln := newEchoServer(t, "SSH-2.0-OpenSSH_9.6p1 Ubuntu\r\n")
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	conn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	banner, service := grabBanner(conn)
 	if banner != "SSH-2.0-OpenSSH_9.6p1 Ubuntu" {
@@ -246,7 +246,7 @@ func TestGrabBannerReadsGreeting(t *testing.T) {
 // hanging the worker forever.
 func TestGrabBannerSilentServer(t *testing.T) {
 	ln := mustListen(t)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	go func() {
 		conn, err := ln.Accept()
@@ -255,14 +255,14 @@ func TestGrabBannerSilentServer(t *testing.T) {
 		}
 		// Hold the connection open without ever writing a greeting.
 		time.Sleep(2 * bannerTimeout)
-		conn.Close()
+		_ = conn.Close()
 	}()
 
 	conn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	done := make(chan struct{})
 	go func() {
@@ -425,10 +425,10 @@ func newEchoServer(t *testing.T, greeting string) net.Listener {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		writer := bufio.NewWriter(conn)
-		writer.WriteString(greeting)
-		writer.Flush()
+		_, _ = writer.WriteString(greeting)
+		_ = writer.Flush()
 		time.Sleep(100 * time.Millisecond)
 	}()
 	return ln
