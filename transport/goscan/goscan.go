@@ -63,7 +63,7 @@ func emitEnvelope(code, message, module string) {
 		Module:    module,
 	}
 	data, _ := json.Marshal(env)
-	fmt.Fprintln(os.Stderr, string(data))
+	_, _ = fmt.Fprintln(os.Stderr, string(data))
 }
 
 // sanitizeBanner keeps printable ASCII, replaces everything else with a space,
@@ -367,7 +367,7 @@ func main() {
 	case len(args) == 1 && args[0] == "selftest":
 		os.Exit(runSelftest())
 	case len(args) == 1 && (args[0] == "version" || args[0] == "--version"):
-		fmt.Printf("%s\n", Version)
+		_, _ = fmt.Printf("%s\n", Version)
 		os.Exit(0)
 	case len(args) == 1 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help"):
 		usage()
@@ -403,10 +403,10 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  goscan <target-ip> <ports>   scan (80, 1-1000, 80,443, 'common' or 'all')")
-	fmt.Fprintln(os.Stderr, "  goscan selftest               run offline internal checks")
-	fmt.Fprintln(os.Stderr, "  goscan version                print the version string")
+	_, _ = fmt.Fprintln(os.Stderr, "usage:")
+	_, _ = fmt.Fprintln(os.Stderr, "  goscan <target-ip> <ports>   scan (80, 1-1000, 80,443, 'common' or 'all')")
+	_, _ = fmt.Fprintln(os.Stderr, "  goscan selftest               run offline internal checks")
+	_, _ = fmt.Fprintln(os.Stderr, "  goscan version                print the version string")
 }
 
 // scanPort dials one port and reports it. It runs on a pool worker rather than
