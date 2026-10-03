@@ -97,7 +97,11 @@ impl Graph {
         let mut out: Vec<(usize, f64)> = (0..self.n)
             .map(|i| (i, self.degree(i) as f64 / max_degree))
             .collect();
-        out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal).then(a.0.cmp(&b.0)));
+        out.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(Ordering::Equal)
+                .then(a.0.cmp(&b.0))
+        });
         out
     }
 

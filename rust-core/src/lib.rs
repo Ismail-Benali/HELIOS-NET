@@ -143,11 +143,11 @@ fn json_escape(s: &str) -> String {
 
 // ---------------------------------------------------------------- identity
 
-    /// Returns a static, NUL-terminated version string. Never free this.
-    #[no_mangle]
-    pub extern "C" fn helios_rust_version() -> *const c_char {
-        version_string().as_ptr()
-    }
+/// Returns a static, NUL-terminated version string. Never free this.
+#[no_mangle]
+pub extern "C" fn helios_rust_version() -> *const c_char {
+    version_string().as_ptr()
+}
 
 /// Returns the exported ABI version number.
 #[no_mangle]
@@ -273,36 +273,36 @@ pub unsafe extern "C" fn helios_fnv1a32(text: *const c_char) -> *mut c_char {
 
 // ------------------------------------------------------------------- graph
 
-    /// Parses `n` and a flat `u32` edge array into a `Graph`.
-    ///
-    /// `edges` is `edge_count * 2` consecutive `u32` node indices. The buffer is
-    /// only read, never retained.
-    ///
-    /// `n` is clamped to MAX_NODES, which is a genuine safety bound: it is a
-    /// scalar that drives our own allocation, so an oversized value is refused
-    /// rather than trusted.
-    ///
-    /// `edge_count` is clamped to MAX_EDGES, which is only a resource bound. A
-    /// raw pointer carries no length, so a count larger than the caller's buffer
-    /// is undefined behaviour before clamping is relevant; see MAX_EDGES.
-    /// Callers must pass the true length of the buffer they supply.
-    unsafe fn build_graph(n: c_int, edges: *const u32, edge_count: c_int) -> Graph {
-        let node_count = if n <= 0 {
-            0usize
-        } else {
-            (n as usize).min(MAX_NODES)
-        };
-        let mut list: Vec<(usize, usize)> = Vec::new();
-        if !edges.is_null() && edge_count > 0 {
-            let capped = (edge_count as usize).min(MAX_EDGES);
-            let slice = std::slice::from_raw_parts(edges, capped * 2);
-            list.reserve(capped);
-            for pair in slice.as_chunks::<2>().0 {
-                list.push((pair[0] as usize, pair[1] as usize));
-            }
+/// Parses `n` and a flat `u32` edge array into a `Graph`.
+///
+/// `edges` is `edge_count * 2` consecutive `u32` node indices. The buffer is
+/// only read, never retained.
+///
+/// `n` is clamped to MAX_NODES, which is a genuine safety bound: it is a
+/// scalar that drives our own allocation, so an oversized value is refused
+/// rather than trusted.
+///
+/// `edge_count` is clamped to MAX_EDGES, which is only a resource bound. A
+/// raw pointer carries no length, so a count larger than the caller's buffer
+/// is undefined behaviour before clamping is relevant; see MAX_EDGES.
+/// Callers must pass the true length of the buffer they supply.
+unsafe fn build_graph(n: c_int, edges: *const u32, edge_count: c_int) -> Graph {
+    let node_count = if n <= 0 {
+        0usize
+    } else {
+        (n as usize).min(MAX_NODES)
+    };
+    let mut list: Vec<(usize, usize)> = Vec::new();
+    if !edges.is_null() && edge_count > 0 {
+        let capped = (edge_count as usize).min(MAX_EDGES);
+        let slice = std::slice::from_raw_parts(edges, capped * 2);
+        list.reserve(capped);
+        for pair in slice.as_chunks::<2>().0 {
+            list.push((pair[0] as usize, pair[1] as usize));
         }
-        Graph::from_edges(node_count, &list)
     }
+    Graph::from_edges(node_count, &list)
+}
 
 /// Returns `{"count":N,"components":[[...],[...]]}`. Free with `helios_free_string`.
 ///
