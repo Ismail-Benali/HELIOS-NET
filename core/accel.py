@@ -33,9 +33,10 @@ rather than quietly being left out of the table.
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 __all__ = [
     "BackendInfo",
@@ -62,7 +63,10 @@ __all__ = [
 #: The graph operations both the Rust core and the Python fallback implement. The
 #: C core ships no graph code, so it is registered without them.
 GRAPH_CAPABILITIES = (
-    "graph_degree", "graph_betweenness", "graph_components", "graph_shortest_path",
+    "graph_degree",
+    "graph_betweenness",
+    "graph_components",
+    "graph_shortest_path",
 )
 
 #: Port scanning, served by the Go core and by a plain socket probe. The C and
@@ -127,6 +131,7 @@ class BackendInfo:
 
 
 # ------------------------------------------------------------------- backends
+
 
 def _c_path() -> str:
     """Which C front end is serving: "ffi", "process", or "python".
@@ -238,8 +243,13 @@ def backend_infos() -> list[BackendInfo]:
         try:
             out.append(_BACKENDS[name]())
         except Exception as exc:  # noqa: BLE001 - a broken import is a state, not a crash
-            out.append(BackendInfo(name=name, available=False,
-                                   reason=f"probe raised {type(exc).__name__}: {exc}"))
+            out.append(
+                BackendInfo(
+                    name=name,
+                    available=False,
+                    reason=f"probe raised {type(exc).__name__}: {exc}",
+                )
+            )
     return out
 
 
@@ -249,6 +259,7 @@ def backend_infos_by_name() -> dict[str, BackendInfo]:
 
 
 # --------------------------------------------------------------------- python
+
 
 def _normalise(hits: Iterable[Match]) -> tuple[Match, ...]:
     """Collapses a backend's raw hits into the unified contract.
@@ -293,6 +304,7 @@ def _python_fingerprint(text: str) -> FingerprintOutcome:
 
 # --------------------------------------------------------------------- public
 
+
 def match_signatures(
     text: str,
     patterns: Iterable[str],
@@ -315,7 +327,9 @@ def match_signatures(
     order = list(_PREFERENCE)
     if prefer:
         if prefer not in _BACKENDS:
-            raise ValueError(f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}")
+            raise ValueError(
+                f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}"
+            )
         order = [prefer] + [name for name in order if name != prefer]
 
     reasons: list[str] = []
@@ -339,7 +353,13 @@ def match_signatures(
             reasons.append(f"{name}: raised {type(exc).__name__}: {exc}")
             continue
 
-        engine = "c-native" if name == "c" else "rust-native" if name == "rust" else "python-fallback"
+        engine = (
+            "c-native"
+            if name == "c"
+            else "rust-native"
+            if name == "rust"
+            else "python-fallback"
+        )
         reason = "skipped " + "; ".join(reasons) if reasons else ""
         if name == "c":
             # Both C front ends run the same native code, so the engine label is
@@ -351,14 +371,18 @@ def match_signatures(
         return MatchOutcome(_normalise(raw_hits), engine, reason)
 
     # Unreachable: python is registered as always available.
-    return MatchOutcome((), "none", "no backend could serve the request: " + "; ".join(reasons))
+    return MatchOutcome(
+        (), "none", "no backend could serve the request: " + "; ".join(reasons)
+    )
 
 
 def _c_match(text: str, patterns: Sequence[str]) -> tuple[Match, ...]:
     from core import c_core_bridge
 
     if not c_core_bridge.core_available():
-        raise RuntimeError(c_core_bridge.staleness_note() or "the C core is unavailable")
+        raise RuntimeError(
+            c_core_bridge.staleness_note() or "the C core is unavailable"
+        )
 
     # The C core receives patterns as `name<TAB>pattern` lines, so the in-memory
     # interface is projected onto a signature file for this call. The generated
@@ -379,7 +403,10 @@ def _c_match(text: str, patterns: Sequence[str]) -> tuple[Match, ...]:
     if not results:
         return ()
     return tuple(
-        Match(placeholders.get(str(m["signature"]), str(m["signature"])), int(m["position"]))
+        Match(
+            placeholders.get(str(m["signature"]), str(m["signature"])),
+            int(m["position"]),
+        )
         for m in results[0].get("matches", [])
         if isinstance(m, dict) and "signature" in m and "position" in m
     )
@@ -411,7 +438,9 @@ def fingerprint(text: str, prefer: str | None = None) -> FingerprintOutcome:
     order = list(_PREFERENCE)
     if prefer:
         if prefer not in _BACKENDS:
-            raise ValueError(f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}")
+            raise ValueError(
+                f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}"
+            )
         order = [prefer] + [name for name in order if name != prefer]
 
     reasons: list[str] = []
@@ -437,19 +466,27 @@ def fingerprint(text: str, prefer: str | None = None) -> FingerprintOutcome:
         if name == "c":
             reason = (reason + "; " if reason else "") + f"served by {_c_path()}"
         return FingerprintOutcome(
-            fnv1a32=raw.fnv1a32, fnv1a64=raw.fnv1a64, crc32=raw.crc32,
-            engine="c-native" if name == "c" else "python-fallback", reason=reason,
+            fnv1a32=raw.fnv1a32,
+            fnv1a64=raw.fnv1a64,
+            crc32=raw.crc32,
+            engine="c-native" if name == "c" else "python-fallback",
+            reason=reason,
         )
 
-    return FingerprintOutcome("", engine="none",
-                              reason="no backend could serve the request: " + "; ".join(reasons))
+    return FingerprintOutcome(
+        "",
+        engine="none",
+        reason="no backend could serve the request: " + "; ".join(reasons),
+    )
 
 
 def _c_fingerprint(text: str) -> FingerprintOutcome:
     from core import c_core_bridge
 
     if not c_core_bridge.core_available():
-        raise RuntimeError(c_core_bridge.staleness_note() or "the C core is unavailable")
+        raise RuntimeError(
+            c_core_bridge.staleness_note() or "the C core is unavailable"
+        )
     digests = c_core_bridge.fingerprint(text)
     return FingerprintOutcome(
         fnv1a32=digests["fp_fnv1a32"],
@@ -460,6 +497,7 @@ def _c_fingerprint(text: str) -> FingerprintOutcome:
 
 
 # ------------------------------------------------------------------ graph
+
 
 @dataclass(frozen=True)
 class GraphOutcome:
@@ -492,7 +530,9 @@ def _graph_dispatch(
     order = [n for n in _PREFERENCE if n in ("rust", "python")]
     if prefer:
         if prefer not in _BACKENDS:
-            raise ValueError(f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}")
+            raise ValueError(
+                f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}"
+            )
         order = [prefer] + [n for n in order if n != prefer]
 
     reasons: list[str] = []
@@ -514,7 +554,9 @@ def _graph_dispatch(
             value, "rust-native" if name == "rust" else "python-fallback", reason
         )
 
-    return GraphOutcome(None, "none", "no backend could serve the request: " + "; ".join(reasons))
+    return GraphOutcome(
+        None, "none", "no backend could serve the request: " + "; ".join(reasons)
+    )
 
 
 def graph_degree_centrality(
@@ -622,7 +664,9 @@ def graph_shortest_path(
     def native() -> Any:
         from core import rust_bridge
 
-        return rust_bridge.graph_shortest_path_rust(node_count, list(edges), source, target)
+        return rust_bridge.graph_shortest_path_rust(
+            node_count, list(edges), source, target
+        )
 
     def fallback() -> Any:
         from engine.graph.core import AssetGraph
@@ -637,7 +681,6 @@ def graph_shortest_path(
         return None if path is None else (len(path) - 1, [int(x) for x in path])
 
     return _graph_dispatch("graph_shortest_path", native, fallback, prefer)
-
 
 
 @dataclass(frozen=True)
@@ -721,7 +764,9 @@ def scan_ports(
     order = ["go", "python"]
     if prefer:
         if prefer not in _BACKENDS:
-            raise ValueError(f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}")
+            raise ValueError(
+                f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}"
+            )
         order = [prefer] + [n for n in order if n != prefer]
 
     reasons: list[str] = []
@@ -751,7 +796,9 @@ def scan_ports(
             reason=reason,
         )
 
-    return PortScanOutcome((), (), "none", "no backend could serve the request: " + "; ".join(reasons))
+    return PortScanOutcome(
+        (), (), "none", "no backend could serve the request: " + "; ".join(reasons)
+    )
 
 
 def _go_scan(host: str, ports: Sequence[int], timeout: float) -> list[dict[str, Any]]:
@@ -779,6 +826,7 @@ def _go_scan(host: str, ports: Sequence[int], timeout: float) -> list[dict[str, 
 
 
 # ------------------------------------------------------------- cross-checking
+
 
 def compare_backends(
     text: str,
@@ -827,9 +875,11 @@ def compare_backends(
     reference_name = next(iter(per_backend))
     reference = key(per_backend[reference_name])
     disagreements = {
-        name: {"this": [list(hit) for hit in key(found)],
-               "reference": [list(hit) for hit in reference],
-               "reference_backend": reference_name}
+        name: {
+            "this": [list(hit) for hit in key(found)],
+            "reference": [list(hit) for hit in reference],
+            "reference_backend": reference_name,
+        }
         for name, found in per_backend.items()
         if key(found) != reference
     }

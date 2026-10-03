@@ -24,10 +24,10 @@ from core.orchestrator import Orchestrator
 from core.planner import Planner, PlanStep
 from core.state import CampaignState, StateStore
 
-
 # --------------------------------------------------------------------------- #
 # Planner
 # --------------------------------------------------------------------------- #
+
 
 def test_discovery_is_always_planned_even_with_no_intelligence():
     steps = Planner().plan([], "10.0.0.1")
@@ -69,7 +69,9 @@ def test_recon_and_collect_depend_on_everything_before_them():
     for step in steps:
         for dependency in step.depends_on:
             assert by_id[dependency].priority <= step.priority
-            assert by_id[dependency].step_id != step.step_id, "a step cannot depend on itself"
+            assert by_id[dependency].step_id != step.step_id, (
+                "a step cannot depend on itself"
+            )
 
 
 def test_steps_are_ordered_by_priority():
@@ -111,7 +113,9 @@ def test_schedule_never_places_a_step_before_its_dependencies():
             seen.add(step.step_id)
         completed |= {s.step_id for s in wave}
 
-    assert seen == {s.step_id for s in steps}, "every step must be scheduled exactly once"
+    assert seen == {s.step_id for s in steps}, (
+        "every step must be scheduled exactly once"
+    )
 
 
 def test_schedule_respects_the_concurrency_cap():
@@ -133,12 +137,16 @@ def test_schedule_breaks_a_dependency_cycle_instead_of_hanging():
     break the cycle and still terminate with every step scheduled.
     """
     steps = [
-        PlanStep(step_id=1, module="discovery", action="scan", target="t", depends_on=[2]),
-        PlanStep(step_id=2, module="recon", action="fingerprint", target="t", depends_on=[1]),
+        PlanStep(
+            step_id=1, module="discovery", action="scan", target="t", depends_on=[2]
+        ),
+        PlanStep(
+            step_id=2, module="recon", action="fingerprint", target="t", depends_on=[1]
+        ),
     ]
     planner = Planner(max_concurrency=4)
 
-    waves = planner.schedule(steps)          # must not hang
+    waves = planner.schedule(steps)  # must not hang
     scheduled = sorted(s.step_id for wave in waves for s in wave)
     assert scheduled == [1, 2]
 
@@ -150,6 +158,7 @@ def test_schedule_handles_an_empty_plan():
 # --------------------------------------------------------------------------- #
 # CampaignState
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.parametrize("bad", ["", "   ", None])
 def test_empty_target_is_rejected(bad):
@@ -237,7 +246,9 @@ def test_corrupt_state_files_are_skipped_not_fatal(tmp_path):
     good = CampaignState(target="10.0.0.1")
     store.save(good)
     (store.campaigns_dir / "broken.json").write_text("{not json", encoding="utf-8")
-    (store.campaigns_dir / "wrongshape.json").write_text('{"nope": 1}', encoding="utf-8")
+    (store.campaigns_dir / "wrongshape.json").write_text(
+        '{"nope": 1}', encoding="utf-8"
+    )
 
     loaded = store.load_all()
     assert [s.campaign_id for s in loaded] == [good.campaign_id]
@@ -280,12 +291,14 @@ def test_concurrent_event_writers_do_not_interleave_lines(tmp_path):
 # Orchestrator
 # --------------------------------------------------------------------------- #
 
+
 def _ok_runner(name: str):
     def runner(step: PlanStep, ctx: dict) -> dict:
         ctx.setdefault("findings", []).append(
             {"module": name, "host": step.target, "port": 80, "service": "http"}
         )
         return {"module": name, "step": step.step_id}
+
     return runner
 
 
@@ -333,8 +346,11 @@ def test_recon_and_stealth_are_skipped_without_corresponding_intelligence(tmp_pa
 
     state = orch.run_campaign("10.0.0.1")
 
-    ran = {e["module"] for e in store.read_log(state.campaign_id)
-           if e["event"] == "step_start"}
+    ran = {
+        e["module"]
+        for e in store.read_log(state.campaign_id)
+        if e["event"] == "step_start"
+    }
     assert ran == {"discovery", "exfil"}, ran
     assert state.meta["report_count"] == 2
 
@@ -379,7 +395,7 @@ def test_a_missing_module_is_logged_and_skipped(tmp_path):
 def test_registering_a_non_callable_is_rejected(tmp_path):
     orch = Orchestrator(StateStore(tmp_path))
     with pytest.raises(TypeError):
-        orch.register("bad", "not a function")     # type: ignore[arg-type]
+        orch.register("bad", "not a function")  # type: ignore[arg-type]
 
 
 def test_campaign_with_no_registered_modules_still_completes(tmp_path):
@@ -446,7 +462,7 @@ def test_report_reflects_the_stored_timeline(tmp_path):
     assert report["summary"] == state.meta
     assert report["timeline"][0]["event"] == "campaign_start"
     assert all(isinstance(row, dict) for row in report["timeline"])
-    json.dumps(report, default=str)      # must be serialisable for the HTML reporter
+    json.dumps(report, default=str)  # must be serialisable for the HTML reporter
 
 
 def test_recover_returns_the_state_that_was_persisted(tmp_path):

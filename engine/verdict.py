@@ -14,17 +14,18 @@ Standing security note:
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
 class Rule:
     """A single classification rule."""
+
     name: str
-    weight: float                 # severity weight (0..1)
+    weight: float  # severity weight (0..1)
     test: Callable[[dict[str, Any]], bool]  # does it apply to this finding?
     note: str = ""
 
@@ -38,6 +39,7 @@ class Rule:
 @dataclass
 class Verdict:
     """The classified result for a single finding."""
+
     finding: dict[str, Any]
     rules_hit: list[str] = field(default_factory=list)
     max_weight: float = 0.0
@@ -49,7 +51,9 @@ class Verdict:
             "finding": self.finding,
             "rules_hit": self.rules_hit,
             "max_weight": round(self.max_weight, 3),
-            "severity": "high" if self.max_weight >= 0.7 else ("medium" if self.max_weight >= 0.4 else "low"),
+            "severity": "high"
+            if self.max_weight >= 0.7
+            else ("medium" if self.max_weight >= 0.4 else "low"),
         }
 
 
@@ -70,6 +74,7 @@ class VerdictEngine:
     def load_from_json(self, json_path: str | Path) -> int:
         """Dynamically loads rules from an external JSON file (Dynamic DSL)."""
         import json
+
         path = Path(json_path)
         if not path.exists():
             return 0
@@ -84,7 +89,9 @@ class VerdictEngine:
                 note = r_def.get("note", "")
 
                 test_fn = lambda f, k=key, v=val: v in str(f.get(k, "")).lower()
-                self._rules.append(Rule(name=name, weight=weight, test=test_fn, note=note))
+                self._rules.append(
+                    Rule(name=name, weight=weight, test=test_fn, note=note)
+                )
                 count += 1
             return count
         except Exception:
@@ -116,19 +123,28 @@ def default_rules() -> list[Rule]:
         Rule(
             name="unpatched_hint",
             weight=0.6,
-            test=lambda f: any(k in str(f.get("service", "")).lower() for k in ("old", "deprecated", "eol")),
+            test=lambda f: any(
+                k in str(f.get("service", "")).lower()
+                for k in ("old", "deprecated", "eol")
+            ),
             note="Indicates an old, unpatched version.",
         ),
         Rule(
             name="admin_interface",
             weight=0.7,
-            test=lambda f: any(k in str(f.get("service", "")).lower() for k in ("admin", "management", "ssh", "rdp")),
+            test=lambda f: any(
+                k in str(f.get("service", "")).lower()
+                for k in ("admin", "management", "ssh", "rdp")
+            ),
             note="Admin/management interface - priority for inspection.",
         ),
         Rule(
             name="default_credentials_hint",
             weight=0.8,
-            test=lambda f: any(k in str(f.get("finding_note", "")).lower() for k in ("default", "factory", "weak")),
+            test=lambda f: any(
+                k in str(f.get("finding_note", "")).lower()
+                for k in ("default", "factory", "weak")
+            ),
             note="Indicates default/weak credentials.",
         ),
     ]

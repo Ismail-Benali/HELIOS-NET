@@ -27,8 +27,8 @@ from pathlib import Path
 
 import pytest
 
-from engine.graph.core import AssetGraph
 from core import rust_bridge
+from engine.graph.core import AssetGraph
 
 ROOT = Path(__file__).resolve().parents[1]
 requires_rust = pytest.mark.skipif(
@@ -166,9 +166,14 @@ def test_accel_reports_node_indices_and_not_ranks():
 
     scores = {index: score for index, score in outcome.value}
     # `accel` returns raw scores; rounding to 3 places is `AssetGraph`'s job.
-    assert scores == {0: 0.333, 1: 0.667, 2: 0.667, 3: 0.333} or scores == pytest.approx(
-        {0: 1 / 3, 1: 2 / 3, 2: 2 / 3, 3: 1 / 3}
-    ), f"chain degree scored wrong: {scores}"
+    assert scores == {
+        0: 0.333,
+        1: 0.667,
+        2: 0.667,
+        3: 0.333,
+    } or scores == pytest.approx({0: 1 / 3, 1: 2 / 3, 2: 2 / 3, 3: 1 / 3}), (
+        f"chain degree scored wrong: {scores}"
+    )
 
 
 @requires_rust
@@ -216,7 +221,9 @@ def test_a_graph_call_records_which_engine_ran_it():
     )
     for operation in ("degree", "shortest_path"):
         assert report["engines"][operation]["engine"] in (
-            "rust-native", "python-fallback", "none"
+            "rust-native",
+            "python-fallback",
+            "none",
         ), f"{operation} reported {report['engines'][operation]}"
 
 
@@ -255,8 +262,12 @@ def test_the_answers_do_not_move_with_the_hash_seed(seed):
     runs = [
         subprocess.run(
             [sys.executable, "-c", script],
-            capture_output=True, text=True, encoding="utf-8",
-            env=env, cwd=str(ROOT), check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            cwd=str(ROOT),
+            check=True,
         ).stdout
         for _ in range(2)
     ]
@@ -270,7 +281,11 @@ def test_the_answers_do_not_move_with_the_hash_seed(seed):
     # randomness, so the leak is caught even if every run is self-consistent.
     baseline = subprocess.run(
         [sys.executable, "-c", script],
-        capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT), check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=str(ROOT),
+        check=True,
         env=dict(os.environ, PYTHONHASHSEED="4242"),
     ).stdout
     assert baseline == reference, (

@@ -11,10 +11,11 @@ Responsibilities:
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, Iterable, Any
+from typing import Any
 
-from .planner import PlanStep, Planner
+from .planner import Planner, PlanStep
 from .state import CampaignState, StateStore
 
 ModuleRunner = Callable[[PlanStep, dict[str, Any]], dict[str, Any]]
@@ -23,20 +24,31 @@ ModuleRunner = Callable[[PlanStep, dict[str, Any]], dict[str, Any]]
 class Orchestrator:
     """Central orchestrator for HELIOS-NET campaigns."""
 
-    def __init__(self, store: StateStore, reg: dict[str, ModuleRunner] | None = None,
-                 max_workers: int = 8):
+    def __init__(
+        self,
+        store: StateStore,
+        reg: dict[str, ModuleRunner] | None = None,
+        max_workers: int = 8,
+    ):
         self.store = store
         self.planner = Planner(max_concurrency=max_workers)
         self.max_workers = max_workers
         self._registry: dict[str, ModuleRunner] = dict(reg or {})
-        self._context: dict[str, Any] = {"timestamps": {}, "findings": [], "reports": [], "meta": {}}
+        self._context: dict[str, Any] = {
+            "timestamps": {},
+            "findings": [],
+            "reports": [],
+            "meta": {},
+        }
 
     def register(self, name: str, runner: ModuleRunner) -> None:
         if not callable(runner):
             raise TypeError(f"runner for {name!r} must be callable")
         self._registry[name] = runner
 
-    def run_campaign(self, target: str, intelligence: list[dict[str, Any]] | None = None) -> CampaignState:
+    def run_campaign(
+        self, target: str, intelligence: list[dict[str, Any]] | None = None
+    ) -> CampaignState:
         """Executes a full campaign against the specified target."""
         state = CampaignState(target=target)
         state.transition("planning")
@@ -58,7 +70,9 @@ class Orchestrator:
         except Exception as exc:
             state.transition("failed")
             self.store.save(state)
-            self.store.log_event(state, "campaign_failed", error=str(exc), ts=time.time())
+            self.store.log_event(
+                state, "campaign_failed", error=str(exc), ts=time.time()
+            )
             raise
 
         state.transition("done")
@@ -67,15 +81,20 @@ class Orchestrator:
         state.meta["plan"] = plan_hash
         self._finalize_graph(state)
         self.store.save(state)
-        self.store.log_event(state, "campaign_done", findings=state.meta["findings_count"])
+        self.store.log_event(
+            state, "campaign_done", findings=state.meta["findings_count"]
+        )
         return state
 
     def _finalize_graph(self, state: CampaignState) -> None:
         """Builds asset graph from findings and records high-centrality targets."""
         try:
             from engine.graph.core import AssetGraph
+
             g = AssetGraph()
-            g.ingest(state.meta.get("findings", []) or self._context.get("findings", []))
+            g.ingest(
+                state.meta.get("findings", []) or self._context.get("findings", [])
+            )
             state.meta["graph_nodes"] = len(g.nodes)
             state.meta["graph_edges"] = len(g.adj)
             state.meta["top_targets"] = g.top_targets(limit=8)
@@ -103,8 +122,13 @@ class Orchestrator:
                         self._context.setdefault("reports", []).append(result)
                 except Exception as exc:
                     step.status = "failed"
-                    self.store.log_event(state, "step_failed",
-                                         module=step.module, action=step.action, error=str(exc))
+                    self.store.log_event(
+                        state,
+                        "step_failed",
+                        module=step.module,
+                        action=step.action,
+                        error=str(exc),
+                    )
 
     def _safe_run(self, state: CampaignState, step: PlanStep) -> dict[str, Any] | None:
         """Safely executes a module step, isolating failures."""
@@ -113,16 +137,33 @@ class Orchestrator:
             self.store.log_event(state, "module_missing", module=step.module)
             return None
         step.status = "running"
-        self.store.log_event(state, "step_start", module=step.module, action=step.action, step_id=step.step_id)
+        self.store.log_event(
+            state,
+            "step_start",
+            module=step.module,
+            action=step.action,
+            step_id=step.step_id,
+        )
         try:
             result = runner(step, self._context)
             step.status = "done"
-            self.store.log_event(state, "step_done", module=step.module, action=step.action, step_id=step.step_id)
+            self.store.log_event(
+                state,
+                "step_done",
+                module=step.module,
+                action=step.action,
+                step_id=step.step_id,
+            )
             return result
         except Exception as exc:
             step.status = "failed"
-            self.store.log_event(state, "step_failed",
-                                 module=step.module, action=step.action, error=str(exc))
+            self.store.log_event(
+                state,
+                "step_failed",
+                module=step.module,
+                action=step.action,
+                error=str(exc),
+            )
             return None
 
     def recover(self, campaign_id: str) -> CampaignState:

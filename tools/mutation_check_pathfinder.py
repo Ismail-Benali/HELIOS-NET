@@ -6,11 +6,11 @@ SRC = pathlib.Path("engine/killchain/pathfinder.py")
 ORIG = SRC.read_text(encoding="utf-8")
 
 GUARD = (
-    "            if cost > visited.get(current, float(\"inf\")):\n"
+    '            if cost > visited.get(current, float("inf")):\n'
     "                continue\n"
 )
-RELAX = "if new_cost < visited.get(neighbor, float(\"inf\")):"
-RELAX_BAD = "if new_cost > visited.get(neighbor, float(\"inf\")):"
+RELAX = 'if new_cost < visited.get(neighbor, float("inf")):'
+RELAX_BAD = 'if new_cost > visited.get(neighbor, float("inf")):'
 COST = "                new_cost = cost + step_cost"
 COST_BAD = "                new_cost = cost + step_cost + 0.5"
 TIE = "                    heapq.heappush(pq, (new_cost, neighbor, path + [neighbor]))"
@@ -27,7 +27,10 @@ MUTANTS = [
 def run_tests() -> tuple[int, str]:
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "tests/test_pathfinder.py", "-q"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     tail = [l for l in proc.stdout.splitlines() if "passed" in l or "failed" in l]
     return proc.returncode, (tail[-1] if tail else "?")

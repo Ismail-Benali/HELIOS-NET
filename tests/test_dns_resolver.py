@@ -15,14 +15,12 @@ from __future__ import annotations
 import asyncio
 import struct
 
-import pytest
-
 from modules.discovery.dns_resolver import EliteDNSResolver
-
 
 # --------------------------------------------------------------------------- #
 # helpers that build DNS packets the long way round
 # --------------------------------------------------------------------------- #
+
 
 def encode_name(domain: str) -> bytes:
     out = bytearray()
@@ -49,8 +47,8 @@ def build_response(
     body = encode_name(domain) + struct.pack("!HH", 1, 1) if qdcount else b""
 
     for address in addresses:
-        body += b"\xc0\x0c"                                  # pointer to the question name
-        body += struct.pack("!HHIH", 1, 1, 300, 4)          # A, IN, TTL 300, rdlength 4
+        body += b"\xc0\x0c"  # pointer to the question name
+        body += struct.pack("!HHIH", 1, 1, 300, 4)  # A, IN, TTL 300, rdlength 4
         body += bytes(int(octet) for octet in address.split("."))
     return header + body + truncation
 
@@ -59,11 +57,14 @@ def build_response(
 # query construction
 # --------------------------------------------------------------------------- #
 
+
 def test_query_header_declares_one_question_and_one_additional():
     resolver = EliteDNSResolver()
     packet = resolver._build_edns_query("example.test")
 
-    tx_id, flags, qdcount, ancount, nscount, arcount = struct.unpack("!HHHHHH", packet[:12])
+    tx_id, flags, qdcount, ancount, nscount, arcount = struct.unpack(
+        "!HHHHHH", packet[:12]
+    )
     assert 0 <= tx_id <= 0xFFFF
     assert flags & 0x0100, "the recursion-desired bit must be set"
     assert qdcount == 1
@@ -83,7 +84,7 @@ def test_query_name_is_length_prefixed_and_terminated():
     assert packet[29] == 0, "the name must be zero terminated"
 
     offset = 12 + len(encode_name("www.example.test"))
-    qtype, qclass = struct.unpack("!HH", packet[offset:offset + 4])
+    qtype, qclass = struct.unpack("!HH", packet[offset : offset + 4])
     assert qtype == 1 and qclass == 1, "default is an A query in the IN class"
 
 
@@ -91,14 +92,14 @@ def test_query_type_is_configurable():
     resolver = EliteDNSResolver()
     packet = resolver._build_edns_query("example.test", qtype=28)
     offset = 12 + len(encode_name("example.test"))
-    qtype, qclass = struct.unpack("!HH", packet[offset:offset + 4])
+    qtype, qclass = struct.unpack("!HH", packet[offset : offset + 4])
     assert qtype == 28, "AAAA is type 28"
     assert qclass == 1
 
 
 def test_edns_opt_record_advertises_a_4096_byte_buffer():
     packet = EliteDNSResolver()._build_edns_query("example.test")
-    opt = packet[-(1 + 10):]
+    opt = packet[-(1 + 10) :]
 
     assert opt[0] == 0, "the OPT owner name is the root"
     # OPT is NAME(1) TYPE(2) CLASS(2) TTL(4) RDLENGTH(2) = 11 bytes. The TTL
@@ -124,6 +125,7 @@ def test_an_empty_label_does_not_produce_a_zero_length_prefix():
 # response parsing
 # --------------------------------------------------------------------------- #
 
+
 def test_a_valid_a_response_yields_its_addresses():
     resolver = EliteDNSResolver()
     packet = build_response("example.test", ["93.184.216.34", "93.184.216.35"])
@@ -139,8 +141,14 @@ def test_a_truncated_packet_is_rejected_not_crashed():
 def test_a_nonzero_rcode_yields_nothing():
     resolver = EliteDNSResolver()
     # NXDOMAIN is rcode 3; a refusal (5) must behave the same way.
-    assert resolver._parse_response(build_response("example.test", ["1.2.3.4"], rcode=3)) == []
-    assert resolver._parse_response(build_response("example.test", ["1.2.3.4"], rcode=5)) == []
+    assert (
+        resolver._parse_response(build_response("example.test", ["1.2.3.4"], rcode=3))
+        == []
+    )
+    assert (
+        resolver._parse_response(build_response("example.test", ["1.2.3.4"], rcode=5))
+        == []
+    )
 
 
 def test_a_response_with_no_answers_yields_nothing():
@@ -184,12 +192,14 @@ def test_parsing_is_deterministic_for_the_same_packet():
 # failover and caching
 # --------------------------------------------------------------------------- #
 
+
 def _with_fake_transport(monkeypatch, answers: dict[str, list[str]], calls: list[str]):
     """Replaces the thread offload so _query_sync never touches a socket.
 
     Keyed by nameserver, so a nameserver absent from `answers` behaves like an
     unreachable one and returns nothing.
     """
+
     async def fake_to_thread(func, *args):
         nameserver = args[0]
         calls.append(nameserver)
@@ -213,7 +223,9 @@ def test_failover_moves_to_the_next_nameserver(monkeypatch):
     _with_fake_transport(monkeypatch, {"8.8.8.8": ["5.6.7.8"]}, calls)
 
     assert asyncio.run(resolver.resolve("example.test")) == ["5.6.7.8"]
-    assert calls == ["1.1.1.1", "8.8.8.8"], "must try in order and stop at the first answer"
+    assert calls == ["1.1.1.1", "8.8.8.8"], (
+        "must try in order and stop at the first answer"
+    )
 
 
 def test_all_nameservers_failing_returns_nothing(monkeypatch):
@@ -259,11 +271,13 @@ def test_an_expired_cache_entry_is_re_resolved(monkeypatch, monkeypatched_time=N
     _with_fake_transport(monkeypatch, {"1.1.1.1": ["1.2.3.4"]}, calls)
 
     clock = {"now": 1000.0}
-    monkeypatch.setattr("modules.discovery.dns_resolver.time.time", lambda: clock["now"])
+    monkeypatch.setattr(
+        "modules.discovery.dns_resolver.time.time", lambda: clock["now"]
+    )
 
     async def scenario() -> tuple[list[str], list[str]]:
         first = await resolver.resolve("example.test")
-        clock["now"] += 121          # past the 120 second window
+        clock["now"] += 121  # past the 120 second window
         second = await resolver.resolve("example.test")
         return first, second
 

@@ -10,7 +10,8 @@ Features:
 from __future__ import annotations
 
 import heapq
-from typing import Dict, List, Tuple, Any
+from typing import Any
+
 from engine.graph.core import AssetGraph
 
 
@@ -26,20 +27,22 @@ class KillChainEngine:
         "mysql": 4.0,
         "postgresql": 4.0,
         "rdp": 4.5,
-        "unknown": 3.0
+        "unknown": 3.0,
     }
 
     def __init__(self, graph: AssetGraph):
         self.graph = graph
 
-    def find_attack_path(self, entry_node: str, crown_jewel: str) -> Tuple[List[str], float]:
+    def find_attack_path(
+        self, entry_node: str, crown_jewel: str
+    ) -> tuple[list[str], float]:
         """Computes the shortest path (Least Resistance) using Dijkstra's algorithm."""
         if entry_node not in self.graph.nodes or crown_jewel not in self.graph.nodes:
             return [], float("inf")
 
         # Dijkstra priority queue: (cumulative_cost, current_node, path_history)
-        pq: List[Tuple[float, str, List[str]]] = [(0.0, entry_node, [entry_node])]
-        visited: Dict[str, float] = {entry_node: 0.0}
+        pq: list[tuple[float, str, list[str]]] = [(0.0, entry_node, [entry_node])]
+        visited: dict[str, float] = {entry_node: 0.0}
 
         while pq:
             cost, current, path = heapq.heappop(pq)
@@ -53,12 +56,14 @@ class KillChainEngine:
             for neighbor in self.graph.adj.get(current, []):
                 if neighbor not in self.graph.nodes:
                     continue
-                
+
                 # compute transition cost to neighbor
                 node_meta = self.graph.nodes[neighbor]
                 kind = node_meta.get("kind", "unknown")
                 name = node_meta.get("name", "unknown").lower()
-                step_cost = self.SERVICE_COSTS.get(name, 2.0) if kind == "service" else 1.0
+                step_cost = (
+                    self.SERVICE_COSTS.get(name, 2.0) if kind == "service" else 1.0
+                )
 
                 new_cost = cost + step_cost
 
@@ -68,19 +73,19 @@ class KillChainEngine:
 
         return [], float("inf")
 
-    def simulate_chaining(self, path: List[str]) -> List[dict[str, Any]]:
+    def simulate_chaining(self, path: list[str]) -> list[dict[str, Any]]:
         """Models a step-by-step engagement route based on the computed path."""
         chain = []
         for i in range(len(path) - 1):
             src = path[i]
-            dst = path[i+1]
-            
+            dst = path[i + 1]
+
             src_meta = self.graph.nodes.get(src, {})
             dst_meta = self.graph.nodes.get(dst, {})
-            
+
             action = "Route to adjacent node"
             tactic = "Discovery"
-            
+
             if src_meta.get("kind") == "host" and dst_meta.get("kind") == "service":
                 svc_name = dst_meta.get("name", "service")
                 action = f"Reach exposed service ({svc_name}) on target"
@@ -89,21 +94,25 @@ class KillChainEngine:
                 action = "Collect exposed data store output"
                 tactic = "Assessment"
 
-            chain.append({
-                "step": i + 1,
-                "from": src,
-                "to": dst,
-                "tactic": tactic,
-                "action": action
-            })
-            
+            chain.append(
+                {
+                    "step": i + 1,
+                    "from": src,
+                    "to": dst,
+                    "tactic": tactic,
+                    "action": action,
+                }
+            )
+
         return chain
 
     def generate_kill_chain_plan(self, entry_node: str, crown_jewel: str) -> str:
         """Generates a structured, automated engagement plan."""
         path, total_cost = self.find_attack_path(entry_node, crown_jewel)
         if not path:
-            return f"[!] No reachable path found from '{entry_node}' to '{crown_jewel}'."
+            return (
+                f"[!] No reachable path found from '{entry_node}' to '{crown_jewel}'."
+            )
 
         chain = self.simulate_chaining(path)
 

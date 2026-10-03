@@ -15,11 +15,11 @@ Contract:
 from __future__ import annotations
 
 import importlib
-import inspect
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Any
+from typing import Any
 
 Runner = Callable[..., dict[str, Any]]
 
@@ -27,6 +27,7 @@ Runner = Callable[..., dict[str, Any]]
 @dataclass
 class ModuleSpec:
     """A registered module spec."""
+
     name: str
     kind: str
     runner: Runner
@@ -44,9 +45,11 @@ def module(name: str, kind: str = "generic", **params: Any) -> Callable[..., Any
         @module("dns_enum", kind="discovery", timeout=3)
         def dns_runner(step, ctx): ...
     """
+
     def deco(fn: Runner) -> Runner:
         _MODULES[name] = ModuleSpec(name=name, kind=kind, runner=fn, params=params)
         return fn
+
     return deco
 
 

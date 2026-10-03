@@ -6,10 +6,12 @@ Compares historical campaign states / WAL snapshots to detect new or removed ASM
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 
-def compute_surface_drift(previous_findings: List[dict[str, Any]], current_findings: List[dict[str, Any]]) -> Dict[str, Any]:
+def compute_surface_drift(
+    previous_findings: list[dict[str, Any]], current_findings: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Compares two sets of discovered findings/services and computes delta drift."""
     prev_set = {(f.get("host"), f.get("port")) for f in previous_findings}
     curr_set = {(f.get("host"), f.get("port")) for f in current_findings}
@@ -22,5 +24,5 @@ def compute_surface_drift(previous_findings: List[dict[str, Any]], current_findi
         "new_assets": new_assets,
         "removed_assets": removed_assets,
         "stable_assets": stable_assets,
-        "drift_detected": len(new_assets) > 0 or len(removed_assets) > 0
+        "drift_detected": len(new_assets) > 0 or len(removed_assets) > 0,
     }

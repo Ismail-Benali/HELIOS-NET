@@ -23,9 +23,8 @@ History:
 
 from __future__ import annotations
 
-from typing import Any
-
 import socket
+from typing import Any
 
 #: Signals the Bayesian model can work from.
 DEFAULT_SIGNAL = {"ttl": 64, "window": 64240, "tcp_options_len": 20}
@@ -54,7 +53,9 @@ def _ttl_family(observed_ttl: int | None) -> str:
     return "Linux/Unix-like (TTL<=64)"
 
 
-def fingerprint_host(host: str, observed_sig: dict[str, Any] | None = None) -> dict[str, Any]:
+def fingerprint_host(
+    host: str, observed_sig: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Produces a high-accuracy fingerprint estimate of the target via the
     multi-signal Bayes algorithm.
 
@@ -97,8 +98,9 @@ def fingerprint_host(host: str, observed_sig: dict[str, Any] | None = None) -> d
     }
 
 
-def banner_grab(host: str, port: int, timeout: float = 3.0,
-                probe: bytes = b"\r\n") -> dict[str, Any]:
+def banner_grab(
+    host: str, port: int, timeout: float = 3.0, probe: bytes = b"\r\n"
+) -> dict[str, Any]:
     """Grabs the banner of an open service over a connection.
 
     Arg:

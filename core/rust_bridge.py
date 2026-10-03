@@ -12,9 +12,10 @@ from __future__ import annotations
 import ctypes
 import json
 import os
-from ctypes import c_char_p, c_int, c_uint, c_void_p, CDLL, POINTER
+from collections.abc import Sequence
+from ctypes import CDLL, POINTER, c_char_p, c_int, c_uint, c_void_p
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -224,7 +225,9 @@ def fnv1a32_rust(text: str) -> str:
 # ------------------------------------------------------------------- graph
 
 
-def graph_components_rust(node_count: int, edges: Sequence[tuple[int, int]]) -> list[list[int]]:
+def graph_components_rust(
+    node_count: int, edges: Sequence[tuple[int, int]]
+) -> list[list[int]]:
     if _LIB is None:
         return []
     try:
@@ -272,7 +275,9 @@ def graph_centrality_rust(
     ]
 
 
-def graph_betweenness_rust(node_count: int, edges: Sequence[tuple[int, int]]) -> list[float]:
+def graph_betweenness_rust(
+    node_count: int, edges: Sequence[tuple[int, int]]
+) -> list[float]:
     if _LIB is None:
         return []
     try:
@@ -289,7 +294,9 @@ def graph_betweenness_rust(node_count: int, edges: Sequence[tuple[int, int]]) ->
         parsed = json.loads(decoded)
     except (ValueError, TypeError):
         return []
-    return [float(v) for v in parsed.get("values", [])] if isinstance(parsed, dict) else []
+    return (
+        [float(v) for v in parsed.get("values", [])] if isinstance(parsed, dict) else []
+    )
 
 
 def graph_shortest_path_rust(
@@ -301,7 +308,11 @@ def graph_shortest_path_rust(
     try:
         array = _edge_buffer(edges)
         raw = _LIB.helios_graph_shortest_path(
-            int(node_count), array if edges else None, len(edges), int(source), int(goal)
+            int(node_count),
+            array if edges else None,
+            len(edges),
+            int(source),
+            int(goal),
         )
     except Exception:
         return None

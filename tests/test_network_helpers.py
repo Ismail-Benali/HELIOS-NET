@@ -12,7 +12,6 @@ handed hostile strings and the rendered file is inspected.
 from __future__ import annotations
 
 import asyncio
-import json
 import socket
 
 import pytest
@@ -51,6 +50,7 @@ def writers() -> list[FakeWriter]:
 
 def _open_ok(monkeypatch, writers: list[FakeWriter]):
     """Makes every connection attempt succeed, recording the writer."""
+
     async def fake_open_connection(host, port, **kwargs):
         writer = FakeWriter()
         writers.append(writer)
@@ -69,6 +69,7 @@ def _open_refused(monkeypatch, exception: BaseException | None = None):
 # --------------------------------------------------------------------------- #
 # cidr_scan
 # --------------------------------------------------------------------------- #
+
 
 def test_probe_reports_an_open_port(monkeypatch, writers):
     _open_ok(monkeypatch, writers)
@@ -146,11 +147,14 @@ def test_an_exploded_probe_failure_does_not_abort_the_sweep(monkeypatch, writers
 # tunneled_scanner
 # --------------------------------------------------------------------------- #
 
+
 def test_tunnel_request_is_a_host_port_line(monkeypatch, writers):
     _open_ok(monkeypatch, writers)
     result = asyncio.run(
-        tunneled_scanner.tunneled_tcp_probe("10.1.0.5", 3389,
-                                            proxy_host="127.0.0.1", proxy_port=1080))
+        tunneled_scanner.tunneled_tcp_probe(
+            "10.1.0.5", 3389, proxy_host="127.0.0.1", proxy_port=1080
+        )
+    )
 
     assert result["open"] is True
     assert result["tunneled"] is True
@@ -166,8 +170,11 @@ def test_tunnel_dials_the_proxy_not_the_target(monkeypatch, writers):
         return asyncio.StreamReader(), FakeWriter()
 
     monkeypatch.setattr(asyncio, "open_connection", fake_open_connection)
-    asyncio.run(tunneled_scanner.tunneled_tcp_probe("10.1.0.5", 22,
-                                                   proxy_host="pivot.local", proxy_port=9050))
+    asyncio.run(
+        tunneled_scanner.tunneled_tcp_probe(
+            "10.1.0.5", 22, proxy_host="pivot.local", proxy_port=9050
+        )
+    )
     assert dialled == [("pivot.local", 9050)]
 
 
@@ -184,16 +191,30 @@ def test_tunnel_sweep_only_returns_open_hosts(monkeypatch):
     The connection itself only ever reaches the proxy, so host-based decisions
     have to be made where the target is still visible.
     """
+
     async def fake_probe(target_host, target_port, proxy_host, proxy_port, **kwargs):
-        return {"target": target_host, "port": target_port, "tunneled": True,
-                "open": target_host == "10.1.0.7", "latency": 0.0}
+        return {
+            "target": target_host,
+            "port": target_port,
+            "tunneled": True,
+            "open": target_host == "10.1.0.7",
+            "latency": 0.0,
+        }
 
     monkeypatch.setattr(tunneled_scanner, "tunneled_tcp_probe", fake_probe)
     results = asyncio.run(
-        tunneled_scanner.tunneled_subnet_scan("10.1.0.", [22], concurrency=32))
+        tunneled_scanner.tunneled_subnet_scan("10.1.0.", [22], concurrency=32)
+    )
 
-    assert results == [{"target": "10.1.0.7", "port": 22, "tunneled": True,
-                        "open": True, "latency": 0.0}]
+    assert results == [
+        {
+            "target": "10.1.0.7",
+            "port": 22,
+            "tunneled": True,
+            "open": True,
+            "latency": 0.0,
+        }
+    ]
 
 
 def test_tunnel_sweep_covers_a_quarter_of_a_class_c_network(monkeypatch):
@@ -206,8 +227,11 @@ def test_tunnel_sweep_covers_a_quarter_of_a_class_c_network(monkeypatch):
         return {"target": target_host, "port": target_port, "open": False}
 
     monkeypatch.setattr(tunneled_scanner, "tunneled_tcp_probe", fake_probe)
-    asyncio.run(tunneled_scanner.tunneled_subnet_scan("10.1.0.", [22, 3389],
-                                                     proxy_host="p.local", proxy_port=9050))
+    asyncio.run(
+        tunneled_scanner.tunneled_subnet_scan(
+            "10.1.0.", [22, 3389], proxy_host="p.local", proxy_port=9050
+        )
+    )
 
     assert len(seen) == 254 * 2
     assert ("10.1.0.1", 22) in seen
@@ -220,11 +244,18 @@ def test_tunnel_sweep_covers_a_quarter_of_a_class_c_network(monkeypatch):
 # fingerprint algorithms
 # --------------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("ttl,expected", [
-    (1, "linux"), (64, "linux"),
-    (65, "windows"), (128, "windows"),
-    (129, "router"), (255, "router"),
-])
+
+@pytest.mark.parametrize(
+    "ttl,expected",
+    [
+        (1, "linux"),
+        (64, "linux"),
+        (65, "windows"),
+        (128, "windows"),
+        (129, "router"),
+        (255, "router"),
+    ],
+)
 def test_the_flat_estimator_uses_fixed_ttl_bands(ttl, expected):
     assert fingerprint_sig({"ttl": ttl}, kind="ttl_flat")["guess"] == expected
 
@@ -240,11 +271,14 @@ def test_the_flat_estimator_is_stated_as_certain():
 
 @pytest.mark.parametrize("family,profile", list(PROFILES.items()))
 def test_the_bayesian_model_recognises_its_own_profile(family, profile):
-    result = fingerprint_sig({
-        "ttl": profile["ttl_mean"],
-        "window": profile["window"],
-        "tcp_options_len": profile["tcp_options_len"],
-    }, kind="bayes")
+    result = fingerprint_sig(
+        {
+            "ttl": profile["ttl_mean"],
+            "window": profile["window"],
+            "tcp_options_len": profile["tcp_options_len"],
+        },
+        kind="bayes",
+    )
     assert result["guess"] == family
     assert 0.0 < result["confidence"] <= 1.0
 
@@ -272,6 +306,7 @@ def test_the_result_records_which_model_answered():
 # dns_enum plugin
 # --------------------------------------------------------------------------- #
 
+
 def test_a_resolvable_name_yields_an_address(monkeypatch):
     import modules.plugins.dns_enum as plugin
 
@@ -283,10 +318,12 @@ def test_a_resolvable_name_yields_an_address(monkeypatch):
     # Patched on the loop, not on socket, because the loop resolves through a
     # cached reference to the module-level function.
     monkeypatch.setattr(asyncio.BaseEventLoop, "getaddrinfo", fake_getaddrinfo)
-    found = asyncio.run(plugin.async_subdomain_enum("example.com",
-                                                    wordlist=["www", "nope"]))
-    assert found == [{"subdomain": "www.example.com",
-                      "ip": "93.184.216.34", "resolves": True}]
+    found = asyncio.run(
+        plugin.async_subdomain_enum("example.com", wordlist=["www", "nope"])
+    )
+    assert found == [
+        {"subdomain": "www.example.com", "ip": "93.184.216.34", "resolves": True}
+    ]
 
 
 def test_a_name_that_does_not_resolve_is_dropped(monkeypatch):
@@ -309,7 +346,8 @@ def test_the_plugin_records_what_it_resolved(monkeypatch):
     monkeypatch.setattr(plugin, "async_subdomain_enum", fake_enum)
     ctx: dict = {}
     result = plugin.dns_runner(
-        PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), ctx)
+        PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), ctx
+    )
 
     assert result["resolved"] == ["www.example.com"]
     assert result["count"] == 1
@@ -326,7 +364,8 @@ def test_a_failing_enumeration_does_not_break_the_campaign(monkeypatch):
     monkeypatch.setattr(plugin, "async_subdomain_enum", boom)
     ctx: dict = {}
     result = plugin.dns_runner(
-        PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), ctx)
+        PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), ctx
+    )
 
     assert result["count"] == 0
     assert ctx["findings"] == []
@@ -336,12 +375,19 @@ def test_a_failing_enumeration_does_not_break_the_campaign(monkeypatch):
 # HTML reporter
 # --------------------------------------------------------------------------- #
 
+
 def test_the_report_is_written_and_returned(tmp_path):
-    out = generate_html_report({"campaign_id": "c1", "target": "10.0.0.1",
-                                 "status": "done", "findings_count": 3,
-                                 "events": [{"ts": 1.0, "event": "start", "module": "core"}],
-                                 "top_targets": ["a"]},
-                                tmp_path / "r.html")
+    out = generate_html_report(
+        {
+            "campaign_id": "c1",
+            "target": "10.0.0.1",
+            "status": "done",
+            "findings_count": 3,
+            "events": [{"ts": 1.0, "event": "start", "module": "core"}],
+            "top_targets": ["a"],
+        },
+        tmp_path / "r.html",
+    )
     assert out.exists()
     text = out.read_text(encoding="utf-8")
     assert "c1" in text and "10.0.0.1" in text and "done" in text
@@ -360,12 +406,22 @@ def test_hostile_metadata_is_escaped(tmp_path, field):
 
 
 def test_hostile_event_and_target_names_are_escaped(tmp_path):
-    out = generate_html_report({
-        "campaign_id": "c", "target": "t", "status": "done",
-        "events": [{"ts": 1.0, "event": "<img src=x onerror=alert(1)>",
-                    "module": "<b>m</b>"}],
-        "top_targets": ["<iframe src=evil>"],
-    }, tmp_path / "x.html")
+    out = generate_html_report(
+        {
+            "campaign_id": "c",
+            "target": "t",
+            "status": "done",
+            "events": [
+                {
+                    "ts": 1.0,
+                    "event": "<img src=x onerror=alert(1)>",
+                    "module": "<b>m</b>",
+                }
+            ],
+            "top_targets": ["<iframe src=evil>"],
+        },
+        tmp_path / "x.html",
+    )
     text = out.read_text(encoding="utf-8")
 
     assert "<img src=x" not in text
@@ -376,9 +432,15 @@ def test_hostile_event_and_target_names_are_escaped(tmp_path):
 def test_a_hostile_findings_count_cannot_inject_markup(tmp_path):
     """Regression: the count was interpolated raw while everything else was
     escaped, so a string in that field reached the page as live markup."""
-    out = generate_html_report({"campaign_id": "c", "target": "t", "status": "done",
-                                "findings_count": "<script>alert(1)</script>"},
-                               tmp_path / "x.html")
+    out = generate_html_report(
+        {
+            "campaign_id": "c",
+            "target": "t",
+            "status": "done",
+            "findings_count": "<script>alert(1)</script>",
+        },
+        tmp_path / "x.html",
+    )
     text = out.read_text(encoding="utf-8")
 
     assert "<script>alert(1)</script>" not in text

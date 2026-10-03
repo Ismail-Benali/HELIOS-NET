@@ -63,7 +63,9 @@ def test_abi_version_matches_the_python_constant():
 def test_version_string_is_readable_and_stable():
     version = rust_version()
     assert "Rust Core" in version
-    assert version == rust_version(), "version must be a static string, not a fresh alloc"
+    assert version == rust_version(), (
+        "version must be a static string, not a fresh alloc"
+    )
 
 
 def test_version_is_sane_even_without_the_library():
@@ -111,7 +113,9 @@ def test_reported_label_is_verbatim_not_folded():
     lose the vendor's own casing and diverge from the C core's contract.
     """
     assert match_signatures_rust("server: nginx", ["NGINX"]) == ["NGINX"]
-    assert match_signatures_rust("Microsoft-IIS/10.0", ["microsoft-iis"]) == ["microsoft-iis"]
+    assert match_signatures_rust("Microsoft-IIS/10.0", ["microsoft-iis"]) == [
+        "microsoft-iis"
+    ]
 
 
 @requires_core
@@ -129,7 +133,14 @@ def test_digest_matches_the_published_vector():
 def test_digest_agrees_with_the_python_fallback():
     from core.c_core_bridge import fnv1a32_py
 
-    samples = ["", "a", "foobar", "HTTP/1.1 200 OK", "x" * 5000, "unicode: \u00e9\u00e8"]
+    samples = [
+        "",
+        "a",
+        "foobar",
+        "HTTP/1.1 200 OK",
+        "x" * 5000,
+        "unicode: \u00e9\u00e8",
+    ]
     for sample in samples:
         if not sample:
             continue
@@ -269,9 +280,7 @@ def test_engine_agrees_with_its_python_reference(seed):
     # minimum. Each implementation is therefore free to return a different one,
     # so the contract checked here is "same cost, and a genuine chain of edges"
     # rather than "the same list".
-    pairs = [
-        (a, b) for a in list(graph.nodes)[:6] for b in list(graph.nodes)[:6]
-    ]
+    pairs = [(a, b) for a in list(graph.nodes)[:6] for b in list(graph.nodes)[:6]]
     for a, b in pairs:
         native_path = graph.shortest_path(a, b)
         python_path = _reference_path(graph, a, b)
@@ -279,8 +288,12 @@ def test_engine_agrees_with_its_python_reference(seed):
         if native_path is None:
             continue
         assert len(native_path) == len(python_path), f"different hop count {a}->{b}"
-        assert _is_valid_route(graph, native_path), f"invalid native route {native_path}"
-        assert _is_valid_route(graph, python_path), f"invalid python route {python_path}"
+        assert _is_valid_route(graph, native_path), (
+            f"invalid native route {native_path}"
+        )
+        assert _is_valid_route(graph, python_path), (
+            f"invalid python route {python_path}"
+        )
 
 
 def _reference_path(graph: AssetGraph, source: str, target: str) -> list[str] | None:

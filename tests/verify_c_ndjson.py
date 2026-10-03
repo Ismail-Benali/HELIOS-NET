@@ -1,10 +1,11 @@
 """Verifies that the C core's NDJSON match output is safe against hostile
 signature names: a crafted name must not inject JSON keys, and an over-long
 name must not produce an unparseable line."""
+
 import json
+import os
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 EXE = Path(r"C:\Users\alexa\Desktop\HELIOS-NET\transport\c_core\build\helios_core.exe")
@@ -16,12 +17,17 @@ def run(text, sigfile, attempts=10):
     refuses the freshly linked binary. The refusal arrives as an OSError from
     CreateProcess, not as an exit code, so both paths must be handled."""
     import time
+
     for _ in range(attempts):
         try:
             p = subprocess.run(
                 [str(EXE), "match", str(sigfile)],
-                input=text, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=60,
+                input=text,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
             )
         except OSError as exc:
             if getattr(exc, "winerror", None) == 4551:
@@ -56,8 +62,10 @@ def check(label, text, sigfile):
             ok = False
     if not d.get("matches"):
         print(f"  {label:8} note  no match emitted (treated as truncation)")
-    print(f"  {label:8} {'OK   ' if ok else 'FAIL '} "
-          f"truncated={d.get('truncated')} match={d.get('matches')}")
+    print(
+        f"  {label:8} {'OK   ' if ok else 'FAIL '} "
+        f"truncated={d.get('truncated')} match={d.get('matches')}"
+    )
     return ok
 
 

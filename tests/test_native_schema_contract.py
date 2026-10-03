@@ -52,8 +52,11 @@ BRIDGE_SRC = ROOT / "modules" / "discovery" / "goscan_bridge.py"
 
 
 def go_sources() -> str:
-    return "\n".join(p.read_text(encoding="utf-8") for p in sorted(GO_DIR.glob("*.go"))
-                     if not p.name.endswith("_test.go"))
+    return "\n".join(
+        p.read_text(encoding="utf-8")
+        for p in sorted(GO_DIR.glob("*.go"))
+        if not p.name.endswith("_test.go")
+    )
 
 
 def go_source(name: str) -> str:
@@ -68,8 +71,9 @@ def go_struct(struct: str) -> dict[str, bool]:
     Parsed from source rather than hardcoded, so renaming a tag or dropping
     omitempty changes what this file sees.
     """
-    match = re.search(rf"type\s+{re.escape(struct)}\s+struct\s*\{{(.*?)\n\}}",
-                      go_sources(), re.DOTALL)
+    match = re.search(
+        rf"type\s+{re.escape(struct)}\s+struct\s*\{{(.*?)\n\}}", go_sources(), re.DOTALL
+    )
     assert match, f"struct {struct} not found in {GO_DIR}"
     fields: dict[str, bool] = {}
     for tag in re.finditer(r'`json:"([^",]+)(,omitempty)?"`', match.group(1)):
@@ -100,6 +104,7 @@ def go_subcommands() -> set[str]:
 # --------------------------------------------------------------------------- #
 # port records
 # --------------------------------------------------------------------------- #
+
 
 def test_every_key_the_bridge_reads_is_produced_by_the_go_core():
     produced = go_struct("PortResult")
@@ -166,6 +171,7 @@ def test_the_go_core_filters_closed_ports_before_encoding():
 # error envelopes
 # --------------------------------------------------------------------------- #
 
+
 def test_the_error_envelope_carries_every_required_key():
     produced = go_struct("ErrorEnvelope")
     missing = [k for k in REQUIRED_KEYS if k not in produced]
@@ -178,15 +184,15 @@ def test_the_error_envelope_carries_every_required_key():
 def test_the_envelope_is_written_to_stderr_as_a_single_line():
     """parse_envelope is called per line, so a pretty-printed envelope on one
     line with embedded newlines would never parse."""
-    assert re.search(r"fmt\.Fprintln\(os\.Stderr,\s*string\(data\)\)",
-                     go_source("goscan.go")), (
-        "the envelope must go to stderr through Fprintln, not a multi-line write"
-    )
+    assert re.search(
+        r"fmt\.Fprintln\(os\.Stderr,\s*string\(data\)\)", go_source("goscan.go")
+    ), "the envelope must go to stderr through Fprintln, not a multi-line write"
 
 
 # --------------------------------------------------------------------------- #
 # the selftest report
 # --------------------------------------------------------------------------- #
+
 
 def test_the_selftest_report_carries_the_keys_the_health_check_reads():
     produced = go_struct("selftestReport")
@@ -210,8 +216,13 @@ def test_the_failure_count_is_named_failures_not_failed():
 # the invocation contract
 # --------------------------------------------------------------------------- #
 
+
 def test_the_bridge_only_invents_subcommands_that_exist():
-    invoked = set(re.findall(r'str\(GOSCAN_BIN\),\s*"([a-z]+)"', BRIDGE_SRC.read_text(encoding="utf-8")))
+    invoked = set(
+        re.findall(
+            r'str\(GOSCAN_BIN\),\s*"([a-z]+)"', BRIDGE_SRC.read_text(encoding="utf-8")
+        )
+    )
     known = go_subcommands()
     assert "version" in invoked and "selftest" in invoked
     assert invoked <= known, (
@@ -237,8 +248,11 @@ def test_the_port_specs_the_bridge_advertises_are_the_ones_go_parses():
     one of them, or a default scan silently becomes an error envelope."""
     assert re.search(r'case\s+"common",\s*"default":', go_source("goscan.go"))
     assert re.search(r'case\s+"all",\s*"full",\s*"1-65535":', go_source("goscan.go"))
-    signature = re.search(r"def run_go_scan\(.*?port_arg:\s*str\s*=\s*\"([^\"]+)\"",
-                          BRIDGE_SRC.read_text(encoding="utf-8"), re.DOTALL)
+    signature = re.search(
+        r"def run_go_scan\(.*?port_arg:\s*str\s*=\s*\"([^\"]+)\"",
+        BRIDGE_SRC.read_text(encoding="utf-8"),
+        re.DOTALL,
+    )
     assert signature, "could not read run_go_scan's default port spec"
     assert signature.group(1) == "common", (
         f"the bridge defaults to {signature.group(1)!r}, which Go treats as a "
@@ -250,6 +264,7 @@ def test_the_port_specs_the_bridge_advertises_are_the_ones_go_parses():
 # the guard has teeth
 # --------------------------------------------------------------------------- #
 
+
 def test_the_subset_check_rejects_a_key_the_core_cannot_produce():
     """Self-check on the extractor itself.
 
@@ -258,7 +273,7 @@ def test_the_subset_check_rejects_a_key_the_core_cannot_produce():
     """
     produced = go_struct("PortResult")
     read = dict(bridge_reads())
-    read["is_open"] = False            # as if the tag had been renamed
+    read["is_open"] = False  # as if the tag had been renamed
 
     missing = {k for k in read if k not in produced and k not in REQUIRED_KEYS}
     assert missing == {"is_open"}, "the subset check failed to notice a drift"
@@ -277,6 +292,7 @@ def test_the_reader_detects_defaults_and_guards():
 # --------------------------------------------------------------------------- #
 # behavioural proof that omitempty fields really are optional
 # --------------------------------------------------------------------------- #
+
 
 def test_a_minimal_go_record_still_produces_a_complete_result(monkeypatch):
     """Runs a record containing only the fields goscan.go always emits.
@@ -302,7 +318,12 @@ def test_a_minimal_go_record_still_produces_a_complete_result(monkeypatch):
             return 0
 
     # Exactly the fields with no omitempty in goscan.go's PortResult.
-    minimal = {"port": 8080, "open": True, "latency_ms": 12, "time": "2026-09-28T00:00:00Z"}
+    minimal = {
+        "port": 8080,
+        "open": True,
+        "latency_ms": 12,
+        "time": "2026-09-28T00:00:00Z",
+    }
 
     async def fake_exec(*args, **kwargs):
         return Proc([(json.dumps(minimal) + "\n").encode()])
@@ -345,7 +366,13 @@ def test_a_record_missing_the_filter_key_is_a_provable_defect():
             return 0
 
     # A producer that renamed `open` but still found the port.
-    drifted = {"port": 22, "is_open": True, "service": "ssh", "latency_ms": 1, "time": "t"}
+    drifted = {
+        "port": 22,
+        "is_open": True,
+        "service": "ssh",
+        "latency_ms": 1,
+        "time": "t",
+    }
 
     async def fake_exec(*args, **kwargs):
         return Proc([(json.dumps(drifted) + "\n").encode()])

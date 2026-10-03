@@ -9,20 +9,25 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import List, Any
+from typing import Any
 
 
-async def tunneled_tcp_probe(target_host: str, target_port: int, proxy_host: str = "127.0.0.1", proxy_port: int = 1080, timeout: float = 3.0) -> dict[str, Any]:
+async def tunneled_tcp_probe(
+    target_host: str,
+    target_port: int,
+    proxy_host: str = "127.0.0.1",
+    proxy_port: int = 1080,
+    timeout: float = 3.0,
+) -> dict[str, Any]:
     """Probes an internal target port by tunneling through the pivot proxy."""
     start = time.time()
     try:
         # Connect through proxy relay
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(proxy_host, proxy_port),
-            timeout=timeout
+            asyncio.open_connection(proxy_host, proxy_port), timeout=timeout
         )
         # Send target destination framing to proxy
-        tunnel_header = f"{target_host}:{target_port}\n".encode("utf-8")
+        tunnel_header = f"{target_host}:{target_port}\n".encode()
         writer.write(tunnel_header)
         await writer.drain()
 
@@ -33,7 +38,7 @@ async def tunneled_tcp_probe(target_host: str, target_port: int, proxy_host: str
             "port": target_port,
             "tunneled": True,
             "open": True,
-            "latency": round(time.time() - start, 4)
+            "latency": round(time.time() - start, 4),
         }
     except (asyncio.TimeoutError, OSError):
         return {
@@ -41,11 +46,17 @@ async def tunneled_tcp_probe(target_host: str, target_port: int, proxy_host: str
             "port": target_port,
             "tunneled": True,
             "open": False,
-            "latency": round(time.time() - start, 4)
+            "latency": round(time.time() - start, 4),
         }
 
 
-async def tunneled_subnet_scan(subnet_prefix: str, ports: List[int], proxy_host: str = "127.0.0.1", proxy_port: int = 1080, concurrency: int = 50) -> List[dict[str, Any]]:
+async def tunneled_subnet_scan(
+    subnet_prefix: str,
+    ports: list[int],
+    proxy_host: str = "127.0.0.1",
+    proxy_port: int = 1080,
+    concurrency: int = 50,
+) -> list[dict[str, Any]]:
     """Scans an entire internal CIDR subnet through the active pivot tunnel."""
     sem = asyncio.Semaphore(concurrency)
     tasks = []

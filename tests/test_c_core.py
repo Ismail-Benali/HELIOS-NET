@@ -18,9 +18,9 @@ from core.c_core_bridge import (
     core_available,
     core_version,
     crc32_py,
+    fingerprint,
     fnv1a32_py,
     fnv1a64_py,
-    fingerprint,
     scan_banners,
     selftest,
 )
@@ -58,20 +58,23 @@ requires_core = pytest.mark.skipif(not _C_RUNNABLE, reason=_C_SKIP_REASON)
 def signature_file(tmp_path_factory) -> Path:
     path = tmp_path_factory.mktemp("sigs") / "signatures.txt"
     path.write_text(
-        "\n".join([
-            "# comment line is ignored",
-            "",
-            "openssh\topenssh",
-            "nginx",
-            "microsoft-iis",
-            "mariadb",
-        ]),
+        "\n".join(
+            [
+                "# comment line is ignored",
+                "",
+                "openssh\topenssh",
+                "nginx",
+                "microsoft-iis",
+                "mariadb",
+            ]
+        ),
         encoding="utf-8",
     )
     return path
 
 
 # ---------------------------------------------------------------- discovery
+
 
 @requires_core
 def test_core_binary_is_located():
@@ -88,6 +91,7 @@ def test_native_selftest_reports_zero_failures():
 
 # ------------------------------------------------------------ hash vectors
 
+
 def test_hash_vectors_match_published_values():
     assert fnv1a32_py("a") == 0xE40C292C
     assert fnv1a32_py("foobar") == 0xBF9CF968
@@ -98,6 +102,7 @@ def test_hash_vectors_match_published_values():
 
 
 # ------------------------------------------------- native / fallback parity
+
 
 @requires_core
 def test_native_digests_match_python_fallback(signature_file):
@@ -133,20 +138,25 @@ def test_native_digests_match_python_fallback(signature_file):
         assert n["fp_fnv1a32"] == f["fp_fnv1a32"]
         assert n["fp_fnv1a64"] == f["fp_fnv1a64"]
         assert n["fp_crc32"] == f["fp_crc32"]
-        assert [m["signature"] for m in n["matches"]] == \
-               [m["signature"] for m in f["matches"]]
+        assert [m["signature"] for m in n["matches"]] == [
+            m["signature"] for m in f["matches"]
+        ]
 
 
 # ------------------------------------------------------------------ matching
 
+
 @requires_core
 def test_scan_reports_expected_signatures(signature_file):
-    results = scan_banners([
-        "SSH-2.0-OpenSSH_9.6p1",
-        "Server: nginx/1.24",
-        "Server: Microsoft-IIS/10.0",
-        "completely unrelated text",
-    ], signature_file)
+    results = scan_banners(
+        [
+            "SSH-2.0-OpenSSH_9.6p1",
+            "Server: nginx/1.24",
+            "Server: Microsoft-IIS/10.0",
+            "completely unrelated text",
+        ],
+        signature_file,
+    )
 
     assert [r["match_count"] for r in results] == [1, 1, 1, 0]
     assert results[0]["matches"][0]["signature"] == "openssh"
@@ -188,6 +198,7 @@ def test_fingerprint_falls_back_when_binary_absent(monkeypatch):
 
 
 # ------------------------------------------------------------- edge cases
+
 
 def test_empty_banner_list_returns_empty(signature_file):
     assert scan_banners([], signature_file) == []
@@ -357,11 +368,18 @@ def test_fallback_handles_comments_and_blank_lines(tmp_path):
 
 # ----------------------------------------------------------- CLI contract
 
+
 @requires_core
 def test_cli_version_subcommand_emits_json():
     from core.c_core_bridge import _BINARY
 
-    proc = subprocess.run([str(_BINARY), "version"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(
+        [str(_BINARY), "version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     assert proc.returncode == 0
     payload = json.loads(proc.stdout)
     assert payload["status"] == "ok"
@@ -372,7 +390,13 @@ def test_cli_version_subcommand_emits_json():
 def test_cli_rejects_unknown_subcommand():
     from core.c_core_bridge import _BINARY
 
-    proc = subprocess.run([str(_BINARY), "nonsense"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(
+        [str(_BINARY), "nonsense"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     assert proc.returncode == 2
     assert "Usage" in proc.stderr
 
@@ -383,8 +407,11 @@ def test_cli_reports_missing_signature_file():
 
     proc = subprocess.run(
         [str(_BINARY), "match", str(ROOT / "no-such-sigs.txt")],
-        input="banner\n", capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
+        input="banner\n",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     assert proc.returncode == 3
     assert json.loads(proc.stderr.strip())["code"] == "SIG_LOAD_FAILED"

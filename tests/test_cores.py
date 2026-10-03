@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import subprocess
 import sys
 
 import pytest
@@ -21,10 +20,10 @@ from core import cores
 from core.cores import BLOCKED, FAILED, FALLBACK, OK, CoreStatus
 from modules.discovery import goscan_bridge
 
-
 # --------------------------------------------------------------------------
 # core/cores.py
 # --------------------------------------------------------------------------
+
 
 def test_health_report_shape():
     report = cores.health_report()
@@ -99,9 +98,16 @@ def test_probe_that_raises_does_not_abort_the_report(monkeypatch):
 
 def test_failed_core_is_counted_and_degrades_the_report(monkeypatch):
     """A present-but-broken core must be counted as unusable, and must show."""
+
     def broken():
-        return CoreStatus(name="go", language="Go", role="scanning",
-                          state=FAILED, version="1.0.0", detail="selftest failed")
+        return CoreStatus(
+            name="go",
+            language="Go",
+            role="scanning",
+            state=FAILED,
+            version="1.0.0",
+            detail="selftest failed",
+        )
 
     monkeypatch.setattr(cores, "_CHECKS", ((cores.check_python,), (broken,)))
     report = cores.health_report()
@@ -117,14 +123,41 @@ def test_failed_core_is_counted_and_degrades_the_report(monkeypatch):
 
 def test_format_report_mentions_a_non_usable_core():
     report = {
-        "platform": "test", "python": "3.12", "native_usable": 1, "native_total": 3,
+        "platform": "test",
+        "python": "3.12",
+        "native_usable": 1,
+        "native_total": 3,
         "cores": [
-            {"name": "go", "language": "Go", "role": "x", "state": OK,
-             "usable": True, "version": "1.0", "detail": "19 checks", "tests": {}},
-            {"name": "c", "language": "C", "role": "x", "state": BLOCKED,
-             "usable": False, "version": "2.1.0", "detail": "host policy", "tests": {}},
-            {"name": "rust", "language": "Rust", "role": "x", "state": FAILED,
-             "usable": False, "version": "3.0.0", "detail": "broken", "tests": {}},
+            {
+                "name": "go",
+                "language": "Go",
+                "role": "x",
+                "state": OK,
+                "usable": True,
+                "version": "1.0",
+                "detail": "19 checks",
+                "tests": {},
+            },
+            {
+                "name": "c",
+                "language": "C",
+                "role": "x",
+                "state": BLOCKED,
+                "usable": False,
+                "version": "2.1.0",
+                "detail": "host policy",
+                "tests": {},
+            },
+            {
+                "name": "rust",
+                "language": "Rust",
+                "role": "x",
+                "state": FAILED,
+                "usable": False,
+                "version": "3.0.0",
+                "detail": "broken",
+                "tests": {},
+            },
         ],
     }
     text = cores.format_report(report)
@@ -135,6 +168,7 @@ def test_format_report_mentions_a_non_usable_core():
 # --------------------------------------------------------------------------
 # Go bridge: a failure must never masquerade as an empty scan
 # --------------------------------------------------------------------------
+
 
 def test_missing_binary_is_recorded_not_swallowed(monkeypatch):
     monkeypatch.setattr(goscan_bridge, "GOSCAN_BIN", goscan_bridge.ROOT / "nope.exe")
@@ -200,9 +234,14 @@ def test_fields_from_the_core_survive_the_bridge(monkeypatch):
     The previous bridge hardcoded a generic service name and dropped the rest,
     silently discarding the native work.
     """
-    payload = {"port": 22, "open": True, "service": "ssh",
-               "banner": "SSH-2.0-OpenSSH_9.6", "latency_ms": 3,
-               "time": "2026-01-01T00:00:00Z"}
+    payload = {
+        "port": 22,
+        "open": True,
+        "service": "ssh",
+        "banner": "SSH-2.0-OpenSSH_9.6",
+        "latency_ms": 3,
+        "time": "2026-01-01T00:00:00Z",
+    }
 
     class FakeProc:
         def __init__(self):
@@ -266,6 +305,7 @@ def test_unidentified_service_is_not_given_an_invented_name(monkeypatch):
 
 def test_closed_ports_are_not_reported_as_open(monkeypatch):
     """`open: false` lines are results of their own and must not leak through."""
+
     class FakeProc:
         def __init__(self):
             self.stdout = _stream_of(json.dumps({"port": 1, "open": False}))
@@ -288,6 +328,7 @@ def test_closed_ports_are_not_reported_as_open(monkeypatch):
 # --------------------------------------------------------------------------
 # Go self test: the proof the core actually runs
 # --------------------------------------------------------------------------
+
 
 def test_go_selftest_reports_success_when_the_core_runs():
     _skip_unless_go_runnable()
@@ -324,8 +365,12 @@ def test_go_bridge_agrees_with_the_health_probe():
 # winerror only reaches _policy_blocked through the exception itself, so these
 # tests pin the propagation rather than the message text, which is localised.
 
+
 def _policy_error():
-    exc = OSError(4551, "Une strat\u00e9gie de contr\u00f4le d'application a bloqu\u00e9 ce fichier")
+    exc = OSError(
+        4551,
+        "Une strat\u00e9gie de contr\u00f4le d'application a bloqu\u00e9 ce fichier",
+    )
     exc.winerror = 4551
     return exc
 

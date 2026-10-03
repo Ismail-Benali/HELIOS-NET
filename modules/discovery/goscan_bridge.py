@@ -19,13 +19,12 @@ Callers that legitimately want best-effort behaviour pass `strict=False`.
 
 from __future__ import annotations
 
-from typing import Any
-
 import asyncio
 import json
 import os
 import subprocess  # nosec B404 - the native core is a project-built binary at a fixed path
 from pathlib import Path
+from typing import Any
 
 from core.envelope import parse_envelope
 
@@ -67,7 +66,7 @@ def core_version() -> str:
             errors="replace",
             timeout=20.0,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
+    except (OSError, subprocess.SubprocessError):
         return "unavailable"
     if proc.returncode != 0:
         return "unknown"
@@ -114,7 +113,9 @@ class GoscanError(RuntimeError):
     """Raised in strict mode when the native core could not be used."""
 
 
-async def run_go_scan_async(target: str, port_arg: str = "common", strict: bool = False) -> list[dict[str, Any]]:
+async def run_go_scan_async(
+    target: str, port_arg: str = "common", strict: bool = False
+) -> list[dict[str, Any]]:
     """Executes the native Go scanner binary asynchronously using NDJSON line streaming.
 
     Returns one dict per open port. An empty list means "the core ran and found
@@ -134,9 +135,11 @@ async def run_go_scan_async(target: str, port_arg: str = "common", strict: bool 
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            str(GOSCAN_BIN), target, port_arg,
+            str(GOSCAN_BIN),
+            target,
+            port_arg,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
 
         # Capture stderr line-by-line and parse standardized error envelopes.
@@ -174,23 +177,25 @@ async def run_go_scan_async(target: str, port_arg: str = "common", strict: bool 
                     # discarded the banner, the detected service and the latency,
                     # and hardcoded a generic "tcp-native" service, throwing away
                     # the entire point of running the Go core.
-                    results.append({
-                        "module": "discovery",
-                        "host": target,
-                        "port": data.get("port"),
-                        # Empty when the core did not identify the service.
-                        # This used to substitute "tcp-native", which reads like
-                        # a detection but is a label the bridge invented. A
-                        # caller checking truthiness already treats an absent
-                        # service as no service, and modules/core.py keys its
-                        # service graph node off exactly that check.
-                        "service": data.get("service") or "",
-                        "banner": data.get("banner", ""),
-                        "latency_ms": data.get("latency_ms"),
-                        "time": data.get("time", ""),
-                        "open": True,
-                        "source": "native(Go-Goroutines-NDJSON)",
-                    })
+                    results.append(
+                        {
+                            "module": "discovery",
+                            "host": target,
+                            "port": data.get("port"),
+                            # Empty when the core did not identify the service.
+                            # This used to substitute "tcp-native", which reads like
+                            # a detection but is a label the bridge invented. A
+                            # caller checking truthiness already treats an absent
+                            # service as no service, and modules/core.py keys its
+                            # service graph node off exactly that check.
+                            "service": data.get("service") or "",
+                            "banner": data.get("banner", ""),
+                            "latency_ms": data.get("latency_ms"),
+                            "time": data.get("time", ""),
+                            "open": True,
+                            "source": "native(Go-Goroutines-NDJSON)",
+                        }
+                    )
 
         if err_task:
             await err_task
@@ -215,7 +220,9 @@ async def run_go_scan_async(target: str, port_arg: str = "common", strict: bool 
     return results
 
 
-def run_go_scan(target: str, port_arg: str = "common", strict: bool = False) -> list[dict[str, Any]]:
+def run_go_scan(
+    target: str, port_arg: str = "common", strict: bool = False
+) -> list[dict[str, Any]]:
     """Synchronous wrapper for Go scanner execution.
 
     With `strict=True` a core failure raises instead of silently returning an

@@ -21,6 +21,7 @@ import statistics
 import pytest
 
 from core.drift import compute_surface_drift
+from core.planner import PlanStep
 from core.reporter import generate_executive_briefing
 from core.state import CampaignState
 from engine.ai.adaptive_learner import EpsilonGreedyBandit
@@ -33,16 +34,16 @@ from modules.registry import (
     stealth_runner,
 )
 from modules.stealth.pacer import Pacer
-from core.planner import PlanStep
-
 
 # --------------------------------------------------------------------------- #
 # registry: the regression that mattered
 # --------------------------------------------------------------------------- #
 
+
 def _step(**params) -> PlanStep:
-    return PlanStep(step_id=1, module="stealth", action="pace",
-                    target="10.0.0.1", params=params)
+    return PlanStep(
+        step_id=1, module="stealth", action="pace", target="10.0.0.1", params=params
+    )
 
 
 def test_stealth_runner_actually_runs():
@@ -64,6 +65,7 @@ def test_stealth_runner_scales_its_cadence_with_the_requested_mean():
     Individual samples are not bounded below by the mean, so the property that
     matters is the expected value over many draws.
     """
+
     def average_dwell(mean_dwell: float) -> float:
         ctx = {"plan": list(range(4000))}
         stealth_runner(_step(base_dwell=mean_dwell, jitter=0.0), ctx)
@@ -79,41 +81,70 @@ def test_every_registered_runner_is_callable():
         assert callable(runner), f"{name} is registered but is not callable"
 
 
-def test_discovery_runner_collects_findings_and_confirms_with_the_native_probe(monkeypatch):
+def test_discovery_runner_collects_findings_and_confirms_with_the_native_probe(
+    monkeypatch,
+):
     # registry imports these names directly, so they must be replaced there.
     import modules.registry as registry
 
-    monkeypatch.setattr(registry, "discover_ports",
-                        lambda host, ports=None, **kwargs: [
-                            {"module": "discovery", "host": host,
-                             "port": 22, "service": "ssh", "open": True}
-                        ])
-    monkeypatch.setattr(registry, "native_connect_probe",
-                        lambda host, port, **kwargs: {"host": host, "port": port,
-                                                      "open": True, "probe": "connect"})
+    monkeypatch.setattr(
+        registry,
+        "discover_ports",
+        lambda host, ports=None, **kwargs: [
+            {
+                "module": "discovery",
+                "host": host,
+                "port": 22,
+                "service": "ssh",
+                "open": True,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        registry,
+        "native_connect_probe",
+        lambda host, port, **kwargs: {
+            "host": host,
+            "port": port,
+            "open": True,
+            "probe": "connect",
+        },
+    )
 
-    step = PlanStep(step_id=1, module="discovery", action="scan",
-                    target="10.0.0.1", params={"ports": [22, 80]})
+    step = PlanStep(
+        step_id=1,
+        module="discovery",
+        action="scan",
+        target="10.0.0.1",
+        params={"ports": [22, 80]},
+    )
     ctx: dict = {}
     result = registry.discovery_runner(step, ctx)
 
     assert result["open_ports"] == [22]
     assert result["count"] == 1
     assert result["native"]["port"] == 22
-    assert any(f.get("port") == 22 and f.get("probe") == "connect"
-               for f in ctx["findings"]), "the confirmed finding must be recorded"
+    assert any(
+        f.get("port") == 22 and f.get("probe") == "connect" for f in ctx["findings"]
+    ), "the confirmed finding must be recorded"
 
 
 def test_discovery_runner_skips_the_native_probe_without_ports(monkeypatch):
     import modules.registry as registry
 
-    monkeypatch.setattr(registry, "discover_ports", lambda host, ports=None, **kwargs: [])
+    monkeypatch.setattr(
+        registry, "discover_ports", lambda host, ports=None, **kwargs: []
+    )
     called: list[tuple] = []
-    monkeypatch.setattr(registry, "native_connect_probe",
-                        lambda host, port, **kwargs: called.append((host, port)))
+    monkeypatch.setattr(
+        registry,
+        "native_connect_probe",
+        lambda host, port, **kwargs: called.append((host, port)),
+    )
 
-    step = PlanStep(step_id=1, module="discovery", action="scan",
-                    target="10.0.0.1", params={})
+    step = PlanStep(
+        step_id=1, module="discovery", action="scan", target="10.0.0.1", params={}
+    )
     result = registry.discovery_runner(step, {})
 
     assert called == [], "the probe has no port to confirm without one"
@@ -123,33 +154,57 @@ def test_discovery_runner_skips_the_native_probe_without_ports(monkeypatch):
 def test_a_closed_port_is_not_recorded_as_a_finding(monkeypatch):
     import modules.registry as registry
 
-    monkeypatch.setattr(registry, "discover_ports",
-                        lambda host, ports=None, **kwargs: [
-                            {"module": "discovery", "host": host, "port": 22,
-                             "service": "ssh", "open": True}])
-    monkeypatch.setattr(registry, "native_connect_probe",
-                        lambda host, port, **kwargs: {"host": host, "port": port,
-                                                      "open": False})
+    monkeypatch.setattr(
+        registry,
+        "discover_ports",
+        lambda host, ports=None, **kwargs: [
+            {
+                "module": "discovery",
+                "host": host,
+                "port": 22,
+                "service": "ssh",
+                "open": True,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        registry,
+        "native_connect_probe",
+        lambda host, port, **kwargs: {"host": host, "port": port, "open": False},
+    )
 
     ctx: dict = {}
     result = registry.discovery_runner(
-        PlanStep(step_id=1, module="discovery", action="scan",
-                 target="10.0.0.1", params={"ports": [22]}), ctx)
+        PlanStep(
+            step_id=1,
+            module="discovery",
+            action="scan",
+            target="10.0.0.1",
+            params={"ports": [22]},
+        ),
+        ctx,
+    )
 
     assert result["native"]["open"] is False
     assert all(f.get("probe") != "connect" for f in ctx["findings"]), (
-        "a refused connection is not a finding")
+        "a refused connection is not a finding"
+    )
 
 
 def test_recon_runner_records_which_estimator_answered(tmp_path, monkeypatch):
     import modules.registry as registry
 
-    monkeypatch.setattr(registry, "fingerprint_host",
-                        lambda host: {"host": host, "source": "http-banners"})
+    monkeypatch.setattr(
+        registry,
+        "fingerprint_host",
+        lambda host: {"host": host, "source": "http-banners"},
+    )
 
     ctx: dict = {}
     result = recon_runner(
-        PlanStep(step_id=1, module="recon", action="fingerprint", target="10.0.0.1"), ctx)
+        PlanStep(step_id=1, module="recon", action="fingerprint", target="10.0.0.1"),
+        ctx,
+    )
 
     assert result["source"] == "http-banners"
     assert ctx["fingerprint_source"] == "http-banners", (
@@ -159,13 +214,16 @@ def test_recon_runner_records_which_estimator_answered(tmp_path, monkeypatch):
 
 
 def test_exfil_runner_collects_what_discovery_found(tmp_path):
-    ctx = {"findings": [
-        {"module": "discovery", "host": "10.0.0.1", "port": 22, "service": "ssh"},
-        {"module": "discovery", "host": "10.0.0.1", "port": 22, "service": "ssh"},
-        {"module": "discovery", "host": "10.0.0.1", "port": 80, "service": "http"},
-    ]}
+    ctx = {
+        "findings": [
+            {"module": "discovery", "host": "10.0.0.1", "port": 22, "service": "ssh"},
+            {"module": "discovery", "host": "10.0.0.1", "port": 22, "service": "ssh"},
+            {"module": "discovery", "host": "10.0.0.1", "port": 80, "service": "http"},
+        ]
+    }
     result = exfil_runner(
-        PlanStep(step_id=1, module="exfil", action="collect", target="10.0.0.1"), ctx)
+        PlanStep(step_id=1, module="exfil", action="collect", target="10.0.0.1"), ctx
+    )
 
     assert result["total"] == 3
     assert result["collected"] == 2, "the duplicate must be counted out"
@@ -175,6 +233,7 @@ def test_exfil_runner_collects_what_discovery_found(tmp_path):
 # --------------------------------------------------------------------------- #
 # Pacer
 # --------------------------------------------------------------------------- #
+
 
 def test_pacer_dwell_is_positive_and_bounded_by_its_mean():
     pacer = Pacer(mean_dwell=0.5, jitter=0.0)
@@ -199,11 +258,14 @@ def test_pacer_clamps_nonsensical_settings():
 # Collector
 # --------------------------------------------------------------------------- #
 
+
 def test_collector_deduplicates_by_natural_id():
     col = Collector(campaign_id="c1")
     first = {"module": "discovery", "host": "h", "port": 22, "service": "ssh"}
     assert col.add(first) is True
-    assert col.add(dict(first)) is False, "an identical finding must not be stored twice"
+    assert col.add(dict(first)) is False, (
+        "an identical finding must not be stored twice"
+    )
     assert len(col.all()) == 1
 
 
@@ -255,6 +317,7 @@ def test_collector_serialises_and_writes(tmp_path):
 # drift
 # --------------------------------------------------------------------------- #
 
+
 def _finding(host: str, port: int) -> dict:
     return {"host": host, "port": port, "module": "discovery"}
 
@@ -267,7 +330,10 @@ def test_drift_classifies_new_removed_and_stable_assets():
 
     assert {(a["host"], a["port"]) for a in report["stable_assets"]} == {("h1", 22)}
     assert {(a["host"], a["port"]) for a in report["new_assets"]} == {("h3", 8080)}
-    assert {(a["host"], a["port"]) for a in report["removed_assets"]} == {("h1", 80), ("h2", 443)}
+    assert {(a["host"], a["port"]) for a in report["removed_assets"]} == {
+        ("h1", 80),
+        ("h2", 443),
+    }
     assert report["drift_detected"] is True
 
 
@@ -295,15 +361,27 @@ def test_drift_from_an_empty_baseline_is_all_new():
 # executive briefing
 # --------------------------------------------------------------------------- #
 
+
 def test_briefing_reports_the_state_it_was_given():
     state = CampaignState(target="10.0.0.1")
     state.transition("done")
-    state.meta.update({"findings_count": 7, "graph_nodes": 3, "graph_edges": 2,
-                       "top_targets": ["a", "b"]})
+    state.meta.update(
+        {
+            "findings_count": 7,
+            "graph_nodes": 3,
+            "graph_edges": 2,
+            "top_targets": ["a", "b"],
+        }
+    )
 
-    text = generate_executive_briefing(state, {"timeline": [
-        {"ts": 1.0, "event": "campaign_start", "module": "core"},
-    ]})
+    text = generate_executive_briefing(
+        state,
+        {
+            "timeline": [
+                {"ts": 1.0, "event": "campaign_start", "module": "core"},
+            ]
+        },
+    )
 
     assert state.campaign_id in text
     assert "10.0.0.1" in text
@@ -321,7 +399,9 @@ def test_briefing_says_so_when_there_are_no_priority_targets():
 
 def test_briefing_shows_only_the_last_ten_events():
     state = CampaignState(target="h")
-    timeline = [{"ts": float(i), "event": f"event{i}", "module": "m"} for i in range(25)]
+    timeline = [
+        {"ts": float(i), "event": f"event{i}", "module": "m"} for i in range(25)
+    ]
     text = generate_executive_briefing(state, {"timeline": timeline})
     assert "event24" in text
     assert "event14" not in text, "older events must be dropped from the briefing"
@@ -331,6 +411,7 @@ def test_briefing_shows_only_the_last_ten_events():
 # --------------------------------------------------------------------------- #
 # adaptive learner
 # --------------------------------------------------------------------------- #
+
 
 def test_bandit_average_matches_the_arithmetic_mean():
     """The incremental update must equal the mean computed from scratch."""
@@ -347,7 +428,7 @@ def test_bandit_average_matches_the_arithmetic_mean():
 def test_bandit_reports_the_arm_with_the_highest_learned_rate():
     bandit = EpsilonGreedyBandit([10.0, 50.0, 25.0], epsilon=0.0)
     for _ in range(10):
-        bandit.update(1, 1.0)          # arm 1 is the only one tried
+        bandit.update(1, 1.0)  # arm 1 is the only one tried
     assert bandit.get_optimal_rate() == 50.0
     assert bandit.select_arm() == 1, "with epsilon 0 the best arm is always chosen"
 
@@ -361,7 +442,7 @@ def test_bandit_with_zero_epsilon_never_explores():
 
 def test_bandit_with_full_epsilon_only_explores():
     bandit = EpsilonGreedyBandit([1.0, 2.0, 3.0], epsilon=1.0)
-    bandit.update(0, 99.0)             # arm 0 is far and away the best
+    bandit.update(0, 99.0)  # arm 0 is far and away the best
     chosen = {bandit.select_arm() for _ in range(200)}
     assert len(chosen) > 1, "epsilon 1 must keep exploring"
 
@@ -377,6 +458,7 @@ def test_bandit_counts_every_update():
 # --------------------------------------------------------------------------- #
 # load balancing, against the true optimum
 # --------------------------------------------------------------------------- #
+
 
 def _optimal_makespan(weights: list[float], workers: int) -> float:
     """Exhaustive search: the best achievable makespan over all assignments."""

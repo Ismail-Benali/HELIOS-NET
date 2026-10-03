@@ -16,8 +16,9 @@ import json
 import os
 import subprocess  # nosec B404 - the native core is a project-built binary at a fixed path
 import sys
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 _CORE_DIR = ROOT / "transport" / "c_core"
@@ -465,7 +466,11 @@ def core_available() -> bool:
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv against a project-built binary, shell=False
             [str(_BINARY), "version"],
-            capture_output=True, text=True, encoding=_IO_ENCODING, errors="replace", timeout=10.0,
+            capture_output=True,
+            text=True,
+            encoding=_IO_ENCODING,
+            errors="replace",
+            timeout=10.0,
         )
     except OSError as exc:
         # A refusal is a host policy decision, not a missing file: recording it
@@ -540,7 +545,11 @@ def core_version() -> str:
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv against a project-built binary, shell=False
             [str(_BINARY), "version"],
-            capture_output=True, text=True, encoding=_IO_ENCODING, errors="replace", timeout=10.0,
+            capture_output=True,
+            text=True,
+            encoding=_IO_ENCODING,
+            errors="replace",
+            timeout=10.0,
         )
         return str(json.loads(proc.stdout).get("version", "unknown"))
     except OSError:
@@ -575,7 +584,11 @@ def selftest() -> dict[str, Any]:
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv against a project-built binary, shell=False
             [str(_BINARY), "selftest"],
-            capture_output=True, text=True, encoding=_IO_ENCODING, errors="replace", timeout=60.0,
+            capture_output=True,
+            text=True,
+            encoding=_IO_ENCODING,
+            errors="replace",
+            timeout=60.0,
         )
     except subprocess.SubprocessError as exc:
         return {"ok": False, "failures": None, "error": f"subprocess error: {exc}"}
@@ -585,7 +598,11 @@ def selftest() -> dict[str, Any]:
     except (json.JSONDecodeError, ValueError):
         return {"ok": False, "failures": None, "error": "unparseable selftest output"}
     if not isinstance(parsed, dict):
-        return {"ok": False, "failures": None, "error": "selftest output was not an object"}
+        return {
+            "ok": False,
+            "failures": None,
+            "error": "selftest output was not an object",
+        }
     return parsed
 
 
@@ -637,7 +654,12 @@ def scan_banners(
         try:
             proc = subprocess.run(  # nosec B603 - fixed argv against a project-built binary, shell=False
                 [str(_BINARY), "match", str(sig_path)],
-                input=payload, capture_output=True, text=True, encoding=_IO_ENCODING, errors="replace", timeout=timeout,
+                input=payload,
+                capture_output=True,
+                text=True,
+                encoding=_IO_ENCODING,
+                errors="replace",
+                timeout=timeout,
             )
         except OSError:
             proc = None
@@ -677,7 +699,12 @@ def fingerprint(banner: str) -> dict[str, str]:
         try:
             proc = subprocess.run(  # nosec B603 - fixed argv against a project-built binary, shell=False
                 [str(_BINARY), "fp"],
-                input=banner + "\n", capture_output=True, text=True, encoding=_IO_ENCODING, errors="replace", timeout=15.0,
+                input=banner + "\n",
+                capture_output=True,
+                text=True,
+                encoding=_IO_ENCODING,
+                errors="replace",
+                timeout=15.0,
             )
             parsed = json.loads(proc.stdout.strip() or "{}")
             if isinstance(parsed, dict) and parsed.get("status") == "ok":
@@ -686,8 +713,13 @@ def fingerprint(banner: str) -> dict[str, str]:
                     "fp_fnv1a64": parsed["fp_fnv1a64"],
                     "fp_crc32": parsed["fp_crc32"],
                 }
-        except (OSError, subprocess.SubprocessError, json.JSONDecodeError,
-                ValueError, KeyError):
+        except (
+            OSError,
+            subprocess.SubprocessError,
+            json.JSONDecodeError,
+            ValueError,
+            KeyError,
+        ):
             pass
 
     return {
@@ -699,9 +731,7 @@ def fingerprint(banner: str) -> dict[str, str]:
 
 # --------------------------------------------------------------- fallbacks
 
-_ASCII_FOLD = str.maketrans(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"
-)
+_ASCII_FOLD = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 
 def fold_ascii(text: str) -> str:
@@ -786,7 +816,7 @@ def _load_signatures(sig_path: Path) -> list[tuple[str, str]]:
             continue
         tab = line.find("\t")
         if tab >= 0:
-            pair = (line[:tab], line[tab + 1:])
+            pair = (line[:tab], line[tab + 1 :])
         else:
             pair = (line, line)
         if pair in seen:
@@ -825,17 +855,19 @@ def _python_fallback(banners: Iterable[str], sig_path: Path) -> list[dict[str, A
             {"signature": name, "position": position}
             for position, _, _, name in sorted(located)
         ]
-        results.append({
-            "status": "ok",
-            "banner": banner,
-            "fp_fnv1a32": f"0x{fnv1a32_py(banner):08X}",
-            "fp_fnv1a64": f"0x{fnv1a64_py(banner):016X}",
-            "fp_crc32": f"0x{crc32_py(banner):08X}",
-            "matches": matches,
-            "match_count": len(matches),
-            "truncated": False,
-            "engine": "python-fallback",
-        })
+        results.append(
+            {
+                "status": "ok",
+                "banner": banner,
+                "fp_fnv1a32": f"0x{fnv1a32_py(banner):08X}",
+                "fp_fnv1a64": f"0x{fnv1a64_py(banner):016X}",
+                "fp_crc32": f"0x{crc32_py(banner):08X}",
+                "matches": matches,
+                "match_count": len(matches),
+                "truncated": False,
+                "engine": "python-fallback",
+            }
+        )
     return results
 
 

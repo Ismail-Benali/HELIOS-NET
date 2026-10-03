@@ -17,11 +17,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.orchestrator import Orchestrator  # noqa: E402
-from core.planner import Planner            # noqa: E402
+from core.planner import Planner  # noqa: E402
 from core.state import CampaignState, StateStore  # noqa: E402
-from engine.scanner import Scanner, ScanTask      # noqa: E402
+from engine.plugins import plugin_registry  # noqa: E402
+from engine.scanner import Scanner, ScanTask  # noqa: E402
 from engine.verdict import VerdictEngine, default_rules  # noqa: E402
-from engine.plugins import plugin_registry          # noqa: E402
 
 
 def test_state_persistence():
@@ -42,10 +42,13 @@ def test_state_persistence():
 
 def test_planner_waves():
     p = Planner(max_concurrency=2)
-    steps = p.plan([
-        {"module": "discovery", "action": "scan", "priority": 10},
-        {"module": "recon", "action": "fingerprint", "priority": 20},
-    ], "lab.test")
+    steps = p.plan(
+        [
+            {"module": "discovery", "action": "scan", "priority": 10},
+            {"module": "recon", "action": "fingerprint", "priority": 20},
+        ],
+        "lab.test",
+    )
     waves = p.schedule(steps)
     # no batch exceeds the concurrency limit.
     assert all(len(w) <= 2 for w in waves)
@@ -62,7 +65,14 @@ def test_orchestrator_runs():
 
         def fake_discovery(step, ctx):
             calls["discovery"] += 1
-            ctx.setdefault("findings", []).append({"module": "discovery", "host": step.target, "port": 80, "service": "HTTP"})
+            ctx.setdefault("findings", []).append(
+                {
+                    "module": "discovery",
+                    "host": step.target,
+                    "port": 80,
+                    "service": "HTTP",
+                }
+            )
             return {"module": "discovery", "count": 1}
 
         def fake_recon(step, ctx):
@@ -74,10 +84,15 @@ def test_orchestrator_runs():
         def fake_exfil(step, ctx):
             return {"module": "exfil", "total": len(ctx.get("findings", []))}
 
-        orch = Orchestrator(store=store, reg={
-            "discovery": fake_discovery, "recon": fake_recon,
-            "stealth": fake_stealth, "exfil": fake_exfil,
-        })
+        orch = Orchestrator(
+            store=store,
+            reg={
+                "discovery": fake_discovery,
+                "recon": fake_recon,
+                "stealth": fake_stealth,
+                "exfil": fake_exfil,
+            },
+        )
         state = orch.run_campaign("lab.test")
         assert state.status == "done"
         assert calls["discovery"] >= 1
@@ -88,7 +103,10 @@ def test_orchestrator_runs():
 
 def test_scanner_balancing():
     s = Scanner(max_workers=3)
-    tasks = [ScanTask(name=f"t{i}", fn=lambda i=i: {"i": i}, weight=float(i + 1)) for i in range(5)]
+    tasks = [
+        ScanTask(name=f"t{i}", fn=lambda i=i: {"i": i}, weight=float(i + 1))
+        for i in range(5)
+    ]
     batches = s.balanced_batches(tasks, 3)
     # verify that each batch is at or below the worker load limit.
     loads = [sum(t.weight for t in b) for b in batches]
@@ -101,7 +119,15 @@ def test_scanner_balancing():
 def test_verdict():
     ve = VerdictEngine(rules=default_rules())
     ve.load_plugins(plugin_registry())
-    v = ve.judge({"module": "discovery", "host": "x", "port": 3306, "service": "MySQL", "open": True})
+    v = ve.judge(
+        {
+            "module": "discovery",
+            "host": "x",
+            "port": 3306,
+            "service": "MySQL",
+            "open": True,
+        }
+    )
     assert "critical_port_open" in v.rules_hit
     assert v.to_dict()["severity"] == "medium"
     print("verdict: OK")
@@ -119,7 +145,12 @@ def test_algorithm_registry():
 
     # switching the fingerprint model.
     assert fingerprint_sig({"ttl": 64}, "ttl_flat")["guess"] == "linux"
-    assert fingerprint_sig({"ttl": 127, "window": 65535, "tcp_options_len": 40}, "bayes")["guess"] == "windows"
+    assert (
+        fingerprint_sig({"ttl": 127, "window": 65535, "tcp_options_len": 40}, "bayes")[
+            "guess"
+        ]
+        == "windows"
+    )
 
     assert "balancing" in list_algos() and "fingerprint" in list_algos()
     print("algorithm_registry: OK")
@@ -127,6 +158,7 @@ def test_algorithm_registry():
 
 def test_module_spawner():
     from pathlib import Path
+
     from modules.core import discover, get_module
 
     n = discover(Path(__file__).resolve().parents[1] / "modules" / "plugins")
@@ -136,6 +168,7 @@ def test_module_spawner():
 
 def test_async_engine():
     import asyncio
+
     from core.async_engine import enterprise_adaptive_recon
 
     res = asyncio.run(enterprise_adaptive_recon("127.0.0.1", [80]))
@@ -144,13 +177,14 @@ def test_async_engine():
 
 
 def test_custom_arsenal():
-    import tempfile
     import asyncio
+    import tempfile
     from pathlib import Path
+
+    from core.async_engine import enterprise_adaptive_recon
     from core.wal import TransactionalWAL
     from engine.pattern_matcher import AhoCorasickMatcher
     from modules.discovery.dns_resolver import EliteDNSResolver
-    from core.async_engine import enterprise_adaptive_recon
 
     # 1. test the Transactional WAL with Begin/Commit
     with tempfile.TemporaryDirectory() as tmp:
@@ -177,7 +211,9 @@ def test_custom_arsenal():
     recon_res = asyncio.run(enterprise_adaptive_recon("127.0.0.1", [80]))
     assert isinstance(recon_res, list)
 
-    print("elite_arsenal: OK (Transactional WAL, Aho-Corasick, Elite DNS & AIMD Recon verified)")
+    print(
+        "elite_arsenal: OK (Transactional WAL, Aho-Corasick, Elite DNS & AIMD Recon verified)"
+    )
 
 
 def test_killchain_engine():
@@ -201,7 +237,6 @@ def test_killchain_engine():
 
 
 def test_lateral_movement():
-    import asyncio
     from modules.internal.subnet_discovery import extract_internal_subnets
 
     # 1. Test Subnet Discovery parser
@@ -212,9 +247,8 @@ def test_lateral_movement():
 
 
 def test_advanced_capabilities():
+
     from engine.ai.adaptive_learner import EpsilonGreedyBandit
-    import subprocess
-    from pathlib import Path
 
     # 1. Test Adaptive Reinforcement Learning Bandit
     bandit = EpsilonGreedyBandit([10.0, 50.0, 100.0])
@@ -227,9 +261,10 @@ def test_advanced_capabilities():
 
 
 def test_hardened_security():
-    import tempfile
     import json
+    import tempfile
     from pathlib import Path
+
     from core.wal import TransactionalWAL
     from engine.pattern_matcher import AhoCorasickMatcher
 
@@ -246,20 +281,25 @@ def test_hardened_security():
     # 2. Test Dynamic JSON Signature Loading in PatternMatcher
     with tempfile.TemporaryDirectory() as tmp:
         sig_file = Path(tmp) / "custom_sigs.json"
-        sig_file.write_text(json.dumps({"custom_db": "postgresql-custom"}), encoding="utf-8")
-        
+        sig_file.write_text(
+            json.dumps({"custom_db": "postgresql-custom"}), encoding="utf-8"
+        )
+
         ac = AhoCorasickMatcher()
         loaded = ac.load_from_json(sig_file)
         assert loaded == 1
         hits = ac.match("Connected to postgresql-custom backend.")
         assert len(hits) == 1 and hits[0]["signature"] == "postgresql-custom"
 
-    print("hardened_security: OK (Encrypted WAL at rest & Dynamic signature loader verified)")
+    print(
+        "hardened_security: OK (Encrypted WAL at rest & Dynamic signature loader verified)"
+    )
 
 
 def test_attack_surface_drift_and_html_report():
     import tempfile
     from pathlib import Path
+
     from core.drift import compute_surface_drift
     from core.reporter_html import generate_html_report
 
@@ -280,7 +320,9 @@ def test_attack_surface_drift_and_html_report():
             "status": "done",
             "findings_count": 2,
             "top_targets": ["host:127.0.0.1"],
-            "events": [{"ts": 123.45, "event": "recon_complete", "module": "async_engine"}]
+            "events": [
+                {"ts": 123.45, "event": "recon_complete", "module": "async_engine"}
+            ],
         }
         res = generate_html_report(briefing, out_file)
         assert res.exists()
@@ -288,7 +330,9 @@ def test_attack_surface_drift_and_html_report():
         assert "HELIOS-NET :: EXECUTIVE BRIEFING REPORT" in html_text
         assert "test-123" in html_text
 
-    print("drift_and_html_report: OK (Attack surface diff & HTML executive reporting verified)")
+    print(
+        "drift_and_html_report: OK (Attack surface diff & HTML executive reporting verified)"
+    )
 
 
 def main():

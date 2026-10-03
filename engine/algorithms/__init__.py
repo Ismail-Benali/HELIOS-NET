@@ -12,8 +12,8 @@ Philosophy:
 from __future__ import annotations
 
 import importlib
-
-from typing import Callable, TypeVar, Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -27,7 +27,9 @@ ALGO_REGISTRY: dict[str, dict[str, Callable[..., Any]]] = {}
 DEFAULT_FALLBACK = "__default__"
 
 
-def register_algo(kind: str, name: str, factory: Callable[..., T], default: bool = False) -> None:
+def register_algo(
+    kind: str, name: str, factory: Callable[..., T], default: bool = False
+) -> None:
     """Registers an algorithm in its kind, optionally as the default fallback."""
     bucket = ALGO_REGISTRY.setdefault(kind, {})
     bucket[name] = factory

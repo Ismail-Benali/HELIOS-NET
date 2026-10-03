@@ -9,14 +9,15 @@ Features:
 
 from __future__ import annotations
 
-from typing import Any, List
-
 import asyncio
 import random
 import time
+from typing import Any
 
 
-async def jittered_backoff(base_delay: float = 0.05, max_delay: float = 1.0, attempt: int = 1) -> None:
+async def jittered_backoff(
+    base_delay: float = 0.05, max_delay: float = 1.0, attempt: int = 1
+) -> None:
     """Applies exponential backoff with random jitter to defeat IDS/SIEM periodicity detection."""
     delay = min(max_delay, base_delay * (2 ** max(0, attempt - 1)))
     jitter = random.uniform(0, 0.5 * delay)  # nosec B311 - jitter on a retry delay, not a security value
@@ -47,12 +48,13 @@ class AIMDController:
             return int(self.concurrency)
 
 
-async def adaptive_banner_probe(host: str, port: int, timeout: float = 2.0) -> dict[str, Any]:
+async def adaptive_banner_probe(
+    host: str, port: int, timeout: float = 2.0
+) -> dict[str, Any]:
     start = time.time()
     try:
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, port),
-            timeout=timeout
+            asyncio.open_connection(host, port), timeout=timeout
         )
         try:
             writer.write(b"HEAD / HTTP/1.0\r\n\r\n")
@@ -64,12 +66,26 @@ async def adaptive_banner_probe(host: str, port: int, timeout: float = 2.0) -> d
 
         writer.close()
         await writer.wait_closed()
-        return {"host": host, "port": port, "open": True, "banner": banner, "rtt": round(time.time() - start, 4)}
+        return {
+            "host": host,
+            "port": port,
+            "open": True,
+            "banner": banner,
+            "rtt": round(time.time() - start, 4),
+        }
     except (asyncio.TimeoutError, OSError):
-        return {"host": host, "port": port, "open": False, "banner": "", "rtt": round(time.time() - start, 4)}
+        return {
+            "host": host,
+            "port": port,
+            "open": False,
+            "banner": "",
+            "rtt": round(time.time() - start, 4),
+        }
 
 
-async def enterprise_adaptive_recon(host: str, ports: List[int]) -> List[dict[str, Any]]:
+async def enterprise_adaptive_recon(
+    host: str, ports: list[int]
+) -> list[dict[str, Any]]:
     """Executes an adaptive recon scan using a dynamic worker queue."""
     controller = AIMDController(initial_concurrency=15, max_c=50)
     results = []

@@ -5,17 +5,42 @@ Registers via the @module decorator for dynamic plugin discovery.
 
 from __future__ import annotations
 
-from core.planner import PlanStep
-
 import asyncio
 import socket
-from typing import List, Any
+from typing import Any
+
+from core.planner import PlanStep
 from modules.core import module
 
 DEFAULT_WORDLIST = [
-    "www", "mail", "ftp", "localhost", "webmail", "smtp", "pop", "ns1", "webserver",
-    "dns", "ns2", "smtp", "imap", "mail1", "imap1", "ns3", "ipv4", "admin", "api",
-    "dev", "staging", "test", "vpn", "gateway", "secure", "login", "portal", "cloud"
+    "www",
+    "mail",
+    "ftp",
+    "localhost",
+    "webmail",
+    "smtp",
+    "pop",
+    "ns1",
+    "webserver",
+    "dns",
+    "ns2",
+    "smtp",
+    "imap",
+    "mail1",
+    "imap1",
+    "ns3",
+    "ipv4",
+    "admin",
+    "api",
+    "dev",
+    "staging",
+    "test",
+    "vpn",
+    "gateway",
+    "secure",
+    "login",
+    "portal",
+    "cloud",
 ]
 
 
@@ -30,7 +55,9 @@ async def _async_resolve(fqdn: str) -> dict[str, Any] | None:
     return None
 
 
-async def async_subdomain_enum(domain: str, wordlist: List[str] = DEFAULT_WORDLIST) -> List[dict[str, Any]]:
+async def async_subdomain_enum(
+    domain: str, wordlist: list[str] = DEFAULT_WORDLIST
+) -> list[dict[str, Any]]:
     """Asynchronously resolves common subdomains for the target domain."""
     tasks = [_async_resolve(f"{w}.{domain}") for w in wordlist]
     results = await asyncio.gather(*tasks)
@@ -47,12 +74,17 @@ def dns_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
         found = []
 
     ctx.setdefault("findings", []).extend(
-        {"module": "dns_enum", "host": step.target, "subdomain": h["subdomain"], "ip": h["ip"]}
+        {
+            "module": "dns_enum",
+            "host": step.target,
+            "subdomain": h["subdomain"],
+            "ip": h["ip"],
+        }
         for h in found
     )
     return {
         "module": "dns_enum",
         "host": step.target,
         "resolved": [h["subdomain"] for h in found],
-        "count": len(found)
+        "count": len(found),
     }

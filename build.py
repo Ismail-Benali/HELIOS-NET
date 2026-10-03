@@ -26,7 +26,8 @@ C_STRICT_FLAGS = [
     "-Wpedantic",
     "-Wshadow",
     "-Wcast-qual",
-    "-Wcast-align",    "-Wstrict-prototypes",
+    "-Wcast-align",
+    "-Wstrict-prototypes",
     "-Wmissing-prototypes",
     "-Wpointer-arith",
     "-Wwrite-strings",
@@ -48,8 +49,8 @@ _FUZZ_RETRY_DELAY = 2.0
 
 
 _POLICY_BLOCK_MARKERS = (
-    "blocked this file",      # English locale
-    "une strat",              # French locale: "Une stratégie de contrôle..."
+    "blocked this file",  # English locale
+    "une strat",  # French locale: "Une stratégie de contrôle..."
     "application control",
     "applicationcontrol",
 )
@@ -120,8 +121,11 @@ _SIGNING_TALLY: dict[str, int] = {"signed": 0, "unsigned": 0, "failed": 0, "bloc
 
 def signing_tally() -> tuple[int, int, int]:
     """(signed, unsigned, failed) counts for the artifacts built so far."""
-    return (_SIGNING_TALLY["signed"], _SIGNING_TALLY["unsigned"],
-            _SIGNING_TALLY["failed"])
+    return (
+        _SIGNING_TALLY["signed"],
+        _SIGNING_TALLY["unsigned"],
+        _SIGNING_TALLY["failed"],
+    )
 
 
 def _record_signing(state: str) -> None:
@@ -144,8 +148,10 @@ def _signing_config() -> tuple[Path, str, str] | None:
         return None
     cert = Path(raw_cert)
     if not cert.is_file():
-        print(f"[-] {_SIGN_CERT_ENV} points at {cert}, which is not a file; "
-              "this build will be left unsigned.")
+        print(
+            f"[-] {_SIGN_CERT_ENV} points at {cert}, which is not a file; "
+            "this build will be left unsigned."
+        )
         return None
     password = os.environ.get(_SIGN_PASS_ENV, "")
     timestamp = os.environ.get(_SIGN_TS_ENV) or _DEFAULT_TIMESTAMP_URL
@@ -163,11 +169,11 @@ def _find_signtool() -> str | None:
     if os.name != "nt":
         return None
     from shutil import which
+
     found = which("signtool")
     if found:
         return found
-    for root in (os.environ.get("ProgramFiles(x86)"),
-                 os.environ.get("ProgramFiles")):
+    for root in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles")):
         if not root:
             continue
         kit = Path(root) / "Windows Kits" / "10" / "bin"
@@ -212,17 +218,24 @@ def _sign_artifact(path: Path) -> str:
     cert, password, timestamp = config
     signtool = _find_signtool()
     if signtool is None:
-        print(f"[-] {_SIGN_CERT_ENV} is set but signtool.exe was not found. Install "
-              "the Windows SDK, or unset the variable to accept an unsigned build. "
-              f"{path.name} is left unsigned.")
+        print(
+            f"[-] {_SIGN_CERT_ENV} is set but signtool.exe was not found. Install "
+            "the Windows SDK, or unset the variable to accept an unsigned build. "
+            f"{path.name} is left unsigned."
+        )
         return "unsigned"
 
     cmd = [
-        signtool, "sign",
-        "/fd", "SHA256",
-        "/f", str(cert),
-        "/tr", timestamp,
-        "/td", "SHA256",
+        signtool,
+        "sign",
+        "/fd",
+        "SHA256",
+        "/f",
+        str(cert),
+        "/tr",
+        timestamp,
+        "/td",
+        "SHA256",
         str(path),
     ]
     if password:
@@ -231,8 +244,14 @@ def _sign_artifact(path: Path) -> str:
         # signing attempt fails with an unhelpful error.
         cmd[2:2] = ["/p", password]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=180)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
     except OSError as exc:
         if _is_policy_block(exc):
             print(f"[!] BLOCKED: signing {path.name} was refused by a host policy.")
@@ -245,18 +264,27 @@ def _sign_artifact(path: Path) -> str:
 
     if proc.returncode != 0:
         # The password is never echoed: signtool puts it in its own diagnostics.
-        print(f"[-] signing {path.name} failed (exit {proc.returncode}). "
-              f"{(proc.stderr or proc.stdout or '').strip()[:300]}")
+        print(
+            f"[-] signing {path.name} failed (exit {proc.returncode}). "
+            f"{(proc.stderr or proc.stdout or '').strip()[:300]}"
+        )
         return "failed"
 
     # signtool exiting zero is not proof the image carries a signature, so the
     # artifact is verified rather than trusted.
-    verify = subprocess.run([signtool, "verify", "/pa", str(path)],
-                            capture_output=True, text=True, encoding="utf-8",
-                            errors="replace", timeout=180)
+    verify = subprocess.run(
+        [signtool, "verify", "/pa", str(path)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=180,
+    )
     if verify.returncode != 0:
-        print(f"[-] {path.name} was reported signed but does not verify: "
-              f"{(verify.stdout or verify.stderr or '').strip()[:300]}")
+        print(
+            f"[-] {path.name} was reported signed but does not verify: "
+            f"{(verify.stdout or verify.stderr or '').strip()[:300]}"
+        )
         return "failed"
     return "signed"
 
@@ -306,8 +334,11 @@ def build_rust_core() -> None:
         # The cdylib is loaded into the Python process rather than executed, but it
         # is still a native image the host decides whether to load, so it carries
         # the same signing requirement as an executable.
-        for name in ("helios_rust_core.dll", "libhelios_rust_core.so",
-                     "libhelios_rust_core.dylib"):
+        for name in (
+            "helios_rust_core.dll",
+            "libhelios_rust_core.so",
+            "libhelios_rust_core.dylib",
+        ):
             candidate = rust_dir / "target" / "release" / name
             if candidate.is_file():
                 _sign_and_report(candidate)
@@ -391,9 +422,15 @@ def build_c_core() -> bool:
     # thing a caller can bind to and the internal shape can change freely.
     visibility = [] if os.name == "nt" else ["-fvisibility=hidden"]
     lib_cmd = [
-        "gcc", *common, *visibility, "-shared", "-fPIC",
-        *[str(p) for p in units], str(src_dir / "helios_dll.c"),
-        "-o", str(library),
+        "gcc",
+        *common,
+        *visibility,
+        "-shared",
+        "-fPIC",
+        *[str(p) for p in units],
+        str(src_dir / "helios_dll.c"),
+        "-o",
+        str(library),
     ]
     if not run_cmd(lib_cmd, ROOT):
         print("[-] gcc failed for the shared library; retrying with clang.")
@@ -404,7 +441,6 @@ def build_c_core() -> bool:
     print(f"[+] C core library built: {library.relative_to(ROOT)}")
     _sign_and_report(library)
     return True
-
 
 
 def _sign_and_report(path: Path) -> str:
@@ -421,12 +457,16 @@ def _sign_and_report(path: Path) -> str:
         print(f"[+] signed: {path.name}")
     elif state == "unsigned":
         if _signing_config() is None:
-            print(f"[*] {path.name} is UNSIGNED. A host application-control policy "
-                  "(Smart App Control, AppLocker, WDAC) may refuse to execute it; "
-                  f"set {_SIGN_CERT_ENV} to sign build artifacts.")
+            print(
+                f"[*] {path.name} is UNSIGNED. A host application-control policy "
+                "(Smart App Control, AppLocker, WDAC) may refuse to execute it; "
+                f"set {_SIGN_CERT_ENV} to sign build artifacts."
+            )
     elif state == "blocked":
-        print(f"[!] {path.name} could not be signed: a host policy refused "
-              "signtool itself.")
+        print(
+            f"[!] {path.name} could not be signed: a host policy refused "
+            "signtool itself."
+        )
     return state
 
 
@@ -439,7 +479,9 @@ def build_c_components() -> None:
         return
 
     if os.name != "nt":
-        print("[-] Additional C primitives are Windows-specific. Skipping on non-Windows runners.")
+        print(
+            "[-] Additional C primitives are Windows-specific. Skipping on non-Windows runners."
+        )
         return
 
     transport_dir = ROOT / "transport"
@@ -512,9 +554,11 @@ def run_rust_unit_tests() -> str:
         print("[+] Rust unit tests passed.")
         return "passed"
     if _looks_policy_blocked(output):
-        print("[!] BLOCKED: the host application-control policy refused to run a "
-              "Rust test binary. The suite did not execute; this is not a code "
-              "failure, and it is not coverage either.")
+        print(
+            "[!] BLOCKED: the host application-control policy refused to run a "
+            "Rust test binary. The suite did not execute; this is not a code "
+            "failure, and it is not coverage either."
+        )
         return "blocked"
     print(f"[-] Rust unit tests failed (exit={result.returncode}).")
     for line in result.stderr.splitlines()[-15:]:
@@ -540,15 +584,20 @@ def run_go_unit_tests(
     `fuzz_seconds` runs each fuzz target for that long. It is off by default
     because fuzzing is time-based and would make an ordinary build unpredictable.
     """
-    modules = [d for d in (ROOT / "transport").iterdir()
-               if d.is_dir() and (d / "go.mod").exists()]
+    modules = [
+        d
+        for d in (ROOT / "transport").iterdir()
+        if d.is_dir() and (d / "go.mod").exists()
+    ]
     if not modules:
         print("[-] No Go modules found.")
         return False
 
-    stages = [("gofmt", ["gofmt", "-l", "."]),
-              ("vet", ["go", "vet", "./..."]),
-              ("test", ["go", "test", "-count=1", "./..."])]
+    stages = [
+        ("gofmt", ["gofmt", "-l", "."]),
+        ("vet", ["go", "vet", "./..."]),
+        ("test", ["go", "test", "-count=1", "./..."]),
+    ]
     if race:
         stages.append(("race", ["go", "test", "-race", "-count=1", "./..."]))
 
@@ -564,14 +613,22 @@ def run_go_unit_tests(
             if label == "race":
                 env = _race_env()
                 if env is None:
-                    race_skipped_reason = "no C compiler, so the race detector cannot run"
+                    race_skipped_reason = (
+                        "no C compiler, so the race detector cannot run"
+                    )
                     print(f"    [SKIP] {rel}: {race_skipped_reason}")
                     continue
                 race_ran = True
             try:
                 result = subprocess.run(
-                    args, cwd=str(module), check=False, capture_output=True,
-                    text=True, encoding="utf-8", errors="replace", env=env,
+                    args,
+                    cwd=str(module),
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    env=env,
                 )
             except (subprocess.SubprocessError, FileNotFoundError) as exc:
                 print(f"[-] Could not run {label} in {rel}: {exc}")
@@ -590,8 +647,10 @@ def run_go_unit_tests(
                     # test binary into "[+] Go vet, gofmt, unit tests and race
                     # detector passed", which is the one outcome this report exists
                     # to prevent.
-                    print(f"    [BLOCKED] {rel}: {label} was refused by the host "
-                          "application-control policy; it did not execute")
+                    print(
+                        f"    [BLOCKED] {rel}: {label} was refused by the host "
+                        "application-control policy; it did not execute"
+                    )
                     blocked = True
                     ok = False
                     continue
@@ -614,8 +673,10 @@ def run_go_unit_tests(
         if race_ran:
             print("[+] Go vet, gofmt, unit tests and race detector passed.")
         elif race_skipped_reason:
-            print(f"[+] Go vet, gofmt and unit tests passed "
-                  f"(race detector skipped: {race_skipped_reason}).")
+            print(
+                f"[+] Go vet, gofmt and unit tests passed "
+                f"(race detector skipped: {race_skipped_reason})."
+            )
         else:
             print("[+] Go vet, gofmt and unit tests passed.")
     # Recorded before the state is decided, so the summary can say that a green
@@ -632,9 +693,12 @@ def run_go_unit_tests(
 
 
 _C_TEST_STATES = {
-    True: "PASSED", False: "FAILED",
-    "passed": "PASSED", "failed": "FAILED",
-    "blocked": "BLOCKED BY HOST POLICY", "skipped": "SKIPPED",
+    True: "PASSED",
+    False: "FAILED",
+    "passed": "PASSED",
+    "failed": "FAILED",
+    "blocked": "BLOCKED BY HOST POLICY",
+    "skipped": "SKIPPED",
 }
 
 
@@ -733,8 +797,13 @@ def _cc_compiler_works(compiler: str) -> bool:
     """
     try:
         probe = subprocess.run(
-            [compiler, "--version"], capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=False, timeout=60,
+            [compiler, "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=60,
             shell=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -762,7 +831,9 @@ def _race_env() -> dict[str, str] | None:
     candidates: list[str] = []
     if env.get("CC"):
         candidates.append(env["CC"])
-    candidates += [found for found in (which(c) for c in ("gcc", "clang", "cc")) if found]
+    candidates += [
+        found for found in (which(c) for c in ("gcc", "clang", "cc")) if found
+    ]
 
     for candidate in candidates:
         if _cc_compiler_works(candidate):
@@ -789,12 +860,26 @@ def run_go_fuzz(modules: list[Path], seconds: int) -> bool:
             print(f"    [SKIP] {rel}: no fuzz targets")
             continue
         for target in targets:
-            args = ["go", "test", "-run", "^$", "-fuzz", f"^{target}$",
-                    "-fuzztime", f"{seconds}s", "."]
+            args = [
+                "go",
+                "test",
+                "-run",
+                "^$",
+                "-fuzz",
+                f"^{target}$",
+                "-fuzztime",
+                f"{seconds}s",
+                ".",
+            ]
             try:
                 result = subprocess.run(
-                    args, cwd=str(module), check=False, capture_output=True,
-                    text=True, encoding="utf-8", errors="replace",
+                    args,
+                    cwd=str(module),
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
             except (subprocess.SubprocessError, FileNotFoundError) as exc:
                 print(f"[-] Could not fuzz {target} in {rel}: {exc}")
@@ -824,7 +909,7 @@ def _go_fuzz_targets(module: Path) -> list[str]:
         for line in text.splitlines():
             stripped = line.strip()
             if stripped.startswith("func Fuzz"):
-                name = stripped[len("func "):].split("(")[0].strip()
+                name = stripped[len("func ") :].split("(")[0].strip()
                 if name:
                     names.add(name)
     return sorted(names)
@@ -842,7 +927,7 @@ def run_core_health() -> str:
     """
     print("[*] Probing native core health...")
     try:
-        from core.cores import health_report, format_report, FAILED, BLOCKED
+        from core.cores import BLOCKED, FAILED, format_report, health_report
     except Exception as exc:  # noqa: BLE001 - reported, not raised
         print(f"[-] Could not load the core health module: {exc}")
         return "failed"
@@ -854,14 +939,18 @@ def run_core_health() -> str:
     broken = [c for c in cores if c["state"] == FAILED]
     if broken:
         for core in broken:
-            print(f"[-] Core {core['name']} is present but not working: {core['detail']}")
+            print(
+                f"[-] Core {core['name']} is present but not working: {core['detail']}"
+            )
         return "failed"
 
     refused = [c for c in cores if c["state"] == BLOCKED]
     if refused:
         for core in refused:
-            print(f"[!] Core {core['name']} was refused by the host policy and did "
-                  f"not run: {core['detail']}")
+            print(
+                f"[!] Core {core['name']} was refused by the host policy and did "
+                f"not run: {core['detail']}"
+            )
         print("    This is a host decision, not a code defect, and it is not evidence.")
         return "blocked"
     return "passed"
@@ -895,8 +984,16 @@ def run_c_core_tests() -> bool:
     binary = build_dir / f"test_core{'.exe' if os.name == 'nt' else ''}"
 
     cmd = [
-        "gcc", "-std=c11", "-O2", "-Werror", *C_STRICT_FLAGS,
-        f"-I{include}", str(test_file), *sources, "-o", str(binary),
+        "gcc",
+        "-std=c11",
+        "-O2",
+        "-Werror",
+        *C_STRICT_FLAGS,
+        f"-I{include}",
+        str(test_file),
+        *sources,
+        "-o",
+        str(binary),
     ]
     compiled = run_cmd(cmd, ROOT)
     if not compiled:
@@ -921,15 +1018,24 @@ def run_c_core_tests() -> bool:
     print(f"[*] Running native test suite: {binary.name}")
     try:
         result = subprocess.run(
-            [str(binary)], cwd=str(ROOT), check=False,
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            [str(binary)],
+            cwd=str(ROOT),
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except OSError as exc:
         # WinError 4551 is the host application-control policy refusing the image.
         if _is_policy_block(exc):
-            print("[!] BLOCKED: the host application-control policy refused to run "
-                  f"{binary.name}. The suite did not execute; this is not a code failure.")
-            print("    Re-run after signing the binary or on an unrestricted host/CI runner.")
+            print(
+                "[!] BLOCKED: the host application-control policy refused to run "
+                f"{binary.name}. The suite did not execute; this is not a code failure."
+            )
+            print(
+                "    Re-run after signing the binary or on an unrestricted host/CI runner."
+            )
             return "blocked"
         print(f"[-] Could not execute the c_core test suite: {exc}")
         return "failed"
@@ -974,8 +1080,17 @@ def run_c_fuzz_harness() -> str:
     binary = build_dir / f"fuzz_harness{'.exe' if os.name == 'nt' else ''}"
 
     cmd = [
-        "gcc", "-std=c11", "-O1", "-g", "-Werror", *C_STRICT_FLAGS,
-        f"-I{include}", str(harness), *sources, "-o", str(binary),
+        "gcc",
+        "-std=c11",
+        "-O1",
+        "-g",
+        "-Werror",
+        *C_STRICT_FLAGS,
+        f"-I{include}",
+        str(harness),
+        *sources,
+        "-o",
+        str(binary),
     ]
     compiled = run_cmd(cmd, ROOT)
     if not compiled:
@@ -989,7 +1104,9 @@ def run_c_fuzz_harness() -> str:
             print("    Reporting SKIPPED rather than FAILED: without a usable C")
             print("    toolchain this host cannot judge the harness either way.")
             return "skipped"
-        print(f"[!] No usable C compiler here, so the prebuilt harness stands in: {why}.")
+        print(
+            f"[!] No usable C compiler here, so the prebuilt harness stands in: {why}."
+        )
         print("    This is real differential fuzz coverage, not a source-level check.")
 
     # Signed before it is executed, for the same reason as the unit suite: an
@@ -1013,11 +1130,18 @@ def run_c_fuzz_harness() -> str:
     for attempt in range(1, _FUZZ_ATTEMPTS + 1):
         if attempt > 1:
             time.sleep(_FUZZ_RETRY_DELAY)
-            print(f"[*] Retrying the same binary (attempt {attempt}/{_FUZZ_ATTEMPTS})...")
+            print(
+                f"[*] Retrying the same binary (attempt {attempt}/{_FUZZ_ATTEMPTS})..."
+            )
         try:
             result = subprocess.run(
-                [str(binary)], cwd=str(ROOT), check=False,
-                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                [str(binary)],
+                cwd=str(ROOT),
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             break
         except OSError as exc:
@@ -1028,11 +1152,13 @@ def run_c_fuzz_harness() -> str:
 
     if result is None:
         assert blocked_exc is not None
-        print("[!] BLOCKED: the host application-control policy refused to run "
-              f"{binary.name} on all {_FUZZ_ATTEMPTS} attempts. The fuzzer did NOT "
-              "execute, so this build carries no fuzzing coverage at all. This is "
-              "an environment condition, not a code failure; the authoritative "
-              "fuzzer run is the ASan/UBSan stage on the Linux CI runner.")
+        print(
+            "[!] BLOCKED: the host application-control policy refused to run "
+            f"{binary.name} on all {_FUZZ_ATTEMPTS} attempts. The fuzzer did NOT "
+            "execute, so this build carries no fuzzing coverage at all. This is "
+            "an environment condition, not a code failure; the authoritative "
+            "fuzzer run is the ASan/UBSan stage on the Linux CI runner."
+        )
         return "blocked"
 
     for line in result.stdout.splitlines():
@@ -1047,11 +1173,21 @@ def run_c_fuzz_harness() -> str:
 
 
 def main() -> None:
-    print("[HELIOS-NET] Initializing Polyglot Build Pipeline & Pre-flight Diagnostics...")
+    print(
+        "[HELIOS-NET] Initializing Polyglot Build Pipeline & Pre-flight Diagnostics..."
+    )
 
-    toolchain_status = {"go": False, "rust": False, "c": False,
-                       "go_tests": False, "rust_tests": False, "c_tests": False,
-                       "c_build": None, "c_fuzz": "skipped", "health": "skipped"}
+    toolchain_status = {
+        "go": False,
+        "rust": False,
+        "c": False,
+        "go_tests": False,
+        "rust_tests": False,
+        "c_tests": False,
+        "c_build": None,
+        "c_fuzz": "skipped",
+        "health": "skipped",
+    }
     run_tests = "--test" in sys.argv
     # Fuzzing is opt-in because it is time-based; CI passes --fuzz to bound it.
     fuzz_arg = next((a for a in sys.argv if a.startswith("--fuzz=")), None)
@@ -1059,21 +1195,39 @@ def main() -> None:
 
     # Check Go
     try:
-        res = subprocess.run(["go", "version"], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+        res = subprocess.run(
+            ["go", "version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
         print(f"[+] [Diagnostic] Found Go toolchain: {res.stdout.strip()}")
         toolchain_status["go"] = True
         build_go_components()
     except (subprocess.SubprocessError, FileNotFoundError):
-        print("[-] [Diagnostic] Go compiler not found or execution failed. Skipping Go builds.")
+        print(
+            "[-] [Diagnostic] Go compiler not found or execution failed. Skipping Go builds."
+        )
 
     # Check Cargo/Rust
     try:
-        res = subprocess.run(["cargo", "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
+        res = subprocess.run(
+            ["cargo", "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+        )
         print(f"[+] [Diagnostic] Found Cargo/Rust toolchain: {res.stdout.strip()}")
         toolchain_status["rust"] = True
         build_rust_core()
     except (subprocess.SubprocessError, FileNotFoundError):
-        print("[-] [Diagnostic] Cargo/Rust compiler not found or execution failed. Skipping Rust builds.")
+        print(
+            "[-] [Diagnostic] Cargo/Rust compiler not found or execution failed. Skipping Rust builds."
+        )
 
     # Check C compiler (gcc/clang) for size-optimized C primitives.
     #
@@ -1086,15 +1240,23 @@ def main() -> None:
     # to run before it is trusted.
     c_compiler = next((c for c in ("gcc", "clang") if _cc_compiler_works(c)), None)
     if c_compiler is None:
-        print("[-] [Diagnostic] No usable C compiler (gcc/clang): either none is on "
-              "PATH, or the one present will not execute under host policy. "
-              "Skipping C builds.")
+        print(
+            "[-] [Diagnostic] No usable C compiler (gcc/clang): either none is on "
+            "PATH, or the one present will not execute under host policy. "
+            "Skipping C builds."
+        )
     else:
         toolchain_status["c"] = True
         try:
-            res = subprocess.run([c_compiler, "--version"], capture_output=True,
-                                 text=True, encoding="utf-8", errors="replace",
-                                 check=True, shell=False)
+            res = subprocess.run(
+                [c_compiler, "--version"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+                shell=False,
+            )
             banner = res.stdout.splitlines()[0].strip() if res.stdout else "unknown"
         except (subprocess.SubprocessError, FileNotFoundError):
             banner = "unknown"
@@ -1110,8 +1272,8 @@ def main() -> None:
 
     if run_tests and toolchain_status["go"]:
         toolchain_status["go_tests"] = run_go_unit_tests(
-        fuzz_seconds=fuzz_seconds, notes=toolchain_status
-    )
+            fuzz_seconds=fuzz_seconds, notes=toolchain_status
+        )
 
     if run_tests and toolchain_status["rust"]:
         toolchain_status["rust_tests"] = run_rust_unit_tests()
@@ -1129,24 +1291,34 @@ def main() -> None:
         toolchain_status["health"] = health
 
     print("\n" + "=" * 50)
-    print(f"[HELIOS-NET] Pre-flight Toolchain Diagnostics Summary:")
-    print(f"    - Go Compiler:     {'AVAILABLE' if toolchain_status['go'] else 'MISSING'}")
-    print(f"    - Rust/Cargo:      {'AVAILABLE' if toolchain_status['rust'] else 'MISSING'}")
-    print(f"    - C Compiler:      {'AVAILABLE' if toolchain_status['c'] else 'MISSING'}")
+    print("[HELIOS-NET] Pre-flight Toolchain Diagnostics Summary:")
+    print(
+        f"    - Go Compiler:     {'AVAILABLE' if toolchain_status['go'] else 'MISSING'}"
+    )
+    print(
+        f"    - Rust/Cargo:      {'AVAILABLE' if toolchain_status['rust'] else 'MISSING'}"
+    )
+    print(
+        f"    - C Compiler:      {'AVAILABLE' if toolchain_status['c'] else 'MISSING'}"
+    )
     if run_tests:
         rust_result = toolchain_status["rust_tests"]
         rust_state = {
-            True: "PASSED", "passed": "PASSED",
+            True: "PASSED",
+            "passed": "PASSED",
             "blocked": "BLOCKED BY HOST POLICY",
-            False: "FAILED", "failed": "FAILED",
+            False: "FAILED",
+            "failed": "FAILED",
         }.get(rust_result, "SKIPPED")
         if rust_result == "failed" and not toolchain_status["rust"]:
             rust_state = "SKIPPED"
         go_result = toolchain_status["go_tests"]
         go_state = {
-            True: "PASSED", "passed": "PASSED",
+            True: "PASSED",
+            "passed": "PASSED",
             "blocked": "BLOCKED BY HOST POLICY",
-            False: "FAILED", "failed": "FAILED",
+            False: "FAILED",
+            "failed": "FAILED",
             "skipped": "SKIPPED",
         }.get(go_result, "SKIPPED" if not toolchain_status["go"] else "FAILED")
         go_race_note = str(toolchain_status.get("go_race_note", "") or "")
@@ -1156,13 +1328,17 @@ def main() -> None:
         # missing C coverage went unnoticed.
         c_state = _c_core_state(toolchain_status)
         fuzz_state = {
-            "passed": "PASSED", "failed": "FAILED",
-            "blocked": "BLOCKED BY HOST POLICY", "skipped": "SKIPPED",
+            "passed": "PASSED",
+            "failed": "FAILED",
+            "blocked": "BLOCKED BY HOST POLICY",
+            "skipped": "SKIPPED",
         }.get(toolchain_status["c_fuzz"], "SKIPPED")
         health_state = {
-            True: "PASSED", "passed": "PASSED",
+            True: "PASSED",
+            "passed": "PASSED",
             "blocked": "BLOCKED BY HOST POLICY",
-            False: "FAILED", "failed": "FAILED",
+            False: "FAILED",
+            "failed": "FAILED",
         }.get(toolchain_status["health"], "SKIPPED")
         print(f"    - Go Unit Tests:   {go_state}")
         print(f"    - Rust Unit Tests: {rust_state}")
@@ -1175,12 +1351,14 @@ def main() -> None:
         # is also not coverage. Saying so here stops a green pipeline from being
         # read as "the suite ran and found nothing".
         gaps = [
-            label for label, value in (
+            label
+            for label, value in (
                 ("the Go test/race suite", go_state),
                 ("the C unit suite", c_state),
                 ("the C differential fuzzer", fuzz_state),
                 ("the native core health probe", health_state),
-            ) if value.startswith("BLOCKED") or value.startswith("SKIPPED")
+            )
+            if value.startswith("BLOCKED") or value.startswith("SKIPPED")
         ]
         if gaps:
             print()
@@ -1197,27 +1375,30 @@ def main() -> None:
         # invites. Stating it once, next to the outcome it caused, keeps the two
         # from being read as unrelated.
         signed, unsigned, sign_failed = signing_tally()
-        print(f"    - Signing:        {signed} signed, {unsigned} unsigned"
-              + (f", {sign_failed} FAILED" if sign_failed else ""))
+        print(
+            f"    - Signing:        {signed} signed, {unsigned} unsigned"
+            + (f", {sign_failed} FAILED" if sign_failed else "")
+        )
         if unsigned or sign_failed:
             print("      These binaries carry no valid code signature, so a host")
             print("      application-control policy (Smart App Control, AppLocker,")
             print("      WDAC) may refuse to execute them - which is the most likely")
-            print("      reason the C stages above were blocked. Set "
-                  f"{_SIGN_CERT_ENV}")
+            print(f"      reason the C stages above were blocked. Set {_SIGN_CERT_ENV}")
             print("      to a code-signing certificate and rebuild to run the C")
             print("      core natively on any Windows machine.")
 
         # A state is a failure when it starts with "FAILED", so that qualified
         # states such as "FAILED (C build failed)" still fail the process. An
         # exact comparison let the C build failure fall through and exit 0.
-        failed = _failing_stages({
-            "Go unit tests": go_state,
-            "Rust unit tests": rust_state,
-            "C core tests": c_state,
-            "C core fuzzer": fuzz_state,
-            "core health": health_state,
-        })
+        failed = _failing_stages(
+            {
+                "Go unit tests": go_state,
+                "Rust unit tests": rust_state,
+                "C core tests": c_state,
+                "C core fuzzer": fuzz_state,
+                "core health": health_state,
+            }
+        )
 
         if failed:
             print(f"[-] Failing stages: {', '.join(failed)}")

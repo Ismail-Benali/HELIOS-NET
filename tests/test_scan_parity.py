@@ -69,10 +69,13 @@ def test_both_backends_agree_on_which_ports_are_open(fake_socket):
 
     # Go core: reports exactly the open ports.
     monkey_go = lambda *a, **k: [  # noqa: E731 - a stub, kept on one line
-        {"port": p, "open": True, "state": "open", "service": None} for p in sorted(open_ports)
+        {"port": p, "open": True, "state": "open", "service": None}
+        for p in sorted(open_ports)
     ]
     original_run, original_avail, original_err = (
-        goscan_bridge.run_go_scan, goscan_bridge.core_available, goscan_bridge.LAST_ERROR
+        goscan_bridge.run_go_scan,
+        goscan_bridge.core_available,
+        goscan_bridge.LAST_ERROR,
     )
     goscan_bridge.run_go_scan, goscan_bridge.core_available = monkey_go, lambda: True
     goscan_bridge.LAST_ERROR = None
@@ -121,7 +124,9 @@ def test_the_caller_port_list_reaches_the_go_core_not_its_own_default():
         return []
 
     original_run, original_avail, original_err = (
-        goscan_bridge.run_go_scan, goscan_bridge.core_available, goscan_bridge.LAST_ERROR
+        goscan_bridge.run_go_scan,
+        goscan_bridge.core_available,
+        goscan_bridge.LAST_ERROR,
     )
     goscan_bridge.run_go_scan, goscan_bridge.core_available = capture, lambda: True
     goscan_bridge.LAST_ERROR = None
@@ -141,7 +146,9 @@ def test_a_recorded_core_failure_is_not_read_as_a_clean_sweep():
     from modules.discovery import goscan_bridge
 
     original_run, original_avail, original_err = (
-        goscan_bridge.run_go_scan, goscan_bridge.core_available, goscan_bridge.LAST_ERROR
+        goscan_bridge.run_go_scan,
+        goscan_bridge.core_available,
+        goscan_bridge.LAST_ERROR,
     )
     goscan_bridge.run_go_scan = lambda *a, **k: []
     goscan_bridge.core_available = lambda: True
@@ -164,7 +171,9 @@ def test_a_failing_backend_records_why_it_was_skipped(fake_socket):
     from modules.discovery import goscan_bridge
 
     original_run, original_avail, original_err = (
-        goscan_bridge.run_go_scan, goscan_bridge.core_available, goscan_bridge.LAST_ERROR
+        goscan_bridge.run_go_scan,
+        goscan_bridge.core_available,
+        goscan_bridge.LAST_ERROR,
     )
 
     def boom(*args, **kwargs):

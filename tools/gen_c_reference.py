@@ -35,14 +35,19 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from c_reference_corpus import MATCH_CASES, PARSE_CASES  # type: ignore[import-not-found]  # noqa: E402
+from c_reference_corpus import (  # type: ignore[import-not-found]  # noqa: E402
+    MATCH_CASES,
+    PARSE_CASES,
+)
 
 from core import accel, c_core_bridge, rust_bridge  # noqa: E402
 
 GOLDEN = ROOT / "tests" / "golden" / "c_reference.json"
 
 
-def _native_matches(case_name: str, banner: str, patterns: list[str]) -> tuple[list[tuple[str, int]], str]:
+def _native_matches(
+    case_name: str, banner: str, patterns: list[str]
+) -> tuple[list[tuple[str, int]], str]:
     """Matches for one case from the most trustworthy core available here."""
     if c_core_bridge.core_available():
         outcome = accel.match_signatures(banner, patterns, prefer="c")
@@ -75,16 +80,19 @@ def build() -> dict[str, Any]:
                 f"refusing to record a golden for {name!r}: the native core and the "
                 f"in-process path disagree.\n  native: {native}\n  python: {python_side}"
             )
-        matches.append({
-            "name": name,
-            "banner": banner,
-            "patterns": patterns,
-            "matches": [[sig, pos] for sig, pos in native],
-        })
+        matches.append(
+            {
+                "name": name,
+                "banner": banner,
+                "patterns": patterns,
+                "matches": [[sig, pos] for sig, pos in native],
+            }
+        )
 
     parse: list[dict[str, Any]] = []
     for name, text, expected in PARSE_CASES:
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp:
             sig = Path(tmp) / "sigs.txt"
             sig.write_text(text, encoding="utf-8")
@@ -144,7 +152,9 @@ def main() -> int:
 
     GOLDEN.write_text(blob, encoding="utf-8")
     print(f"wrote {GOLDEN} from {payload['established_by']}")
-    print(f"  {len(payload['match_cases'])} match cases, {len(payload['parse_cases'])} parse cases")
+    print(
+        f"  {len(payload['match_cases'])} match cases, {len(payload['parse_cases'])} parse cases"
+    )
     return 0
 
 
