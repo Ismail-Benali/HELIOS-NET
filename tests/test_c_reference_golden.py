@@ -53,9 +53,7 @@ SHORT_CIRCUIT_CASES = {"empty_banner"}
 @pytest.fixture(scope="module")
 def goldens() -> dict:
     if not GOLDEN.exists():
-        pytest.fail(
-            f"{GOLDEN} is missing; generate it with tools/gen_c_reference.py"
-        )
+        pytest.fail(f"{GOLDEN} is missing; generate it with tools/gen_c_reference.py")
     payload = json.loads(GOLDEN.read_text(encoding="utf-8"))
     # Indexed here rather than stored twice: the file stays the single record of
     # what the native core answered, with no derived copy to fall out of step.
@@ -110,8 +108,10 @@ def test_python_path_reproduces_the_c_contract(goldens, case):
 
 
 # --------------------------------------------------------- the native paths
-@pytest.mark.skipif(not rust_bridge.rust_available(),
-                    reason="the Rust core is not available on this host")
+@pytest.mark.skipif(
+    not rust_bridge.rust_available(),
+    reason="the Rust core is not available on this host",
+)
 @pytest.mark.parametrize("case", MATCH_CASES, ids=[c[0] for c in MATCH_CASES])
 def test_rust_core_reproduces_the_c_contract(goldens, case):
     name, banner, patterns = case
@@ -130,8 +130,10 @@ def test_rust_core_reproduces_the_c_contract(goldens, case):
     assert produced == expected
 
 
-@pytest.mark.skipif(not c_core_bridge.core_available(),
-                    reason="the C core cannot be executed on this host")
+@pytest.mark.skipif(
+    not c_core_bridge.core_available(),
+    reason="the C core cannot be executed on this host",
+)
 @pytest.mark.parametrize("case", MATCH_CASES, ids=[c[0] for c in MATCH_CASES])
 def test_c_core_still_reproduces_its_own_contract(goldens, case):
     """Runs wherever the C core is runnable - CI, and unblocked developer hosts.

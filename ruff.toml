@@ -1,3 +1,35 @@
 [lint]
-select = []
-ignore = []
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+]
+ignore = [
+    "E501",
+    "B007",
+    "B008",
+    "SIM112",
+    "F841",
+    "SIM108",
+    "SIM103",
+    "SIM117",
+    "SIM105",
+    "E731",
+    "B905",
+    "B904",
+    "E741",
+    "BLE001",
+    "RUF012",
+    "PERF102",
+    "FLY002",
+    "SIM102",
+    "SIM222",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"

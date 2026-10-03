@@ -8,13 +8,12 @@ based on WAF/IDS feedback and target response latencies, using pure Python.
 from __future__ import annotations
 
 import random
-from typing import List
 
 
 class EpsilonGreedyBandit:
     """Multi-Armed Bandit for dynamic scan speed optimization."""
 
-    def __init__(self, arms: List[float], epsilon: float = 0.1):
+    def __init__(self, arms: list[float], epsilon: float = 0.1):
         # arms represent different scan rates (requests per second)
         self.arms = arms
         self.epsilon = epsilon

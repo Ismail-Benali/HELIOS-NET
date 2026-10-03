@@ -74,7 +74,9 @@ class TestCompilerMustActuallyRun:
     def test_race_env_enables_cgo_for_a_working_compiler(self, monkeypatch, tmp_path):
         stub = tmp_path / ("gcc.bat" if os.name == "nt" else "gcc")
         if os.name == "nt":
-            stub.write_text("@echo off\r\necho gcc (test stub) 1.0\r\n", encoding="utf-8")
+            stub.write_text(
+                "@echo off\r\necho gcc (test stub) 1.0\r\n", encoding="utf-8"
+            )
         else:
             stub.write_text("#!/bin/sh\necho 'gcc (test stub) 1.0'\n", encoding="utf-8")
             stub.chmod(0o755)
@@ -95,25 +97,41 @@ class TestFailureStatesAreNotSwallowed:
     passing after the real one regressed.
     """
 
-    @pytest.mark.parametrize("state", [
-        "FAILED", "FAILED (C build failed)", "FAILED (anything else)",
-    ])
+    @pytest.mark.parametrize(
+        "state",
+        [
+            "FAILED",
+            "FAILED (C build failed)",
+            "FAILED (anything else)",
+        ],
+    )
     def test_prefixed_failed_states_count_as_failures(self, state):
         stages = {
-            "Go unit tests": state, "Rust unit tests": "PASSED",
-            "C core tests": "PASSED", "C core fuzzer": "SKIPPED",
+            "Go unit tests": state,
+            "Rust unit tests": "PASSED",
+            "C core tests": "PASSED",
+            "C core fuzzer": "SKIPPED",
             "core health": "PASSED",
         }
         assert build._failing_stages(stages) == ["Go unit tests"]
 
-    @pytest.mark.parametrize("state", [
-        "PASSED", "SKIPPED", "SKIPPED (no usable C toolchain)",
-        "BLOCKED BY HOST POLICY", "failed-not-a-state", "",
-    ])
+    @pytest.mark.parametrize(
+        "state",
+        [
+            "PASSED",
+            "SKIPPED",
+            "SKIPPED (no usable C toolchain)",
+            "BLOCKED BY HOST POLICY",
+            "failed-not-a-state",
+            "",
+        ],
+    )
     def test_non_failure_states_do_not_fail_the_process(self, state):
         stages = {
-            "Go unit tests": state, "Rust unit tests": "PASSED",
-            "C core tests": "PASSED", "C core fuzzer": "SKIPPED",
+            "Go unit tests": state,
+            "Rust unit tests": "PASSED",
+            "C core tests": "PASSED",
+            "C core fuzzer": "SKIPPED",
             "core health": "PASSED",
         }
         assert build._failing_stages(stages) == []
@@ -121,18 +139,22 @@ class TestFailureStatesAreNotSwallowed:
     def test_a_c_build_failure_alone_fails_the_process(self):
         """The exact regression: C skipped is fine, C build broken is not."""
         stages = {
-            "Go unit tests": "PASSED", "Rust unit tests": "PASSED",
+            "Go unit tests": "PASSED",
+            "Rust unit tests": "PASSED",
             "C core tests": "FAILED (C build failed)",
-            "C core fuzzer": "SKIPPED", "core health": "PASSED",
+            "C core fuzzer": "SKIPPED",
+            "core health": "PASSED",
         }
         assert build._failing_stages(stages) == ["C core tests"]
 
     def test_a_missing_c_toolchain_is_not_a_failure(self):
         """Skipping C for lack of a compiler must stay exit-0 compatible."""
         stages = {
-            "Go unit tests": "PASSED", "Rust unit tests": "PASSED",
+            "Go unit tests": "PASSED",
+            "Rust unit tests": "PASSED",
             "C core tests": "SKIPPED (no usable C toolchain)",
-            "C core fuzzer": "SKIPPED", "core health": "PASSED",
+            "C core fuzzer": "SKIPPED",
+            "core health": "PASSED",
         }
         assert build._failing_stages(stages) == []
 
@@ -142,8 +164,13 @@ class TestFailureStatesAreNotSwallowed:
         start = source.index("failed = _failing_stages(")
         end = source.index("if failed:", start)
         mapping = source[start:end]
-        for stage in ("Go unit tests", "Rust unit tests", "C core tests",
-                      "C core fuzzer", "core health"):
+        for stage in (
+            "Go unit tests",
+            "Rust unit tests",
+            "C core tests",
+            "C core fuzzer",
+            "core health",
+        ):
             assert stage in mapping, f"{stage} is missing from the failure mapping"
 
 
@@ -163,17 +190,23 @@ class TestCOutcomesStayDistinguishable:
         they cannot, so a host with no compiler still gets real C evidence. Only a
         stage that produced nothing is reported as a skip.
         """
-        assert build._c_core_state(
-            {"c": False, "c_build": None, "c_tests": "passed"}) == "PASSED"
+        assert (
+            build._c_core_state({"c": False, "c_build": None, "c_tests": "passed"})
+            == "PASSED"
+        )
 
     def test_a_build_failure_outranks_a_stale_c_tests_value(self):
         state = build._c_core_state({"c": True, "c_build": False, "c_tests": "passed"})
         assert state == "FAILED (C build failed)"
 
     def test_a_working_toolchain_reports_the_real_test_result(self):
-        for raw, expected in ((True, "PASSED"), (False, "FAILED"),
-                              ("blocked", "BLOCKED BY HOST POLICY"),
-                              ("passed", "PASSED"), ("failed", "FAILED")):
+        for raw, expected in (
+            (True, "PASSED"),
+            (False, "FAILED"),
+            ("blocked", "BLOCKED BY HOST POLICY"),
+            ("passed", "PASSED"),
+            ("failed", "FAILED"),
+        ):
             state = build._c_core_state({"c": True, "c_build": True, "c_tests": raw})
             assert state == expected, f"c_tests={raw!r} reported as {state!r}"
 
@@ -191,9 +224,10 @@ class TestCOutcomesStayDistinguishable:
         source = (ROOT / "build.py").read_text(encoding="utf-8")
         assert "c_state = _c_core_state(toolchain_status)" in source
         assert "SKIPPED (no usable C toolchain)" not in source.split(
-            "def _c_core_state", 1)[1].split("def _failing_stages", 1)[0].replace(
-                'return "SKIPPED (no usable C toolchain)"', ""
-            ), "the state must be produced in one place only"
+            "def _c_core_state", 1
+        )[1].split("def _failing_stages", 1)[0].replace(
+            'return "SKIPPED (no usable C toolchain)"', ""
+        ), "the state must be produced in one place only"
 
     def test_detection_does_not_swallow_the_build(self):
         """A C build failure must be recorded, not discarded.
@@ -238,15 +272,18 @@ class TestNoProbeArtifactsAreLeftBehind:
 
         tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
         helper = next(
-            node for node in ast.walk(tree)
+            node
+            for node in ast.walk(tree)
             if isinstance(node, ast.FunctionDef) and node.name == "_fake_compiler"
         )
         helper_id = helper.name
         targets = {
             node.func.id: node
             for node in ast.walk(tree)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-            and node.func.id == helper_id and node.args
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == helper_id
+            and node.args
         }
         assert targets, "the suite must still exercise the compiler probe"
         for call in targets.values():
@@ -277,6 +314,7 @@ class TestPrebuiltCBinaryIsAcceptedOnlyWhenCurrent:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("x", encoding="utf-8")
         import os
+
         os.utime(path, (mtime, mtime))
 
     def test_a_binary_newer_than_every_input_is_accepted(self, tmp_path):
@@ -397,7 +435,9 @@ class TestStaleCBinaryIsNotUsedAsHealthy:
         monkeypatch.delenv(bridge._ENV_KEY, raising=False)
         assert bridge._locate_binary() == binary
 
-    def test_staleness_note_explains_why_the_binary_is_not_used(self, tmp_path, monkeypatch):
+    def test_staleness_note_explains_why_the_binary_is_not_used(
+        self, tmp_path, monkeypatch
+    ):
         core, binary, bridge = self._make_core(tmp_path, 5000.0, 1000.0)
         monkeypatch.setattr(bridge, "_CORE_DIR", core)
         monkeypatch.setattr(bridge, "_BINARY_CANDIDATES", (binary,))
@@ -418,7 +458,10 @@ class TestStaleCBinaryIsNotUsedAsHealthy:
 
         core = ROOT / "transport" / "c_core"
         suffix = ".exe" if os.name == "nt" else ""
-        shipped = [core / "build" / f"helios_core{suffix}", core / f"helios_core{suffix}"]
+        shipped = [
+            core / "build" / f"helios_core{suffix}",
+            core / f"helios_core{suffix}",
+        ]
         present = [p for p in shipped if p.exists()]
         if not present:
             pytest.skip("no shipped C core binary to describe")
@@ -450,12 +493,15 @@ class TestPolicyRefusalInToolOutputIsNotAFailure:
     def test_a_refusal_is_recognised(self, output):
         assert build._looks_policy_blocked(output) is True
 
-    @pytest.mark.parametrize("output", [
-        "--- FAIL: TestParsePorts (0.00s)\n    pool_bounds_test.go:41: peak 20000 goroutines\n",
-        "compile error: undefined: resolveService\n",
-        "vet: ./...: some files were not analysed\n",
-        "",
-    ])
+    @pytest.mark.parametrize(
+        "output",
+        [
+            "--- FAIL: TestParsePorts (0.00s)\n    pool_bounds_test.go:41: peak 20000 goroutines\n",
+            "compile error: undefined: resolveService\n",
+            "vet: ./...: some files were not analysed\n",
+            "",
+        ],
+    )
     def test_a_real_failure_is_not_mistaken_for_a_refusal(self, output):
         assert build._looks_policy_blocked(output) is False
 
@@ -481,7 +527,7 @@ class TestPolicyRefusalInToolOutputIsNotAFailure:
         # has its own policy check now, so a whole-file search finds that one
         # first and asserts against the wrong function.
         go_start = source.index("def run_go_unit_tests(")
-        go_source = source[go_start:source.index("\ndef ", go_start + 1)]
+        go_source = source[go_start : source.index("\ndef ", go_start + 1)]
         start = go_source.index("if _looks_policy_blocked(output):")
         end = go_source.index("continue", start)
         branch = go_source[start:end]
@@ -498,7 +544,7 @@ class TestPolicyRefusalInToolOutputIsNotAFailure:
         """
         source = (ROOT / "build.py").read_text(encoding="utf-8")
         rust_start = source.index("def run_rust_unit_tests(")
-        rust_source = source[rust_start:source.index("\ndef ", rust_start + 1)]
+        rust_source = source[rust_start : source.index("\ndef ", rust_start + 1)]
         assert "_looks_policy_blocked(output)" in rust_source, (
             "the Rust stage must check for a policy refusal"
         )
@@ -509,7 +555,7 @@ class TestPolicyRefusalInToolOutputIsNotAFailure:
         """A stage that is blocked but not failed must return "blocked"."""
         source = (ROOT / "build.py").read_text(encoding="utf-8")
         start = source.index("if not ok and blocked:")
-        snippet = source[start:start + 400]
+        snippet = source[start : start + 400]
         assert 'return "blocked"' in snippet
         assert 'return "passed" if ok else "failed"' in snippet, (
             "a blocked stage must not fall through to the passed/failed return"
@@ -517,9 +563,11 @@ class TestPolicyRefusalInToolOutputIsNotAFailure:
 
     def test_go_state_maps_every_return_value(self):
         cases = {
-            (True, "PASSED"), ("passed", "PASSED"),
+            (True, "PASSED"),
+            ("passed", "PASSED"),
             ("blocked", "BLOCKED BY HOST POLICY"),
-            (False, "FAILED"), ("failed", "FAILED"),
+            (False, "FAILED"),
+            ("failed", "FAILED"),
         }
         for raw, expected in cases:
             assert build._go_state({"go": True, "go_tests": raw}) == expected, raw
@@ -532,7 +580,7 @@ def test_the_rust_stage_reports_a_refusal_as_its_own_state():
     """The three outcomes the summary has to be able to tell apart."""
     source = (ROOT / "build.py").read_text(encoding="utf-8")
     rust_start = source.index("def run_rust_unit_tests(")
-    rust_source = source[rust_start:source.index("\ndef ", rust_start + 1)]
+    rust_source = source[rust_start : source.index("\ndef ", rust_start + 1)]
     for state in ('return "passed"', 'return "failed"', 'return "blocked"'):
         assert state in rust_source, f"the Rust stage has no {state} path"
 
@@ -551,40 +599,53 @@ class TestHealthProbeReportsWhatItProved:
     @staticmethod
     def _fake_health(monkeypatch, cores):
         from core import cores as cores_mod
+
         monkeypatch.setattr(cores_mod, "health_report", lambda: {"cores": cores})
         monkeypatch.setattr(cores_mod, "format_report", lambda r: "report")
 
     def test_a_refused_core_yields_blocked_not_passed(self, monkeypatch):
-        self._fake_health(monkeypatch, [
-            {"name": "go", "state": "blocked", "detail": "refused by host policy"},
-        ])
+        self._fake_health(
+            monkeypatch,
+            [
+                {"name": "go", "state": "blocked", "detail": "refused by host policy"},
+            ],
+        )
         assert build.run_core_health() == "blocked"
 
     def test_a_broken_core_still_fails(self, monkeypatch):
-        self._fake_health(monkeypatch, [
-            {"name": "c", "state": "failed", "detail": "selftest failed"},
-        ])
+        self._fake_health(
+            monkeypatch,
+            [
+                {"name": "c", "state": "failed", "detail": "selftest failed"},
+            ],
+        )
         assert build.run_core_health() == "failed"
 
     def test_a_refused_core_outranks_a_fallback_core(self, monkeypatch):
-        self._fake_health(monkeypatch, [
-            {"name": "python-fallback", "state": "fallback", "detail": "absent"},
-            {"name": "go", "state": "blocked", "detail": "refused by host policy"},
-        ])
+        self._fake_health(
+            monkeypatch,
+            [
+                {"name": "python-fallback", "state": "fallback", "detail": "absent"},
+                {"name": "go", "state": "blocked", "detail": "refused by host policy"},
+            ],
+        )
         assert build.run_core_health() == "blocked"
 
     def test_healthy_cores_pass(self, monkeypatch):
-        self._fake_health(monkeypatch, [
-            {"name": "rust", "state": "ok", "detail": "19 checks"},
-            {"name": "c", "state": "ok", "detail": "selftest ok"},
-        ])
+        self._fake_health(
+            monkeypatch,
+            [
+                {"name": "rust", "state": "ok", "detail": "19 checks"},
+                {"name": "c", "state": "ok", "detail": "selftest ok"},
+            ],
+        )
         assert build.run_core_health() == "passed"
 
     def test_blocked_health_is_named_in_the_coverage_gap(self):
         """A gap that is not printed is a gap nobody acts on."""
         source = (ROOT / "build.py").read_text(encoding="utf-8")
         start = source.index("gaps = [")
-        snippet = source[start:start + 400]
+        snippet = source[start : start + 400]
         assert "native core health probe" in snippet
 
 
@@ -603,7 +664,7 @@ class TestCStagesRunWithoutACompiler:
         # contains the same text.
         call = source.index('toolchain_status["c_tests"] = run_c_core_tests()')
         guard = source.rindex("\n    if ", 0, call) + 1
-        line = source[guard:source.index("\n", guard)]
+        line = source[guard : source.index("\n", guard)]
         assert 'toolchain_status["c"]' not in line, (
             f"C stages are still gated on compiler detection: {line.strip()!r}"
         )
@@ -613,14 +674,18 @@ class TestCStagesRunWithoutACompiler:
 
     def test_both_c_stages_are_still_wired(self):
         source = (ROOT / "build.py").read_text(encoding="utf-8")
-        assert "toolchain_status[\"c_tests\"] = run_c_core_tests()" in source
-        assert "toolchain_status[\"c_fuzz\"] = run_c_fuzz_harness()" in source
+        assert 'toolchain_status["c_tests"] = run_c_core_tests()' in source
+        assert 'toolchain_status["c_fuzz"] = run_c_fuzz_harness()' in source
 
 
 def test_build_module_imports_without_side_effects(monkeypatch):
     """Importing build.py must not start a pipeline or touch os.exit."""
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, "", ""))
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")
+    )
     module = _load_build()
     assert callable(module.run_go_unit_tests)
     assert callable(module._race_env)
-    assert os.environ.get("CGO_ENABLED") != "1", "importing must not enable cgo globally"
+    assert os.environ.get("CGO_ENABLED") != "1", (
+        "importing must not enable cgo globally"
+    )

@@ -7,14 +7,20 @@ Ensures authorized boundaries and prevents out-of-scope scanning.
 from __future__ import annotations
 
 import ipaddress
-from typing import List, Union
 
 
 class ScopeEnforcer:
     """Validates targets against strict authorized CIDR scopes and allowlists."""
 
-    def __init__(self, allowed_cidrs: List[str] | None = None, allowed_domains: List[str] | None = None):
-        self.networks = [ipaddress.ip_network(cidr, strict=False) for cidr in (allowed_cidrs or ["0.0.0.0/0", "::/0"])]
+    def __init__(
+        self,
+        allowed_cidrs: list[str] | None = None,
+        allowed_domains: list[str] | None = None,
+    ):
+        self.networks = [
+            ipaddress.ip_network(cidr, strict=False)
+            for cidr in (allowed_cidrs or ["0.0.0.0/0", "::/0"])
+        ]
         self.domains = [d.lower() for d in (allowed_domains or [])]
 
     def is_target_allowed(self, target: str) -> bool:

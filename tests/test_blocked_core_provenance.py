@@ -19,12 +19,9 @@ never the source of an answer, and always carries the reason it was skipped.
 
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 
-from core import accel
-from core import c_core_bridge
+from core import accel, c_core_bridge
 
 
 def _refuse_4551(*args, **kwargs):
@@ -37,7 +34,11 @@ def blocked_core(monkeypatch):
     """A C core that exists on disk but the host will not execute."""
     monkeypatch.setattr(c_core_bridge, "_BINARY", c_core_bridge.Path("helios_core.exe"))
     monkeypatch.setattr(c_core_bridge.subprocess, "run", _refuse_4551)
-    monkeypatch.setattr(c_core_bridge, "_library_cache", {"lib": None, "path": None, "reason": "policy refusal"})
+    monkeypatch.setattr(
+        c_core_bridge,
+        "_library_cache",
+        {"lib": None, "path": None, "reason": "policy refusal"},
+    )
     c_core_bridge.reset_availability()
     yield
     c_core_bridge.reset_availability()
@@ -77,13 +78,17 @@ def test_the_execution_probe_is_probed_once_not_per_call(blocked_core, monkeypat
 
     for _ in range(5):
         c_core_bridge.core_available()
-    assert len(calls) == 1, f"the probe ran {len(calls)} times; it is on a dispatch path"
+    assert len(calls) == 1, (
+        f"the probe ran {len(calls)} times; it is on a dispatch path"
+    )
 
 
 def test_reset_allows_the_probe_to_run_again(blocked_core):
     assert c_core_bridge.core_available() is False
     c_core_bridge.reset_availability()
-    assert c_core_bridge.core_available() is False, "re-probing must reach the same verdict"
+    assert c_core_bridge.core_available() is False, (
+        "re-probing must reach the same verdict"
+    )
 
 
 # -------------------------------------------------------- the accel answer

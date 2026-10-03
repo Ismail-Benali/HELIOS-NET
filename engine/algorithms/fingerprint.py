@@ -13,17 +13,27 @@ is never touched.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from . import register_algo
-
 
 # Primary signals per family (approximate values for an educational/lab setting).
 # Structure: family -> {ttl_mean, ttl_spread, window, tcp_options_len}
 PROFILES = {
     "linux": {"ttl_mean": 64, "ttl_spread": 6, "window": 64240, "tcp_options_len": 20},
-    "windows": {"ttl_mean": 128, "ttl_spread": 8, "window": 65535, "tcp_options_len": 40},
-    "router": {"ttl_mean": 255, "ttl_spread": 4, "window": 16384, "tcp_options_len": 12},
+    "windows": {
+        "ttl_mean": 128,
+        "ttl_spread": 8,
+        "window": 65535,
+        "tcp_options_len": 40,
+    },
+    "router": {
+        "ttl_mean": 255,
+        "ttl_spread": 4,
+        "window": 16384,
+        "tcp_options_len": 12,
+    },
 }
 
 
@@ -72,6 +82,7 @@ register_algo("fingerprint", "bayes", _bayes)
 def fingerprint_sig(sig: dict[str, Any], kind: str = "ttl_flat") -> dict[str, Any]:
     """The public gateway - invoked by the recon engine when switching models."""
     from . import get_algo
+
     algo: Callable[[dict[str, Any]], dict[str, Any]]
     try:
         algo = get_algo("fingerprint", kind)

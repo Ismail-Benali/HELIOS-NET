@@ -17,7 +17,10 @@ def open_high_value_port() -> Rule:
     return Rule(
         name="critical_port_open",
         weight=0.65,
-        test=lambda f: str(f.get("port")) in critical or str(f.get("service", "")).lower() in critical.values(),
+        test=lambda f: (
+            str(f.get("port")) in critical
+            or str(f.get("service", "")).lower() in critical.values()
+        ),
         note="Critical port open - flagged for deep inspection.",
     )
 
@@ -27,7 +30,9 @@ def web_presence() -> Rule:
     return Rule(
         name="web_surface",
         weight=0.5,
-        test=lambda f: any(k in str(f.get("service", "")).upper() for k in ("HTTP", "HTTPS", "8080")),
+        test=lambda f: any(
+            k in str(f.get("service", "")).upper() for k in ("HTTP", "HTTPS", "8080")
+        ),
         note="Web interface available for application reconnaissance.",
     )
 

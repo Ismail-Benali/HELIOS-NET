@@ -28,10 +28,14 @@ def _stub_orchestrator(monkeypatch, registry: dict | None = None):
     from core.orchestrator import Orchestrator
 
     def fake_build(path: str) -> Orchestrator:
-        reg = registry if registry is not None else {
-            name: (lambda step, ctx, n=name: {"module": n, "step": step.step_id})
-            for name in ("discovery", "recon", "stealth", "exfil")
-        }
+        reg = (
+            registry
+            if registry is not None
+            else {
+                name: (lambda step, ctx, n=name: {"module": n, "step": step.step_id})
+                for name in ("discovery", "recon", "stealth", "exfil")
+            }
+        )
         return Orchestrator(StateStore(path), reg=reg, max_workers=2)
 
     monkeypatch.setattr(cli, "_build_orchestrator", fake_build)
@@ -45,6 +49,7 @@ def _args(**kwargs) -> argparse.Namespace:
 # --------------------------------------------------------------------------- #
 # parser contract
 # --------------------------------------------------------------------------- #
+
 
 def test_every_documented_subcommand_is_registered():
     parser = cli.build_parser()
@@ -84,6 +89,7 @@ def test_daemon_interval_is_a_positive_number():
 # --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
+
 
 def test_recon_runs_a_campaign_and_reports_zero(capsys, monkeypatch, data_dir):
     _stub_orchestrator(monkeypatch)
@@ -159,15 +165,23 @@ def test_judge_classifies_findings(capsys, monkeypatch):
     from modules.discovery import service
 
     monkeypatch.setattr(
-        service, "discover_ports",
+        service,
+        "discover_ports",
         lambda host, ports=None: [
-            {"module": "discovery", "host": host, "port": 22,
-             "service": "ssh", "open": True, "banner": "SSH-2.0-OpenSSH_9.6"}
+            {
+                "module": "discovery",
+                "host": host,
+                "port": 22,
+                "service": "ssh",
+                "open": True,
+                "banner": "SSH-2.0-OpenSSH_9.6",
+            }
         ],
     )
     # The command imports the symbol directly, so patch it where it is used.
-    monkeypatch.setattr("modules.discovery.service.discover_ports",
-                        service.discover_ports)
+    monkeypatch.setattr(
+        "modules.discovery.service.discover_ports", service.discover_ports
+    )
 
     assert cli.cmd_judge(_args(target="10.0.0.1")) == 0
     out = capsys.readouterr().out
@@ -177,7 +191,6 @@ def test_judge_classifies_findings(capsys, monkeypatch):
 
 
 def test_daemon_starts_and_stops_cleanly(capsys, monkeypatch, data_dir):
-    import asyncio
 
     started: list[str] = []
 
@@ -225,6 +238,7 @@ def test_sim_runs_the_simulation(monkeypatch):
 # dispatch
 # --------------------------------------------------------------------------- #
 
+
 def test_main_dispatches_and_returns_an_int(monkeypatch, data_dir):
     seen: list[argparse.Namespace] = []
 
@@ -236,8 +250,9 @@ def test_main_dispatches_and_returns_an_int(monkeypatch, data_dir):
 
     def patched_build() -> argparse.ArgumentParser:
         parser = real_build()
-        subparsers = [a for a in parser._actions
-                      if isinstance(a, argparse._SubParsersAction)][0]
+        subparsers = [
+            a for a in parser._actions if isinstance(a, argparse._SubParsersAction)
+        ][0]
         subparsers.choices["recon"].set_defaults(fn=fake_recon)
         return parser
 
@@ -267,8 +282,9 @@ def test_a_command_returning_a_nonzero_code_reaches_the_caller(monkeypatch):
 
     def patched_build() -> argparse.ArgumentParser:
         parser = real_build()
-        status = [a for a in parser._actions
-                  if isinstance(a, argparse._SubParsersAction)][0].choices["status"]
+        status = [
+            a for a in parser._actions if isinstance(a, argparse._SubParsersAction)
+        ][0].choices["status"]
         status.set_defaults(fn=failing)
         return parser
 

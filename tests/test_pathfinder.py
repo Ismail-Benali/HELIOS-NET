@@ -58,8 +58,9 @@ def _matrix(graph: AssetGraph) -> dict[tuple[str, str], float]:
     return matrix
 
 
-def _reference_shortest(matrix: dict[tuple[str, str], float], src: str,
-                        dst: str) -> float:
+def _reference_shortest(
+    matrix: dict[tuple[str, str], float], src: str, dst: str
+) -> float:
     """Shortest path by relaxing every edge until nothing changes.
 
     No heap, no visited set, no early exit, no reliance on pop ordering. Correct
@@ -87,7 +88,7 @@ def _random_graph(rng: random.Random, size: int, density: float = 0.25) -> Asset
         kind = "service" if rng.random() < 0.5 else "host"
         graph.add_node(node_id, kind, name=rng.choice(services))
     for i, a in enumerate(ids):
-        for b in ids[i + 1:]:
+        for b in ids[i + 1 :]:
             if rng.random() < density:
                 graph.add_edge(a, b)
     return graph
@@ -122,8 +123,7 @@ def test_matches_independent_reference_on_random_graphs():
         expected = _reference_shortest(_matrix(graph), entry, target)
 
         assert cost == pytest.approx(expected), (
-            f"{entry} -> {target}: engine {cost} != reference {expected}, "
-            f"path {path}"
+            f"{entry} -> {target}: engine {cost} != reference {expected}, path {path}"
         )
         compared += 1
 
@@ -172,9 +172,9 @@ def test_never_reports_a_higher_cost_than_the_alternative_route():
     graph = AssetGraph()
     graph.add_node("entry", "host", name="unknown")
     for cheap in ("c0", "c1", "c2"):
-        graph.add_node(cheap, "service", name="http")     # 2.0 each
+        graph.add_node(cheap, "service", name="http")  # 2.0 each
     for pricey in ("p0", "p1"):
-        graph.add_node(pricey, "service", name="ssh")      # 5.0 each
+        graph.add_node(pricey, "service", name="ssh")  # 5.0 each
     graph.add_node("target", "host", name="unknown")
 
     graph.add_edge("entry", "c0")
@@ -216,8 +216,8 @@ def test_service_cost_ordering_actually_drives_the_route():
     """
     graph = AssetGraph()
     graph.add_node("entry", "host", name="unknown")
-    graph.add_node("via_http", "service", name="http")    # 2.0
-    graph.add_node("via_ssh", "service", name="ssh")      # 5.0
+    graph.add_node("via_http", "service", name="http")  # 2.0
+    graph.add_node("via_ssh", "service", name="ssh")  # 5.0
     graph.add_node("target", "host", name="unknown")
     graph.add_edge("entry", "via_http")
     graph.add_edge("entry", "via_ssh")
