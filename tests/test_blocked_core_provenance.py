@@ -37,6 +37,7 @@ def blocked_core(monkeypatch):
     """A C core that exists on disk but the host will not execute."""
     monkeypatch.setattr(c_core_bridge, "_BINARY", c_core_bridge.Path("helios_core.exe"))
     monkeypatch.setattr(c_core_bridge.subprocess, "run", _refuse_4551)
+    monkeypatch.setattr(c_core_bridge, "_library_cache", {"lib": None, "path": None, "reason": "policy refusal"})
     c_core_bridge.reset_availability()
     yield
     c_core_bridge.reset_availability()
