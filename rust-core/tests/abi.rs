@@ -96,10 +96,14 @@ fn empty_text_is_distinguishable_from_failure() {
     unsafe {
         // A successful scan of nothing is an empty result, not an error. The
         // Python bridge relies on this to tell "no match" from "core broken".
-        assert_eq!(take_owned(helios_match_signatures(empty.as_ptr(), patterns.as_ptr())).as_deref(),
-                   Some(""));
-        assert_eq!(take_owned(helios_match_json(empty.as_ptr(), patterns.as_ptr())).as_deref(),
-                   Some("[]"));
+        assert_eq!(
+            take_owned(helios_match_signatures(empty.as_ptr(), patterns.as_ptr())).as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            take_owned(helios_match_json(empty.as_ptr(), patterns.as_ptr())).as_deref(),
+            Some("[]")
+        );
     }
 }
 
@@ -108,8 +112,10 @@ fn empty_pattern_set_matches_nothing() {
     let text = c("alpha beta gamma");
     let none = c("");
     unsafe {
-        assert_eq!(take_owned(helios_match_json(text.as_ptr(), none.as_ptr())).as_deref(),
-                   Some("[]"));
+        assert_eq!(
+            take_owned(helios_match_json(text.as_ptr(), none.as_ptr())).as_deref(),
+            Some("[]")
+        );
     }
 }
 
@@ -132,7 +138,10 @@ fn invalid_utf8_pattern_lines_are_skipped_not_fatal() {
         let out = take_owned(helios_match_json(text.as_ptr(), blob.as_ptr())).unwrap();
         assert!(out.contains("alpha"), "valid line before junk lost: {out}");
         assert!(out.contains("beta"), "valid line after junk lost: {out}");
-        assert!(!out.contains('\u{FFFD}'), "invalid bytes leaked into JSON: {out}");
+        assert!(
+            !out.contains('\u{FFFD}'),
+            "invalid bytes leaked into JSON: {out}"
+        );
     }
 }
 
@@ -145,8 +154,15 @@ fn json_output_escapes_quote_and_backslash_in_labels() {
     unsafe {
         let out = take_owned(helios_match_json(text.as_ptr(), nasty.as_ptr())).unwrap();
         // Exactly one object, not two: an unescaped quote would split the JSON.
-        assert!(out.starts_with('[') && out.ends_with(']'), "not an array: {out}");
-        assert_eq!(out.matches('{').count(), 1, "JSON was split by a raw quote: {out}");
+        assert!(
+            out.starts_with('[') && out.ends_with(']'),
+            "not an array: {out}"
+        );
+        assert_eq!(
+            out.matches('{').count(),
+            1,
+            "JSON was split by a raw quote: {out}"
+        );
     }
 }
 
@@ -157,8 +173,10 @@ fn pattern_longer_than_text_is_safe() {
     let text = c("ab");
     let long = c("abcdefghijklmnopqrstuvwxyz");
     unsafe {
-        assert_eq!(take_owned(helios_match_json(text.as_ptr(), long.as_ptr())).as_deref(),
-                   Some("[]"));
+        assert_eq!(
+            take_owned(helios_match_json(text.as_ptr(), long.as_ptr())).as_deref(),
+            Some("[]")
+        );
     }
 }
 
@@ -170,11 +188,17 @@ fn fnv1a32_matches_the_known_vector() {
     // still agrees with the C core and the Python fallback.
     let empty = c("");
     unsafe {
-        assert_eq!(take_owned(helios_fnv1a32(empty.as_ptr())).as_deref(), Some("0x811C9DC5"));
+        assert_eq!(
+            take_owned(helios_fnv1a32(empty.as_ptr())).as_deref(),
+            Some("0x811C9DC5")
+        );
     }
     let a = c("a");
     unsafe {
-        assert_eq!(take_owned(helios_fnv1a32(a.as_ptr())).as_deref(), Some("0xE40C292C"));
+        assert_eq!(
+            take_owned(helios_fnv1a32(a.as_ptr())).as_deref(),
+            Some("0xE40C292C")
+        );
     }
 }
 
@@ -225,7 +249,10 @@ fn graph_out_of_range_endpoints_are_dropped() {
     unsafe {
         let comps = take_owned(helios_graph_components(3, edges.as_ptr(), 2)).unwrap();
         // Each of the 3 nodes is its own component once the edges are dropped.
-        assert!(comps.contains("\"count\":3"), "out-of-range edges survived: {comps}");
+        assert!(
+            comps.contains("\"count\":3"),
+            "out-of-range edges survived: {comps}"
+        );
 
         let c = take_owned(helios_graph_centrality(3, edges.as_ptr(), 2)).unwrap();
         assert!(c.contains("\"centrality\":0.000000"), "stale degree in {c}");
@@ -239,8 +266,8 @@ fn graph_shortest_path_rejects_out_of_range_endpoints() {
     let edges: [u32; 4] = [0, 1, 1, 2];
     unsafe {
         for (src, goal) in [(u32::MAX, 0), (0, u32::MAX), (99, 99)] {
-            let out = take_owned(helios_graph_shortest_path(3, edges.as_ptr(), 2, src, goal))
-                .unwrap();
+            let out =
+                take_owned(helios_graph_shortest_path(3, edges.as_ptr(), 2, src, goal)).unwrap();
             assert!(
                 out.contains("unreachable"),
                 "source {src} goal {goal} gave {out} instead of unreachable"
@@ -255,7 +282,10 @@ fn graph_self_loop_still_reaches_itself() {
     let edges: [u32; 2] = [1, 1];
     unsafe {
         let out = take_owned(helios_graph_shortest_path(2, edges.as_ptr(), 1, 1, 1)).unwrap();
-        assert!(!out.contains("unreachable"), "self-loop broke reachability: {out}");
+        assert!(
+            !out.contains("unreachable"),
+            "self-loop broke reachability: {out}"
+        );
     }
 }
 
@@ -284,10 +314,14 @@ fn all_graph_output_is_valid_json() {
         ];
         for d in docs.into_iter().flatten() {
             let trimmed = d.trim();
-            assert!(trimmed.starts_with('{') && trimmed.ends_with('}'),
-                    "not a JSON object: {d}");
-            assert!(!d.contains("NaN") && !d.contains("inf"),
-                    "non-finite number serialised, which is invalid JSON: {d}");
+            assert!(
+                trimmed.starts_with('{') && trimmed.ends_with('}'),
+                "not a JSON object: {d}"
+            );
+            assert!(
+                !d.contains("NaN") && !d.contains("inf"),
+                "non-finite number serialised, which is invalid JSON: {d}"
+            );
         }
     }
 }
@@ -302,9 +336,16 @@ fn moderately_large_graph_is_handled() {
         edges.push((i + 1) as u32);
     }
     unsafe {
-        let comps = take_owned(helios_graph_components(n as c_int, edges.as_ptr(), n as c_int - 1))
-            .unwrap();
-        assert!(comps.contains("\"count\":1"), "chain was not one component: {comps}");
+        let comps = take_owned(helios_graph_components(
+            n as c_int,
+            edges.as_ptr(),
+            n as c_int - 1,
+        ))
+        .unwrap();
+        assert!(
+            comps.contains("\"count\":1"),
+            "chain was not one component: {comps}"
+        );
     }
 }
 
