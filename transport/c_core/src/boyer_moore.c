@@ -62,41 +62,23 @@ int hc_bm_search(const char *text, size_t text_len,
     }
 
     const size_t last = pattern_len - 1;
-    /*
-     * Galil state: `prefix_len` counts how many leading pattern bytes are known
-     * to match as a side effect of the previous successful alignment.
-     */
-    size_t prefix_len = 0;
     size_t offset = 0;
 
     while (offset <= text_len - pattern_len) {
-        /* Skip the guaranteed-matching prefix. */
         size_t j = last;
-        size_t start = 0;
-        if (prefix_len > 0) {
-            start = prefix_len;
-            if (start > last) {
-                start = last;
+        int matched = 1;
+        while (1) {
+            if (lower_ascii(t[offset + j]) != lower_ascii(p[j])) {
+                matched = 0;
+                break;
             }
-        }
-
-        while (j >= start && lower_ascii(t[offset + j]) == lower_ascii(p[j])) {
             if (j == 0) {
                 break;
             }
             j--;
         }
 
-        if (j == 0 && lower_ascii(t[offset]) == lower_ascii(p[0])) {
-            /*
-             * Match: record the Galil prefix from the overlap of the pattern
-             * with itself so the next window can skip known bytes.
-             */
-            size_t k = 1;
-            while (k < pattern_len && lower_ascii(p[k]) == lower_ascii(p[k - 1])) {
-                k++;
-            }
-            prefix_len = k - 1;
+        if (matched) {
             return (int)offset;
         }
 
@@ -105,7 +87,6 @@ int hc_bm_search(const char *text, size_t text_len,
             advance = 1; /* guarantee forward progress */
         }
         offset += advance;
-        prefix_len = 0; /* alignment broken; reset the skip window */
     }
     return -1;
 }

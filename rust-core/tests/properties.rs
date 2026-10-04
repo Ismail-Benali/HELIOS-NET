@@ -71,7 +71,9 @@ fn advertised_version_matches_the_crate_version() {
     // if someone hardcodes a version somewhere else.
     let p = helios_rust_version();
     assert!(!p.is_null(), "helios_rust_version returned NULL");
-    let advertised = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+    let advertised = unsafe { std::ffi::CStr::from_ptr(p) }
+        .to_string_lossy()
+        .into_owned();
     assert!(
         advertised.contains(env!("CARGO_PKG_VERSION")),
         "version string {advertised:?} does not contain the crate version {}",
@@ -309,7 +311,10 @@ fn isolated_nodes_appear_in_components() {
     let comps = g.connected_components();
     let all: HashSet<usize> = comps.iter().flatten().copied().collect();
     for n in 0..4 {
-        assert!(all.contains(&n), "node {n} missing from components {comps:?}");
+        assert!(
+            all.contains(&n),
+            "node {n} missing from components {comps:?}"
+        );
     }
 }
 
@@ -333,7 +338,10 @@ fn centralities_are_finite_and_bounded() {
 
         for (node, c) in g.degree_centrality() {
             assert!(c.is_finite(), "degree centrality of {node} is not finite");
-            assert!((0.0..=1.0).contains(&c), "degree centrality {c} out of range");
+            assert!(
+                (0.0..=1.0).contains(&c),
+                "degree centrality {c} out of range"
+            );
         }
         for (node, b) in g.betweenness_centrality().iter().enumerate() {
             assert!(b.is_finite(), "betweenness of {node} is not finite");
