@@ -61,7 +61,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner (fs)
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.16.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
