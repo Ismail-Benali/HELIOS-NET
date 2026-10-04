@@ -113,7 +113,7 @@ func TestBannerServiceOutranksThePortHint(t *testing.T) {
 	// An ephemeral port is not a known service, so if the banner were ignored
 	// the port hint would answer "tcp". The banner must win.
 	ln := newEchoServer(t, "SSH-2.0-OpenSSH_9.6\r\n")
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	res := scanSingle(t, ln)
 	if res.Service != "ssh" {
@@ -126,7 +126,7 @@ func TestBannerServiceOutranksThePortHint(t *testing.T) {
 
 func TestUnrecognisedBannerStillFallsBackToThePortHint(t *testing.T) {
 	ln := newEchoServer(t, "some proprietary protocol v3\r\n")
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	res := scanSingle(t, ln)
 	if res.Service == "unknown" {
@@ -141,7 +141,7 @@ func TestServiceResolutionIsNotConfusedByTheHostPort(t *testing.T) {
 	// A banner that is itself pure control bytes sanitises to empty, which is
 	// the same state as no banner at all. Both must still reach the port hint.
 	ln := newEchoServer(t, "\x00\x01\x02\x03")
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	res := scanSingle(t, ln)
 	if res.Banner != "" {
