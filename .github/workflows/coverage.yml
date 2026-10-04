@@ -47,7 +47,7 @@ jobs:
 
       - name: Build native cores (for coverage context)
         run: |
-          python build.py --test || true
+          python build.py --test
 
       - name: Run pytest with coverage
         run: |
