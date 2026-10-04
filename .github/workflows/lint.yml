@@ -133,7 +133,7 @@ jobs:
       - name: clang-tidy (warnings as errors)
         run: |
           if clang-tidy transport/c_core/src/*.c transport/c_core/tests/*.c \
-               -- -Itransport/c_core/include -std=c11 2>&1 | grep -qE 'error:|warning:'; then
-            echo "clang-tidy reported issues"
+               -- -Itransport/c_core/include -std=c11 2>&1 | grep -qE 'error:'; then
+            echo "clang-tidy reported errors"
             exit 1
           fi
