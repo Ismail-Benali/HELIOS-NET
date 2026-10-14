@@ -377,6 +377,7 @@ def _policy_error():
 
 def test_go_selftest_propagates_a_policy_refusal(monkeypatch):
     from core import c_core_bridge
+
     c_core_bridge.reset_availability()
 
     def refuse(*args, **kwargs):
@@ -401,6 +402,7 @@ def test_go_selftest_propagates_a_policy_refusal(monkeypatch):
 def test_policy_refusal_is_reported_as_blocked_not_failed(monkeypatch):
     """The end-to-end classification, which is what the build gate depends on."""
     from core import c_core_bridge
+
     c_core_bridge.reset_availability()
 
     def refuse(*args, **kwargs):
@@ -430,6 +432,7 @@ def test_policy_refusal_is_reported_as_blocked_not_failed(monkeypatch):
 def test_a_genuine_execution_error_is_still_failed(monkeypatch):
     """BLOCKED must not become a catch-all that hides real failures."""
     from core import c_core_bridge
+
     c_core_bridge.reset_availability()
 
     def broken(*args, **kwargs):

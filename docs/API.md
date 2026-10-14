@@ -35,6 +35,7 @@ from __future__ import annotations
 import sys
 import json
 
+
 def main() -> int:
     try:
         # Read input parameters from stdin
@@ -43,9 +44,7 @@ def main() -> int:
         target = payload.get("target", "127.0.0.1")
 
         # Perform discovery logic (using stdlib only)
-        findings = [
-            {"host": target, "port": 80, "service": "http", "open": True}
-        ]
+        findings = [{"host": target, "port": 80, "service": "http", "open": True}]
 
         # Output results as JSON on stdout
         print(json.dumps(findings, ensure_ascii=True))
@@ -56,10 +55,11 @@ def main() -> int:
             "status": "error",
             "code": "MODULE_ERROR",
             "message": str(exc),
-            "component": "modules/discovery/custom_scanner"
+            "component": "modules/discovery/custom_scanner",
         }
         print(json.dumps(err_env), file=sys.stderr)
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
