@@ -147,4 +147,10 @@ def default_rules() -> list[Rule]:
             ),
             note="Indicates default/weak credentials.",
         ),
+        Rule(
+            name="plaintext_telnet_risk",
+            weight=0.85,
+            test=lambda f: f.get("port") == 23 or "telnet" in str(f.get("service", "")).lower(),
+            note="Unencrypted plaintext telnet service - high interception risk.",
+        ),
     ]

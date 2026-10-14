@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -37,13 +38,21 @@ const (
 	commonPorts = "21,22,23,25,53,80,110,443,445,3306,3389,5432,8080"
 )
 
+type TLSInfo struct {
+	Version  string `json:"version"`
+	Issuer   string `json:"issuer,omitempty"`
+	NotAfter string `json:"not_after,omitempty"`
+	Valid    bool   `json:"valid"`
+}
+
 type PortResult struct {
-	Port      int    `json:"port"`
-	Open      bool   `json:"open"`
-	Banner    string `json:"banner,omitempty"`
-	Service   string `json:"service,omitempty"`
-	LatencyMs int64  `json:"latency_ms"`
-	Time      string `json:"time"`
+	Port      int      `json:"port"`
+	Open      bool     `json:"open"`
+	Banner    string   `json:"banner,omitempty"`
+	Service   string   `json:"service,omitempty"`
+	TLS       *TLSInfo `json:"tls,omitempty"`
+	LatencyMs int64    `json:"latency_ms"`
+	Time      string   `json:"time"`
 }
 
 type ErrorEnvelope struct {
@@ -85,7 +94,7 @@ func sanitizeBanner(raw string) string {
 }
 
 // grabBanner attempts to read a greeting banner from an open TCP connection with a strict timeout.
-func grabBanner(conn net.Conn) (string, string) {
+func grabBanner(conn net.Conn, port int) (string, string) {
 	_ = conn.SetReadDeadline(time.Now().Add(bannerTimeout))
 	reader := bufio.NewReader(conn)
 
@@ -94,11 +103,25 @@ func grabBanner(conn net.Conn) (string, string) {
 	n, err := reader.Read(buf)
 	if err == nil && n > 0 {
 		cleaned := sanitizeBanner(string(buf[:n]))
-		if cleaned == "" {
-			return "", ""
+		if cleaned != "" {
+			return cleaned, guessServiceFromBanner(cleaned)
 		}
-		return cleaned, guessServiceFromBanner(cleaned)
 	}
+
+	// Active HTTP probing for web ports if no passive banner received
+	if port == 80 || port == 8080 || port == 8000 || port == 443 || port == 8443 {
+		_ = conn.SetWriteDeadline(time.Now().Add(bannerTimeout))
+		_, _ = conn.Write([]byte("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"))
+		_ = conn.SetReadDeadline(time.Now().Add(bannerTimeout))
+		n, err = reader.Read(buf)
+		if err == nil && n > 0 {
+			cleaned := sanitizeBanner(string(buf[:n]))
+			if cleaned != "" {
+				return cleaned, "http"
+			}
+		}
+	}
+
 	return "", ""
 }
 
@@ -423,12 +446,34 @@ func scanPort(ip string, port int, timeout time.Duration, results chan<- PortRes
 
 	if err == nil {
 		defer func() { _ = conn.Close() }()
-		banner, service := grabBanner(conn)
+		var tlsInfo *TLSInfo
+		if port == 443 || port == 8443 {
+			tlsConn := tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
+			_ = tlsConn.SetDeadline(time.Now().Add(timeout))
+			if handshakeErr := tlsConn.Handshake(); handshakeErr == nil {
+				state := tlsConn.ConnectionState()
+				if len(state.PeerCertificates) > 0 {
+					cert := state.PeerCertificates[0]
+					versionStr := "TLS 1.2"
+					if state.Version == tls.VersionTLS13 {
+						versionStr = "TLS 1.3"
+					}
+					tlsInfo = &TLSInfo{
+						Version:  versionStr,
+						Issuer:   cert.Issuer.CommonName,
+						NotAfter: cert.NotAfter.Format(time.RFC3339),
+						Valid:    time.Now().Before(cert.NotAfter),
+					}
+				}
+			}
+		}
+		banner, service := grabBanner(conn, port)
 		results <- PortResult{
 			Port:      port,
 			Open:      true,
 			Banner:    banner,
 			Service:   resolveService(service, port),
+			TLS:       tlsInfo,
 			LatencyMs: latency,
 			Time:      time.Now().Format(time.RFC3339),
 		}

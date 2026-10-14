@@ -377,12 +377,14 @@ def _policy_error():
 
 def test_go_selftest_propagates_a_policy_refusal(monkeypatch):
     from core import c_core_bridge
+    c_core_bridge.reset_availability()
 
     def refuse(*args, **kwargs):
         raise _policy_error()
 
     monkeypatch.setattr(goscan_bridge, "core_available", lambda: True)
     monkeypatch.setattr(goscan_bridge.subprocess, "run", refuse)
+    monkeypatch.setattr(c_core_bridge, "ffi_available", lambda: False)
     monkeypatch.setattr(c_core_bridge, "core_available", lambda: True)
     monkeypatch.setattr(c_core_bridge, "_BINARY", "helios_core.exe")
     monkeypatch.setattr(c_core_bridge.subprocess, "run", refuse)
@@ -399,6 +401,7 @@ def test_go_selftest_propagates_a_policy_refusal(monkeypatch):
 def test_policy_refusal_is_reported_as_blocked_not_failed(monkeypatch):
     """The end-to-end classification, which is what the build gate depends on."""
     from core import c_core_bridge
+    c_core_bridge.reset_availability()
 
     def refuse(*args, **kwargs):
         raise _policy_error()
@@ -412,6 +415,7 @@ def test_policy_refusal_is_reported_as_blocked_not_failed(monkeypatch):
         f"a policy refusal was reported as {go_status.state}: {go_status.detail}"
     )
 
+    monkeypatch.setattr(c_core_bridge, "ffi_available", lambda: False)
     monkeypatch.setattr(c_core_bridge, "core_available", lambda: True)
     monkeypatch.setattr(c_core_bridge, "core_version", lambda: "v")
     monkeypatch.setattr(c_core_bridge, "_BINARY", "helios_core.exe")
@@ -426,6 +430,7 @@ def test_policy_refusal_is_reported_as_blocked_not_failed(monkeypatch):
 def test_a_genuine_execution_error_is_still_failed(monkeypatch):
     """BLOCKED must not become a catch-all that hides real failures."""
     from core import c_core_bridge
+    c_core_bridge.reset_availability()
 
     def broken(*args, **kwargs):
         exc = OSError(5, "Access is denied")
@@ -439,6 +444,7 @@ def test_a_genuine_execution_error_is_still_failed(monkeypatch):
     go_status = cores.check_go()
     assert go_status.state == FAILED, go_status.detail
 
+    monkeypatch.setattr(c_core_bridge, "ffi_available", lambda: False)
     monkeypatch.setattr(c_core_bridge, "core_available", lambda: True)
     monkeypatch.setattr(c_core_bridge, "core_version", lambda: "v")
     monkeypatch.setattr(c_core_bridge, "_BINARY", "helios_core.exe")
