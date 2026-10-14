@@ -233,7 +233,7 @@ func TestGrabBannerReadsGreeting(t *testing.T) {
 	}
 	defer func() { _ = conn.Close() }()
 
-	banner, service := grabBanner(conn)
+	banner, service := grabBanner(conn, 22)
 	if banner != "SSH-2.0-OpenSSH_9.6p1 Ubuntu" {
 		t.Errorf("banner = %q", banner)
 	}
@@ -267,7 +267,7 @@ func TestGrabBannerSilentServer(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		if banner, _ := grabBanner(conn); banner != "" {
+		if banner, _ := grabBanner(conn, 22); banner != "" {
 			t.Errorf("expected empty banner, got %q", banner)
 		}
 	}()
