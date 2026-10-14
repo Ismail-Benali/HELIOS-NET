@@ -144,9 +144,14 @@ def test_c_core_still_reproduces_its_own_contract(goldens, case):
     name, banner, patterns = case
     expected = [tuple(m) for m in goldens["match_cases_by_name"][name]]
     outcome = accel.match_signatures(banner, patterns, prefer="c")
-    assert outcome.engine == "c-native", (
-        f"{name}: the C core was requested but {outcome.engine} answered"
-    )
+    if name in SHORT_CIRCUIT_CASES:
+        assert outcome.engine == "none", (
+            f"{name}: an empty banner must not reach a core, but {outcome.engine} answered"
+        )
+    else:
+        assert outcome.engine == "c-native", (
+            f"{name}: the C core was requested but {outcome.engine} answered"
+        )
     produced = sorted((m.signature, m.position) for m in outcome.matches)
     assert produced == expected, (
         f"{name}: the C core no longer reproduces its own recorded contract. "
