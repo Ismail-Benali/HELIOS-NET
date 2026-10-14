@@ -37,7 +37,7 @@ static int mode_match(const char *sig_file) {
     size_t count = 0;
     hc_ac_t *ac = hc_sig_load(sig_file, &count);
     if (ac == NULL) {
-        fprintf(stderr, "c_core: cannot load signatures from '%s'\n", sig_file);
+        fprintf(stderr, "{\"status\":\"error\",\"code\":\"SIG_LOAD_FAILED\"}\n");
         return 3;
     }
     fprintf(stderr, "c_core: loaded %zu signatures from '%s'\n", count, sig_file);
