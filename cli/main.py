@@ -130,7 +130,9 @@ def cmd_dashboard(args: Any) -> int:
     print(f" Total Campaigns: {len(states)}")
     print("-" * 64)
     if not states:
-        print(" (No campaigns recorded yet. Run `python run.py recon --target <ip>` first)")
+        print(
+            " (No campaigns recorded yet. Run `python run.py recon --target <ip>` first)"
+        )
     else:
         for s in sorted(states, key=lambda x: x.created_at, reverse=True):
             print(f" [ID]     {s.campaign_id}")
@@ -144,8 +146,8 @@ def cmd_dashboard(args: Any) -> int:
 
 def cmd_export(args: Any) -> int:
     """Exports campaign findings and metadata to JSON, CSV, or SARIF."""
-    import json
     import csv
+    import json
     import sys
 
     orch = _build_orchestrator(args.data)
@@ -164,28 +166,47 @@ def cmd_export(args: Any) -> int:
         writer = csv.writer(sys.stdout)
         writer.writerow(["host", "port", "service", "open", "banner", "latency_ms"])
         for f in findings:
-            writer.writerow([
-                f.get("host"), f.get("port"), f.get("service"),
-                f.get("open"), f.get("banner"), f.get("latency_ms")
-            ])
+            writer.writerow(
+                [
+                    f.get("host"),
+                    f.get("port"),
+                    f.get("service"),
+                    f.get("open"),
+                    f.get("banner"),
+                    f.get("latency_ms"),
+                ]
+            )
     elif format_type == "sarif":
         sarif = {
             "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0-rtm.5.json",
             "version": "2.1.0",
-            "runs": [{
-                "tool": {"driver": {"name": "HELIOS-NET", "version": "3.0.0"}},
-                "results": [
-                    {
-                        "ruleId": f.get("service", "open_port"),
-                        "message": {"text": f"Open port {f.get('port')} running {f.get('service')}"},
-                        "locations": [{"physicalLocation": {"artifactLocation": {"uri": str(f.get("host"))}}}]
-                    } for f in findings
-                ]
-            }]
+            "runs": [
+                {
+                    "tool": {"driver": {"name": "HELIOS-NET", "version": "3.0.0"}},
+                    "results": [
+                        {
+                            "ruleId": f.get("service", "open_port"),
+                            "message": {
+                                "text": f"Open port {f.get('port')} running {f.get('service')}"
+                            },
+                            "locations": [
+                                {
+                                    "physicalLocation": {
+                                        "artifactLocation": {"uri": str(f.get("host"))}
+                                    }
+                                }
+                            ],
+                        }
+                        for f in findings
+                    ],
+                }
+            ],
         }
         print(json.dumps(sarif, indent=2, ensure_ascii=False))
     else:
-        print(f"[HELIOS] unknown export format: {format_type}. Use json, csv, or sarif.")
+        print(
+            f"[HELIOS] unknown export format: {format_type}. Use json, csv, or sarif."
+        )
         return 1
     return 0
 
@@ -255,12 +276,21 @@ def build_parser() -> argparse.ArgumentParser:
     sim = sub.add_parser("sim", help="Run end-to-end simulation demonstration")
     sim.set_defaults(fn=cmd_sim)
 
-    dash = sub.add_parser("dashboard", help="Display professional ASCII executive dashboard")
+    dash = sub.add_parser(
+        "dashboard", help="Display professional ASCII executive dashboard"
+    )
     dash.set_defaults(fn=cmd_dashboard)
 
-    exp = sub.add_parser("export", help="Export campaign results to JSON, CSV, or SARIF")
+    exp = sub.add_parser(
+        "export", help="Export campaign results to JSON, CSV, or SARIF"
+    )
     exp.add_argument("campaign_id", help="Campaign ID to export")
-    exp.add_argument("--format", default="json", choices=["json", "csv", "sarif"], help="Export format")
+    exp.add_argument(
+        "--format",
+        default="json",
+        choices=["json", "csv", "sarif"],
+        help="Export format",
+    )
     exp.set_defaults(fn=cmd_export)
 
     return p
