@@ -213,7 +213,7 @@ def test_a_refused_connection_is_closed(monkeypatch):
 
 
 def test_a_timed_out_connection_is_closed(monkeypatch):
-    _patch_connection(monkeypatch, exception=asyncio.TimeoutError())
+    _patch_connection(monkeypatch, exception=TimeoutError())
     result = asyncio.run(adaptive_banner_probe("10.0.0.1", 22))
     assert result["open"] is False
 

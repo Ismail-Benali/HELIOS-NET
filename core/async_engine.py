@@ -73,7 +73,7 @@ async def adaptive_banner_probe(
             "banner": banner,
             "rtt": round(time.time() - start, 4),
         }
-    except (asyncio.TimeoutError, OSError):
+    except (TimeoutError, OSError):
         return {
             "host": host,
             "port": port,

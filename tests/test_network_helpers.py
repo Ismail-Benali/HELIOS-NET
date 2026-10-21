@@ -89,7 +89,7 @@ def test_probe_reports_a_refused_connection_as_closed(monkeypatch):
 
 
 def test_probe_treats_a_timeout_as_closed(monkeypatch):
-    _open_refused(monkeypatch, asyncio.TimeoutError())
+    _open_refused(monkeypatch, TimeoutError())
     result = asyncio.run(cidr_scan.probe_host_port("10.0.0.1", 22))
     assert result["open"] is False
 
