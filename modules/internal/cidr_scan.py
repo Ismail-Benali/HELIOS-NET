@@ -26,7 +26,7 @@ async def probe_host_port(host: str, port: int, timeout: float = 1.0) -> dict[st
             "open": True,
             "latency": round(time.time() - start, 4),
         }
-    except (asyncio.TimeoutError, OSError):
+    except (TimeoutError, OSError):
         return {
             "host": host,
             "port": port,
