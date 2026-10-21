@@ -40,7 +40,7 @@ async def tunneled_tcp_probe(
             "open": True,
             "latency": round(time.time() - start, 4),
         }
-    except (asyncio.TimeoutError, OSError):
+    except (TimeoutError, OSError):
         return {
             "target": target_host,
             "port": target_port,
