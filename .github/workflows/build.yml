@@ -302,8 +302,12 @@ jobs:
           print("in-process core served every request")
           PY
 
+      # `pytest` as a console script does not put the repository root on
+      # sys.path, so `from core...` imports failed during collection on both
+      # runners. `python -m pytest` adds the current directory (the repo root)
+      # to sys.path on every platform, which is how the suite is meant to run.
       - name: Pytest Test Suite
-        run: pytest tests/ -v
+        run: python -m pytest tests/ -v
 
       - name: Smoke Test
         run: python tests/smoke.py
