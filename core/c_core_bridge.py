@@ -12,6 +12,7 @@ host-blocked binary can never abort a campaign.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import os
 import subprocess  # nosec B404 - the native core is a project-built binary at a fixed path
@@ -117,7 +118,7 @@ _probe_cache: dict[str, Any] = {}
 
 _LIBRARY_ENV_KEY = "HELIOS_C_CORE_LIB"
 _library_cache: dict[str, Any] = {}
-_handles: dict[str, tuple[int, Any]] = {}
+_handles: dict[str, tuple[str, Any]] = {}
 
 
 def _library_filename() -> str:
@@ -347,15 +348,22 @@ def ffi_version() -> str:
 def _open_signatures(sig_path: Path) -> Any | None:
     """Opens a signature file once and keeps the automaton.
 
-    Keyed on the file's mtime: an edited signature file must not keep matching
-    against the automaton built from the previous contents, and rebuilding on
-    every dispatch is the cost this path exists to remove.
+    Keyed on a digest of the file's contents: an edited signature file must not
+    keep matching against the automaton built from the previous contents, and
+    rebuilding on every dispatch is the cost this path exists to remove.
+
+    The mtime alone is not a safe key. Windows can report the same timestamp for
+    two rapid writes to the same path (coarse timestamp resolution, and file
+    system tunnelling), so a test or a campaign that rewrites one signature file
+    in place was served the previous automaton: patterns that had been removed
+    still matched and patterns just added did not. Hashing is far cheaper than
+    rebuilding the automaton, which is what this cache exists to avoid.
     """
     lib = _library()
     if lib is None:
         return None
     try:
-        stamp = sig_path.stat().st_mtime_ns
+        stamp = hashlib.sha256(sig_path.read_bytes()).hexdigest()
     except OSError:
         return None
 
