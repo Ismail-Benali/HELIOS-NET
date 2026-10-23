@@ -36,6 +36,12 @@ _ENV_KEY = "HELIOS_C_CORE"
 # `text=True` alone would use the host locale (cp1252 on Windows) and silently
 # hash non-ASCII banners as different bytes than the Python fallback does.
 _IO_ENCODING = "utf-8"
+_MAX_BANNER_LEN = 2048
+
+def _sanitize_banner(banner: str) -> str:
+    """Sanitize banner: limit length and remove non-printable characters."""
+    sanitized = banner[:_MAX_BANNER_LEN]
+    return "".join(char for char in sanitized if char.isprintable())
 
 # FNV-1a constants mirror transport/c_core/src/hashing.c so the Python fallback
 # produces byte-identical digests to the native core.
@@ -389,7 +395,7 @@ def _ffi_match(handle: Any, banner: str) -> dict[str, Any] | None:
     lib = _library()
     if lib is None:
         return None
-    raw = _ffi_call("hc_dll_match_json", handle, banner.encode(_IO_ENCODING))
+    raw = _ffi_call("hc_dll_match_json", handle, _sanitize_banner(banner).encode(_IO_ENCODING))
     if raw is None:
         return None
     try:
@@ -405,7 +411,7 @@ def _ffi_fingerprint(banner: str) -> dict[str, str] | None:
     lib = _library()
     if lib is None:
         return None
-    raw = _ffi_call("hc_dll_fp_json", banner.encode(_IO_ENCODING))
+    raw = _ffi_call("hc_dll_fp_json", _sanitize_banner(banner).encode(_IO_ENCODING))
     if raw is None:
         return None
     try:
@@ -647,8 +653,8 @@ def scan_banners(
     if handle is not None:
         results: list[dict[str, Any]] = []
         ok = True
-        for banner in banners:
-            parsed = _ffi_match(handle, banner)
+        for raw_banner in banners:
+            parsed = _ffi_match(handle, raw_banner) # _ffi_match calls _sanitize_banner
             if parsed is None:
                 ok = False
                 break
@@ -657,7 +663,7 @@ def scan_banners(
             return results
 
     if _BINARY is not None:
-        payload = "\n".join(b.replace("\n", " ").replace("\r", " ") for b in banners)
+        payload = "\n".join(_sanitize_banner(b).replace("\n", " ").replace("\r", " ") for b in banners)
         payload += "\n"
         try:
             proc = subprocess.run(  # nosec B603 - fixed argv against a project-built binary, shell=False
@@ -845,7 +851,8 @@ def _python_fallback(banners: Iterable[str], sig_path: Path) -> list[dict[str, A
     """
     pairs = _load_signatures(sig_path)
     results: list[dict[str, Any]] = []
-    for banner in banners:
+    for raw_banner in banners:
+        banner = _sanitize_banner(raw_banner)
         folded = fold_ascii(banner)
         # The contract is the set of (signature, position) pairs, not the order
         # they arrive in: the native differential harness qsorts both sides
