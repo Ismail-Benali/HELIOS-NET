@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
@@ -13,27 +20,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-24.04, windows-latest]
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             fuzz_seconds: 20
           - os: windows-latest
             fuzz_seconds: 0
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: transport/goscan/go.mod
           cache: true
+          cache-dependency-path: |
+            transport/goscan/go.sum
+            core/consensus/go.sum
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -48,7 +62,8 @@ jobs:
       - name: Install Development Dependencies (Mypy, Bandit, Pytest)
         run: |
           python -m pip install --upgrade pip
-          pip install mypy bandit pytest
+          python -m pip install mypy bandit pytest
+          python -m pip check
 
       # Both of these used to end in `|| true`, which discards the exit status.
       # The pipeline therefore reported green no matter what the check said, and
