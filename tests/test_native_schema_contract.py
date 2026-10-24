@@ -50,6 +50,10 @@ ROOT = Path(__file__).resolve().parents[1]
 GO_DIR = ROOT / "transport" / "goscan"
 BRIDGE_SRC = ROOT / "modules" / "discovery" / "goscan_bridge.py"
 
+#: Keys that belong to the persistent `goscan serve` envelope, not to a port
+#: record. The bridge reads both shapes from the same file.
+PROTOCOL_KEYS = {"id", "results", "error"}
+
 
 def go_sources() -> str:
     return "\n".join(
@@ -110,7 +114,11 @@ def test_every_key_the_bridge_reads_is_produced_by_the_go_core():
     produced = go_struct("PortResult")
     read = bridge_reads()
 
-    missing = {k for k in read if k not in produced and k not in REQUIRED_KEYS}
+    missing = {
+        k
+        for k in read
+        if k not in produced and k not in REQUIRED_KEYS and k not in PROTOCOL_KEYS
+    }
     assert not missing, (
         f"the bridge reads {sorted(missing)} but goscan.go's PortResult emits "
         f"only {sorted(produced)}"
@@ -275,7 +283,11 @@ def test_the_subset_check_rejects_a_key_the_core_cannot_produce():
     read = dict(bridge_reads())
     read["is_open"] = False  # as if the tag had been renamed
 
-    missing = {k for k in read if k not in produced and k not in REQUIRED_KEYS}
+    missing = {
+        k
+        for k in read
+        if k not in produced and k not in REQUIRED_KEYS and k not in PROTOCOL_KEYS
+    }
     assert missing == {"is_open"}, "the subset check failed to notice a drift"
 
 

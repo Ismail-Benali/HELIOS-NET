@@ -389,6 +389,8 @@ func main() {
 	switch {
 	case len(args) == 1 && args[0] == "selftest":
 		os.Exit(runSelftest())
+	case len(args) == 1 && args[0] == "serve":
+		os.Exit(runServe())
 	case len(args) == 1 && (args[0] == "version" || args[0] == "--version"):
 		_, _ = fmt.Printf("%s\n", Version)
 		os.Exit(0)
@@ -425,9 +427,78 @@ func main() {
 	wait()
 }
 
+// scanRequest is one line on the persistent worker's stdin.
+type scanRequest struct {
+	ID        int    `json:"id"`
+	Target    string `json:"target"`
+	Ports     string `json:"ports"`
+	TimeoutMS int64  `json:"timeout_ms,omitempty"`
+}
+
+// scanResponse is one line on the persistent worker's stdout. Keeping the port
+// argument and the scan pool alive removes process startup from every sweep.
+type scanResponse struct {
+	ID      int          `json:"id"`
+	Results []PortResult `json:"results"`
+	Error   string       `json:"error,omitempty"`
+}
+
+// runServe reads one JSON request per line and writes one JSON response per
+// line. It is the long-lived counterpart to the one-shot CLI: the Python bridge
+// keeps this process alive so repeated sweeps do not pay process creation.
+func runServe() int {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	encoder := json.NewEncoder(os.Stdout)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var req scanRequest
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			_ = encoder.Encode(scanResponse{Error: "invalid request: " + err.Error()})
+			continue
+		}
+		if req.Target == "" {
+			_ = encoder.Encode(scanResponse{ID: req.ID, Error: "missing target"})
+			continue
+		}
+		ports := parsePorts(req.Ports)
+		if len(ports) == 0 {
+			_ = encoder.Encode(scanResponse{ID: req.ID, Error: "no valid ports: " + req.Ports})
+			continue
+		}
+		timeout := scanTimeout
+		if req.TimeoutMS > 0 {
+			timeout = time.Duration(req.TimeoutMS) * time.Millisecond
+		}
+
+		resultsChan, wait := startScan(req.Target, ports, timeout)
+		results := make([]PortResult, 0)
+		for res := range resultsChan {
+			if res.Open {
+				results = append(results, res)
+			}
+		}
+		wait()
+		if err := encoder.Encode(scanResponse{ID: req.ID, Results: results}); err != nil {
+			emitEnvelope("IO_ERROR", "failed writing serve response: "+err.Error(), "goscan")
+			return 3
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		emitEnvelope("IO_ERROR", "serve stdin closed with error: "+err.Error(), "goscan")
+		return 3
+	}
+	return 0
+}
+
 func usage() {
 	_, _ = fmt.Fprintln(os.Stderr, "usage:")
 	_, _ = fmt.Fprintln(os.Stderr, "  goscan <target-ip> <ports>   scan (80, 1-1000, 80,443, 'common' or 'all')")
+	_, _ = fmt.Fprintln(os.Stderr, "  goscan serve                  persistent NDJSON worker (stdin/stdout)")
 	_, _ = fmt.Fprintln(os.Stderr, "  goscan selftest               run offline internal checks")
 	_, _ = fmt.Fprintln(os.Stderr, "  goscan version                print the version string")
 }

@@ -864,6 +864,65 @@ def test_the_sync_wrapper_records_a_non_strict_failure(monkeypatch):
     assert goscan_bridge.LAST_ERROR is not None
 
 
+def test_a_healthy_worker_answers_without_the_one_shot_path(monkeypatch):
+    calls: list[tuple[str, str, float]] = []
+
+    def fake_scan(target, port_arg, timeout):
+        calls.append((target, port_arg, timeout))
+        return [{"port": 22, "open": True}]
+
+    monkeypatch.setattr(goscan_bridge._WORKER, "scan", fake_scan)
+    monkeypatch.setattr(
+        goscan_bridge, "run_go_scan_async", lambda *a, **k: pytest.fail("fallback")
+    )
+    goscan_bridge.LAST_ERROR = "stale"
+
+    rows = goscan_bridge.run_go_scan("10.0.0.1", "22", timeout=7.0)
+
+    assert rows == [{"port": 22, "open": True}]
+    assert calls == [("10.0.0.1", "22", 7.0)]
+    assert goscan_bridge.LAST_ERROR is None
+
+
+def test_a_worker_failure_falls_back_and_clears_the_error(monkeypatch):
+    async def fake_async(target, port_arg="common", strict=False):
+        return [{"port": 80, "open": True}]
+
+    def broken_worker(target, port_arg, timeout):
+        raise goscan_bridge.GoscanError("worker died")
+
+    monkeypatch.setattr(goscan_bridge._WORKER, "scan", broken_worker)
+    monkeypatch.setattr(goscan_bridge, "run_go_scan_async", fake_async)
+
+    rows = goscan_bridge.run_go_scan("10.0.0.1", "80")
+
+    assert [row["port"] for row in rows] == [80]
+    assert goscan_bridge.LAST_ERROR is None
+
+
+def test_both_paths_failing_keeps_both_reasons(monkeypatch):
+    async def broken_async(target, port_arg="common", strict=False):
+        raise RuntimeError("one-shot boom")
+
+    def broken_worker(target, port_arg, timeout):
+        raise goscan_bridge.GoscanError("worker boom")
+
+    monkeypatch.setattr(goscan_bridge._WORKER, "scan", broken_worker)
+    monkeypatch.setattr(goscan_bridge, "run_go_scan_async", broken_async)
+
+    assert goscan_bridge.run_go_scan("10.0.0.1") == []
+    assert "one-shot boom" in str(goscan_bridge.LAST_ERROR)
+    assert "worker boom" in str(goscan_bridge.LAST_ERROR)
+
+    with pytest.raises(goscan_bridge.GoscanError, match="worker boom"):
+        goscan_bridge.run_go_scan("10.0.0.1", strict=True)
+
+
+def test_shutting_the_worker_down_is_idempotent():
+    goscan_bridge.shutdown_worker()
+    goscan_bridge.shutdown_worker()
+
+
 def _dead_event_loop(monkeypatch):
     """Makes asyncio.run itself fail, before the coroutine is ever entered.
 

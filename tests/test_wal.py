@@ -9,7 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import json
 import os
+import struct
 import tempfile
 
 import pytest
@@ -246,3 +248,49 @@ def test_tampered_ciphertext_is_dropped_not_raised(tmp_path):
     assert TransactionalWAL(wal_path).replay() == [], (
         "a modified record must fail its HMAC and be skipped"
     )
+
+
+def test_a_new_log_uses_the_v3_header(tmp_path):
+    wal_path = tmp_path / "v3.wal"
+    _commit(wal_path, "V3")
+
+    raw = wal_path.read_bytes()
+    assert raw[:4] == b"HWL3"
+    assert len(raw) > 20
+    assert TransactionalWAL(wal_path).replay()[0]["op"] == "V3"
+
+
+def test_the_key_is_derived_once_per_log_not_once_per_record(tmp_path, monkeypatch):
+    import core.wal as wal_module
+
+    calls: list[bytes] = []
+    original = wal_module.hashlib.pbkdf2_hmac
+
+    def counting(*args, **kwargs):
+        calls.append(args[2])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(wal_module.hashlib, "pbkdf2_hmac", counting)
+    wal_path = tmp_path / "once.wal"
+    wal = TransactionalWAL(wal_path)
+    wal.begin()
+    for index in range(5):
+        wal.append("OP", {"i": index})
+    wal.commit()
+
+    assert len(calls) == 1, "one salt per log means one PBKDF2 stretch"
+    assert len(wal.replay()) == 5
+
+
+def test_a_legacy_v2_log_stays_readable(tmp_path):
+    """An old journal must not become unreadable just because v3 shipped."""
+    wal_path = tmp_path / "legacy.wal"
+    writer = TransactionalWAL(wal_path)
+    payload = json.dumps({"lsn": 1, "op": "OLD", "data": {}}).encode()
+    raw = writer._encrypt_v2(payload)  # noqa: SLF001 - pins the legacy layout
+    wal_path.write_bytes(struct.pack("!I", len(raw)) + raw)
+
+    records = TransactionalWAL(wal_path).replay()
+
+    assert [record["op"] for record in records] == ["OLD"]
+    assert b"HWL2" in wal_path.read_bytes()

@@ -36,10 +36,10 @@
 ## ⚙️ Core Capabilities
 
 1. **Closed-Loop Orchestration:** Manages campaign state, dependency planning, and parallel wave execution with absolute fault isolation.
-2. **Encrypted Transactional WAL:** Crash recovery and secure transaction logging with PBKDF2 (100,000 iterations), an HMAC-SHA256 counter-mode keystream, and separate encryption and MAC keys. Records written by the earlier single-key layout remain readable.
+2. **Encrypted Transactional WAL:** Crash recovery and secure transaction logging with PBKDF2 (100,000 iterations) stretched **once per log**, a per-record nonce, an HMAC-SHA256 counter-mode keystream, and separate encryption and MAC keys. Logs written by the earlier per-record-salt layout remain readable in place.
 3. **Fail-Closed Scope Enforcement:** `core/scope.py` denies every target unless the scope file authorizes it. An unreadable, malformed, or `*` scope is an error, not a wildcard; the refusal names the reason.
-4. **Scope-Bound Asset Discovery:** Expands seeds through Certificate Transparency, resolves each name, drops every address the scope does not authorize before a socket is opened, and records HTTP/TLS metadata and virtual-host evidence.
-5. **High-Performance Go Scanning:** Leverages thousands of lightweight Goroutines (`goscan`) streaming open ports via NDJSON.
+4. **Scope-Bound Asset Discovery:** Expands seeds through Certificate Transparency, resolves each name, drops every address the scope does not authorize before a socket is opened, follows redirects only while every hop stays in scope, and records HTTP/TLS metadata, security headers, cookies, certificate expiry, and well-known documents (`--deep`).
+5. **High-Performance Go Scanning:** Leverages thousands of lightweight Goroutines (`goscan`) streaming open ports via NDJSON through a long-lived `serve` worker, so repeated sweeps reuse the pool instead of paying process startup.
 6. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
 7. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
 8. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
@@ -104,9 +104,16 @@ python run.py assets --target example.test --ct --depth 1
 
 `assets` expands names through Certificate Transparency, refuses to probe any
 name or address outside the scope, and reports virtual hosts separately from the
-address-default response. `--max-hosts` and `--max-requests` bound the loop;
-`--seeds` adds names that are still scope-checked. A campaign plans this step by
-default (without CT); `recon --ct` opts into expansion.
+address-default response. Redirects are followed only while every hop resolves
+inside the scope; leaving it is recorded as `redirect-outside-scope`.
+`--max-hosts` and `--max-requests` bound the loop; `--seeds` adds names that are
+still scope-checked. `--deep` also fetches `/.well-known/security.txt` and
+`/robots.txt` for ownership signals. A campaign plans this step by default
+(without CT); `recon --ct` opts into expansion.
+
+DNS enumeration is scope-bound too: `dns_enum` refuses to run without an
+enforcer, filters candidate names before any resolver call, and discards answers
+outside a network scope.
 
 Discovery routes every port through `core.accel.scan_ports` (Go when built,
 socket probe otherwise), and recon matches the collected banners through the

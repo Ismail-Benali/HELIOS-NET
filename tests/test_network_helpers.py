@@ -18,6 +18,7 @@ import pytest
 
 from core.planner import PlanStep
 from core.reporter_html import generate_html_report
+from core.scope import ScopeEnforcer
 from engine import tunneled_scanner
 from engine.algorithms.fingerprint import PROFILES, fingerprint_sig
 from modules.internal import cidr_scan
@@ -344,7 +345,7 @@ def test_the_plugin_records_what_it_resolved(monkeypatch):
         return [{"subdomain": f"www.{domain}", "ip": "1.2.3.4"}]
 
     monkeypatch.setattr(plugin, "async_subdomain_enum", fake_enum)
-    ctx: dict = {}
+    ctx: dict = {"scope": ScopeEnforcer(allowed_domains=["example.com"])}
     result = plugin.dns_runner(
         PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), ctx
     )
@@ -362,13 +363,80 @@ def test_a_failing_enumeration_does_not_break_the_campaign(monkeypatch):
         raise RuntimeError("resolver unavailable")
 
     monkeypatch.setattr(plugin, "async_subdomain_enum", boom)
-    ctx: dict = {}
+    ctx: dict = {"scope": ScopeEnforcer(allowed_domains=["example.com"])}
     result = plugin.dns_runner(
         PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), ctx
     )
 
     assert result["count"] == 0
     assert ctx["findings"] == []
+
+
+def test_enumeration_requires_a_scope(monkeypatch):
+    import modules.plugins.dns_enum as plugin
+
+    calls: list[str] = []
+
+    async def fake_resolve(name):
+        calls.append(name)
+        return {"subdomain": name, "ip": "192.0.2.10", "resolves": True}
+
+    monkeypatch.setattr(plugin, "_async_resolve", fake_resolve)
+    result = plugin.dns_runner(
+        PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), {}
+    )
+
+    assert result["count"] == 0
+    assert "scope required" in result["error"]
+    assert calls == []
+
+
+def test_names_outside_the_scope_are_never_resolved(monkeypatch):
+    import modules.plugins.dns_enum as plugin
+
+    calls: list[str] = []
+
+    async def fake_resolve(name):
+        calls.append(name)
+        return {"subdomain": name, "ip": "192.0.2.10", "resolves": True}
+
+    monkeypatch.setattr(plugin, "_async_resolve", fake_resolve)
+    ctx = {"scope": ScopeEnforcer(allowed_domains=["lab.test"])}
+    result = plugin.dns_runner(
+        PlanStep(step_id=1, module="dns_enum", action="enum", target="example.com"), ctx
+    )
+
+    assert result["count"] == 0
+    assert calls == []
+    assert ctx.get("findings", []) == []
+
+
+def test_answers_outside_a_network_scope_are_discarded(monkeypatch):
+    import modules.plugins.dns_enum as plugin
+
+    async def fake_resolve(name):
+        ip = "198.51.100.7" if name.startswith("www.") else "10.0.0.5"
+        return {"subdomain": name, "ip": ip, "resolves": True}
+
+    monkeypatch.setattr(plugin, "_async_resolve", fake_resolve)
+    ctx = {
+        "scope": ScopeEnforcer(
+            allowed_domains=["lab.test"], allowed_cidrs=["10.0.0.0/8"]
+        )
+    }
+    result = plugin.dns_runner(
+        PlanStep(
+            step_id=1,
+            module="dns_enum",
+            action="enum",
+            target="lab.test",
+            params={"wordlist": ["www", "mail"]},
+        ),
+        ctx,
+    )
+
+    assert result["resolved"] == ["mail.lab.test"]
+    assert all(f["ip"].startswith("10.") for f in ctx["findings"])
 
 
 # --------------------------------------------------------------------------- #
