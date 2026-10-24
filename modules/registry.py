@@ -212,6 +212,7 @@ def asset_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
         max_requests=int(step.params.get("max_requests", 200)),
         web_ports=[int(port) for port in web_ports],
         pace=lambda: _pace(ctx),
+        deep=bool(step.params.get("deep", False)),
     )
     findings = summary.pop("findings", [])
     ctx.setdefault("findings", []).extend(findings)

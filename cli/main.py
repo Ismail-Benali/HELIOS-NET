@@ -164,6 +164,7 @@ def cmd_assets(args: Any) -> int:
         "depth": getattr(args, "depth", 1),
         "max_hosts": getattr(args, "max_hosts", 50),
         "max_requests": getattr(args, "max_requests", 200),
+        "deep": bool(getattr(args, "deep", False)),
     }
     if web_ports:
         params["web_ports"] = web_ports
@@ -423,6 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--depth", type=int, default=1, help="CT expansion hops")
     a.add_argument("--max-hosts", type=int, default=50, dest="max_hosts")
     a.add_argument("--max-requests", type=int, default=200, dest="max_requests")
+    a.add_argument(
+        "--deep",
+        action="store_true",
+        help="Also fetch security.txt and robots.txt for ownership signals",
+    )
     a.add_argument(
         "--seeds",
         default=None,

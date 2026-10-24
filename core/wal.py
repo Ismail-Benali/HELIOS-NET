@@ -25,6 +25,13 @@ log = logging.getLogger(__name__)
 _MAGIC = b"HWL2"
 _KEYSTREAM_LABEL = b"helios-wal-v2-keystream"
 
+#: v3 keeps one salt per log file, so PBKDF2 runs once per process instead of
+#: once per record. Each record still gets a fresh nonce.
+_MAGIC_V3 = b"HWL3"
+_V3_HEADER_LEN = 20
+_KEYSTREAM_LABEL_V3 = b"helios-wal-v3-keystream"
+_MAX_RECORD_BYTES = 64 * 1024 * 1024
+
 
 class TransactionalWAL:
     """Secure encrypted transactional WAL.
@@ -53,6 +60,12 @@ class TransactionalWAL:
         self.path = Path(wal_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._key = self._resolve_key(master_key)
+        self._salt: bytes | None = None
+        self._enc_key: bytes | None = None
+        self._mac_key: bytes | None = None
+        self._v3 = False
+        self._legacy = False
+        self._load_v3_header()
         self._lsn = 0
         self._active_txn = False
         self._txn_buffer: list[bytes] = []
@@ -154,6 +167,51 @@ class TransactionalWAL:
         material = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 64)
         return material[:32], material[32:]
 
+    def _install_salt(self, salt: bytes) -> None:
+        self._salt = salt
+        self._enc_key, self._mac_key = self._derive_keys(salt)
+
+    def _load_v3_header(self) -> None:
+        """Reads the per-file salt from an existing v3 log.
+
+        Doing this once at construction means every record in the file shares a
+        single key derivation instead of paying PBKDF2 per record.
+        """
+        if not self.path.exists() or self.path.stat().st_size < _V3_HEADER_LEN:
+            return
+        with self.path.open("rb") as handle:
+            header = handle.read(_V3_HEADER_LEN)
+        if len(header) == _V3_HEADER_LEN and header[:4] == _MAGIC_V3:
+            self._install_salt(header[4:])
+            self._v3 = True
+        else:
+            self._legacy = True
+
+    def _start_v3(self) -> None:
+        """Creates the v3 header and derives the log's keys exactly once."""
+        salt = os.urandom(16)
+        self._install_salt(salt)
+        self._v3 = True
+        with self.path.open("ab") as handle:
+            handle.write(_MAGIC_V3 + salt)
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def _generate_v3_keystream(self, nonce: bytes, length: int) -> bytes:
+        if self._enc_key is None:
+            raise RuntimeError("WAL keys are not initialized")
+        keystream = bytearray()
+        counter = 0
+        while len(keystream) < length:
+            block = hmac.new(
+                self._enc_key,
+                _KEYSTREAM_LABEL_V3 + nonce + struct.pack("!Q", counter),
+                hashlib.sha256,
+            ).digest()
+            keystream.extend(block)
+            counter += 1
+        return bytes(keystream[:length])
+
     def _generate_keystream(self, enc_key: bytes, salt: bytes, length: int) -> bytes:
         """Expands an HMAC-SHA256 counter-mode keystream.
 
@@ -174,24 +232,60 @@ class TransactionalWAL:
         return bytes(keystream[:length])
 
     def _encrypt(self, plaintext: bytes) -> bytes:
-        """Encrypts a record with HMAC-SHA256 streams and a separate MAC key.
+        """Encrypts one record under the log's single derived key.
 
-        Layout: ``HWL2 | mac(32) | salt(16) | ciphertext``.
+        Layout: ``nonce(16) | mac(32) | ciphertext``. The file header holds the
+        salt, so the derived keys are reused; the nonce makes every record's
+        keystream unique. A log created by an older version keeps the v2 record
+        layout so its records stay readable in place.
         """
+        if self._legacy:
+            return self._encrypt_v2(plaintext)
+        if not self._v3:
+            if self.path.exists() and self.path.stat().st_size:
+                # A short or corrupt pre-v3 file must not receive a header in
+                # the middle of its record stream; keep appending v2 records.
+                self._legacy = True
+                return self._encrypt_v2(plaintext)
+            self._start_v3()
+        if self._mac_key is None:
+            raise RuntimeError("WAL keys are not initialized")
+        nonce = os.urandom(16)
+        stream = self._generate_v3_keystream(nonce, len(plaintext))
+        ciphertext = bytes(b ^ stream[i] for i, b in enumerate(plaintext))
+        sig = hmac.new(
+            self._mac_key, _MAGIC_V3 + nonce + ciphertext, hashlib.sha256
+        ).digest()
+        return nonce + sig + ciphertext
+
+    def _encrypt_v2(self, plaintext: bytes) -> bytes:
+        """Legacy record layout, kept only for appending to an old log."""
         salt = os.urandom(16)
         enc_key, mac_key = self._derive_keys(salt)
-
         stream = self._generate_keystream(enc_key, salt, len(plaintext))
         ciphertext = bytes(b ^ stream[i] for i, b in enumerate(plaintext))
-
         sig = hmac.new(mac_key, _MAGIC + salt + ciphertext, hashlib.sha256).digest()
         return _MAGIC + sig + salt + ciphertext
 
     def _decrypt(self, raw_data: bytes) -> bytes | None:
-        """Verifies and decrypts a record, accepting the legacy v1 layout."""
+        """Verifies and decrypts a legacy (v1/v2) record."""
         if raw_data.startswith(_MAGIC):
             return self._decrypt_v2(raw_data)
         return self._decrypt_legacy(raw_data)
+
+    def _decrypt_v3(self, raw_data: bytes) -> bytes | None:
+        if self._mac_key is None or self._enc_key is None or len(raw_data) < 48:
+            return None
+        nonce = raw_data[:16]
+        sig = raw_data[16:48]
+        ciphertext = raw_data[48:]
+        expected_sig = hmac.new(
+            self._mac_key, _MAGIC_V3 + nonce + ciphertext, hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        stream = self._generate_v3_keystream(nonce, len(ciphertext))
+        return bytes(b ^ stream[i] for i, b in enumerate(ciphertext))
 
     def _decrypt_v2(self, raw_data: bytes) -> bytes | None:
         body = raw_data[len(_MAGIC) :]
@@ -290,16 +384,32 @@ class TransactionalWAL:
 
         valid_records = []
         with self._lock, self.path.open("rb") as fh:
+            head = fh.read(_V3_HEADER_LEN)
+            v3 = len(head) == _V3_HEADER_LEN and head[:4] == _MAGIC_V3
+            if v3:
+                salt = head[4:]
+                if self._salt != salt:
+                    self._install_salt(salt)
+                self._v3 = True
+            else:
+                fh.seek(0)
+
             while True:
                 header = fh.read(4)
                 if len(header) < 4:
                     break
                 length = struct.unpack("!I", header)[0]
+                if length == 0 or length > _MAX_RECORD_BYTES:
+                    break
                 encrypted_payload = fh.read(length)
                 if len(encrypted_payload) < length:
                     break
 
-                plain = self._decrypt(encrypted_payload)
+                plain = (
+                    self._decrypt_v3(encrypted_payload)
+                    if v3
+                    else self._decrypt(encrypted_payload)
+                )
                 if plain:
                     try:
                         record = json.loads(plain.decode("utf-8"))

@@ -31,10 +31,12 @@ import re
 import socket
 import ssl
 import tempfile
+import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from core.input_guard import sanitize_banner
 from core.scope import ScopeEnforcer
@@ -44,7 +46,19 @@ WEB_PORTS = (80, 443, 8080, 8443)
 DEFAULT_TIMEOUT = 2.0
 MAX_BODY_BYTES = 16 * 1024
 MAX_TITLE_CHARS = 120
+MAX_REDIRECTS = 2
+MAX_DOCUMENT_CHARS = 400
 USER_AGENT = "HELIOS-NET/1.0 (+authorized reconnaissance)"
+
+_SECURITY_HEADERS = (
+    "Strict-Transport-Security",
+    "Content-Security-Policy",
+    "X-Frame-Options",
+    "X-Content-Type-Options",
+    "Referrer-Policy",
+    "Permissions-Policy",
+    "Cross-Origin-Opener-Policy",
+)
 
 _TITLE_RE = re.compile(r"(?is)<title[^>]*>(.*?)</title>")
 _TECH_MARKERS = {
@@ -191,6 +205,13 @@ def _tls_info(conn: http.client.HTTPSConnection) -> dict[str, Any]:
     except (ValueError, OSError):
         der = None
     info.update(decode_certificate(der or b""))
+    not_after = info.get("not_after", "")
+    if not_after:
+        try:
+            expires = ssl.cert_time_to_seconds(not_after)
+            info["days_left"] = int((expires - time.time()) // 86400)
+        except ValueError:
+            pass
     return info
 
 
@@ -202,14 +223,23 @@ def probe_http(
     scheme: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     host_header: str | None = None,
+    path: str = "/",
+    capture_body: bool = False,
 ) -> dict[str, Any]:
-    """Fetches minimal HTTP metadata for one `host`/`ip`/`port` triple."""
+    """Fetches HTTP metadata for one `host`/`ip`/`port` triple.
+
+    Metadata is deliberately factual: response status, server banner, title,
+    technologies, TLS facts, redirect target, cookies presence, the security
+    headers the endpoint actually returned, and (optionally) a bounded body
+    excerpt for well-known documents.
+    """
     scheme = scheme or ("https" if port in (443, 8443) else "http")
     result: dict[str, Any] = {
         "host": host,
         "ip": ip,
         "port": port,
         "scheme": scheme,
+        "path": path,
         "open": False,
         "source": "asset-discovery",
     }
@@ -224,7 +254,7 @@ def probe_http(
     try:
         conn.request(
             "GET",
-            "/",
+            path,
             headers={
                 "Host": header,
                 "User-Agent": USER_AGENT,
@@ -236,6 +266,19 @@ def probe_http(
         body = response.read(MAX_BODY_BYTES).decode("utf-8", errors="replace")
         server = sanitize_banner(response.getheader("Server", "") or "")
         powered = sanitize_banner(response.getheader("X-Powered-By", "") or "")
+        security_headers = {
+            name: sanitize_banner(response.getheader(name, "") or "")[:200]
+            for name in _SECURITY_HEADERS
+            if response.getheader(name)
+        }
+        cookies = response.getheaders()
+        cookie_names = sorted(
+            {
+                value.split("=", 1)[0].strip()
+                for key, value in cookies
+                if key.lower() == "set-cookie"
+            }
+        )
         result.update(
             {
                 "open": True,
@@ -244,8 +287,22 @@ def probe_http(
                 "server": server,
                 "title": _title(body),
                 "technologies": _technologies(server, powered, body),
+                "content_type": sanitize_banner(
+                    response.getheader("Content-Type", "") or ""
+                ),
+                "content_length": sanitize_banner(
+                    response.getheader("Content-Length", "") or ""
+                ),
+                "security_headers": security_headers,
+                "security_headers_count": len(security_headers),
+                "cookies": cookie_names,
             }
         )
+        location = response.getheader("Location", "") or ""
+        if location:
+            result["location"] = sanitize_banner(location)[:300]
+        if capture_body:
+            result["body_excerpt"] = sanitize_banner(body)[:MAX_DOCUMENT_CHARS]
         if https_conn is not None:
             result["tls"] = _tls_info(https_conn)
     except (OSError, ssl.SSLError, http.client.HTTPException, ValueError) as exc:
@@ -268,6 +325,157 @@ def _is_vhost(candidate: dict[str, Any], baseline: dict[str, Any]) -> bool:
     return _fingerprint(candidate) != _fingerprint(baseline)
 
 
+def _redirect_target(
+    location: str, host: str, port: int, scheme: str
+) -> tuple[str, int, str, str] | None:
+    """Resolves a Location header into (host, port, scheme, path).
+
+    Relative locations stay on the current authority; absolute ones are parsed
+    only for their authority and path. The caller still has to scope-check the
+    resulting host and every address it resolves to.
+    """
+    try:
+        parts = urlsplit(location)
+    except ValueError:
+        return None
+    next_scheme = parts.scheme or scheme
+    next_host = (parts.hostname or host).strip().lower().rstrip(".")
+    next_port = parts.port or (443 if next_scheme == "https" else 80)
+    path = parts.path or "/"
+    if parts.query:
+        path = f"{path}?{parts.query}"
+    return next_host, next_port, next_scheme, path
+
+
+def _contacts(excerpt: str) -> list[str]:
+    contacts: list[str] = []
+    for line in excerpt.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip().lower() in {"contact", "security-contact"} and value.strip():
+            contact = sanitize_banner(value.strip())[:200]
+            if contact and contact not in contacts:
+                contacts.append(contact)
+    return contacts[:5]
+
+
+def _follow_redirects(
+    scope: ScopeEnforcer,
+    candidate: dict[str, Any],
+    *,
+    name: str,
+    ip: str,
+    port: int,
+    scheme: str,
+    probe: Probe,
+    resolve: Resolver,
+    timeout: float,
+    pace: Callable[[], None] | None,
+    budget: Callable[[], bool],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+    """Follows at most MAX_REDIRECTS in-scope hops from an open response.
+
+    Returns (chain, blocked, requests_used). A redirect that leaves the scope is
+    recorded and never followed; the chain survives so the operator can see the
+    boundary decision instead of a silently truncated walk.
+    """
+    chain: list[dict[str, Any]] = []
+    blocked: list[dict[str, Any]] = []
+    used = 0
+    current = candidate
+    current_host, current_ip, current_port = name, ip, port
+    current_scheme = scheme
+
+    for _ in range(MAX_REDIRECTS):
+        status = int(current.get("status") or 0)
+        location = str(current.get("location") or "")
+        if status not in {301, 302, 303, 307, 308} or not location or not budget():
+            break
+        target = _redirect_target(location, current_host, current_port, current_scheme)
+        if target is None:
+            blocked.append(
+                {"host": name, "reason": "redirect-unparseable", "location": location}
+            )
+            break
+        next_host, next_port, next_scheme, path = target
+        addresses = resolve(next_host) if next_host != current_host else [current_ip]
+        allowed = [address for address in addresses if scope.is_target_allowed(address)]
+        if not addresses or not allowed or not scope.is_target_allowed(next_host):
+            blocked.append(
+                {
+                    "host": name,
+                    "reason": "redirect-outside-scope",
+                    "location": location,
+                    "target_host": next_host,
+                }
+            )
+            break
+        if pace is not None:
+            pace()
+        current = probe(
+            next_host,
+            allowed[0],
+            next_port,
+            scheme=next_scheme,
+            path=path,
+            timeout=timeout,
+        )
+        used += 1
+        chain.append(
+            {
+                "from": f"{current_scheme}://{current_host}:{current_port}",
+                "to": f"{next_scheme}://{next_host}:{next_port}{path}",
+                "status": current.get("status"),
+            }
+        )
+        current_host, current_ip = next_host, allowed[0]
+        current_port, current_scheme = next_port, next_scheme
+        if not current.get("open"):
+            break
+    return chain, blocked, used
+
+
+def _probe_documents(
+    probe: Probe,
+    *,
+    host: str,
+    ip: str,
+    port: int,
+    scheme: str,
+    timeout: float,
+    pace: Callable[[], None] | None,
+    budget: Callable[[], bool],
+) -> tuple[dict[str, Any], int]:
+    """Fetches the two well-known documents that carry ownership signals."""
+    documents: dict[str, Any] = {}
+    used = 0
+    for path in ("/.well-known/security.txt", "/robots.txt"):
+        if not budget():
+            break
+        if pace is not None:
+            pace()
+        document = probe(
+            host,
+            ip,
+            port,
+            scheme=scheme,
+            path=path,
+            timeout=timeout,
+            capture_body=True,
+        )
+        used += 1
+        if not document.get("open"):
+            continue
+        entry: dict[str, Any] = {
+            "status": document.get("status"),
+            "content_type": document.get("content_type", ""),
+        }
+        excerpt = str(document.get("body_excerpt") or "")
+        if path.endswith("security.txt"):
+            entry["contacts"] = _contacts(excerpt)
+        documents[path] = entry
+    return documents, used
+
+
 def discover_assets(
     scope: ScopeEnforcer,
     seeds: list[str],
@@ -282,12 +490,15 @@ def discover_assets(
     resolve: Resolver | None = None,
     probe: Probe | None = None,
     pace: Callable[[], None] | None = None,
+    deep: bool = False,
 ) -> dict[str, Any]:
     """Walks the authorized surface starting from `seeds`.
 
     Returns a summary plus a `findings` list the caller can merge into its
     campaign context. Out-of-scope names and out-of-scope resolved addresses are
-    reported under `blocked`; they are never probed.
+    reported under `blocked`; they are never probed. Redirects are followed only
+    while every hop stays in scope, and `deep` adds the well-known documents
+    that carry ownership signals.
     """
     resolve = resolve or resolve_host
     probe = probe or probe_http
@@ -310,6 +521,9 @@ def discover_assets(
     blocked: list[dict[str, Any]] = []
     requests = 0
     plan = list(dict.fromkeys(web_ports))
+
+    def _budget() -> bool:
+        return requests < max_requests
 
     while queue and len(seen) < max_hosts and requests < max_requests:
         name, level = queue.popleft()
@@ -358,6 +572,39 @@ def discover_assets(
                         if _is_vhost(candidate, baseline):
                             candidate["vhost"] = True
 
+                    chain, redirect_blocked, used = _follow_redirects(
+                        scope,
+                        candidate,
+                        name=name,
+                        ip=ip,
+                        port=port,
+                        scheme=str(candidate["scheme"]),
+                        probe=probe,
+                        resolve=resolve,
+                        timeout=timeout,
+                        pace=pace,
+                        budget=_budget,
+                    )
+                    requests += used
+                    blocked.extend(redirect_blocked)
+                    if chain:
+                        candidate["redirects"] = chain
+
+                    if deep and requests < max_requests:
+                        documents, used = _probe_documents(
+                            probe,
+                            host=name,
+                            ip=ip,
+                            port=port,
+                            scheme=str(candidate["scheme"]),
+                            timeout=timeout,
+                            pace=pace,
+                            budget=_budget,
+                        )
+                        requests += used
+                        if documents:
+                            candidate["documents"] = documents
+
                     finding = {
                         "module": "asset",
                         "host": name,
@@ -376,6 +623,13 @@ def discover_assets(
                         "technologies",
                         "tls",
                         "vhost",
+                        "content_type",
+                        "content_length",
+                        "security_headers",
+                        "security_headers_count",
+                        "cookies",
+                        "redirects",
+                        "documents",
                     ):
                         if candidate.get(key) not in (None, "", []):
                             finding[key] = candidate[key]

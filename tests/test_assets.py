@@ -46,6 +46,9 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "text/html")
         self.send_header("Server", server)
+        if getattr(self.server, "security_headers", False):
+            self.send_header("Strict-Transport-Security", "max-age=31536000")
+            self.send_header("Set-Cookie", "session=abc; HttpOnly")
         if powered:
             self.send_header("X-Powered-By", powered)
         self.send_header("Content-Length", str(len(body)))
@@ -255,6 +258,118 @@ def test_an_identical_response_is_not_labelled_a_vhost(make_server):
     )
 
     assert summary["findings"][0].get("vhost") is not True
+
+
+def test_security_headers_and_cookies_are_reported(make_server):
+    port = make_server(default_status=200, security_headers=True)
+
+    meta = probe_http("app.test", "127.0.0.1", port, timeout=1.0)
+
+    assert meta["security_headers_count"] >= 1
+    assert "strict-transport-security" in {
+        name.lower() for name in meta["security_headers"]
+    }
+    assert meta["cookies"] == ["session"]
+
+
+def test_an_in_scope_redirect_is_followed_and_recorded():
+    seen: list[tuple[str, str]] = []
+
+    def probe(host: str, ip: str, port: int, **kwargs: object) -> dict:
+        path = str(kwargs.get("path", "/"))
+        host_header = str(kwargs.get("host_header", ""))
+        seen.append((host, path))
+        if host_header:
+            return {"open": True, "scheme": "http", "status": 200, "title": "same"}
+        if path == "/":
+            return {
+                "open": True,
+                "scheme": "http",
+                "status": 302,
+                "title": "moved",
+                "location": "https://app.lab.test/login",
+            }
+        return {"open": True, "scheme": "https", "status": 200, "title": "login"}
+
+    summary = discover_assets(
+        ScopeEnforcer(allowed_domains=["lab.test"], allowed_cidrs=["127.0.0.1/32"]),
+        ["app.lab.test"],
+        resolve=lambda name: ["127.0.0.1"],
+        probe=probe,
+        web_ports=[80],
+        max_requests=10,
+    )
+
+    finding = summary["findings"][0]
+    assert finding["redirects"] == [
+        {
+            "from": "http://app.lab.test:80",
+            "to": "https://app.lab.test:443/login",
+            "status": 200,
+        }
+    ]
+    assert ("app.lab.test", "/login") in seen
+
+
+def test_a_redirect_outside_the_scope_is_blocked_and_not_followed():
+    probed: list[str] = []
+
+    def probe(host: str, ip: str, port: int, **kwargs: object) -> dict:
+        probed.append(host)
+        path = str(kwargs.get("path", "/"))
+        if path == "/":
+            return {
+                "open": True,
+                "scheme": "http",
+                "status": 301,
+                "location": "https://outside.test/",
+            }
+        return {"open": True, "scheme": "https", "status": 200}
+
+    summary = discover_assets(
+        ScopeEnforcer(allowed_domains=["lab.test"], allowed_cidrs=["127.0.0.1/32"]),
+        ["app.lab.test"],
+        resolve=lambda name: ["127.0.0.1"],
+        probe=probe,
+        web_ports=[80],
+        max_requests=10,
+    )
+
+    assert "outside.test" not in probed
+    assert any(
+        entry["reason"] == "redirect-outside-scope" for entry in summary["blocked"]
+    )
+
+
+def test_deep_mode_collects_well_known_documents():
+    def probe(host: str, ip: str, port: int, **kwargs: object) -> dict:
+        path = str(kwargs.get("path", "/"))
+        if path == "/.well-known/security.txt":
+            return {
+                "open": True,
+                "status": 200,
+                "content_type": "text/plain",
+                "body_excerpt": "Contact: mailto:security@lab.test",
+            }
+        if path == "/robots.txt":
+            return {"open": True, "status": 200, "content_type": "text/plain"}
+        return {"open": True, "scheme": "http", "status": 200, "title": "root"}
+
+    summary = discover_assets(
+        ScopeEnforcer(allowed_domains=["lab.test"], allowed_cidrs=["127.0.0.1/32"]),
+        ["app.lab.test"],
+        resolve=lambda name: ["127.0.0.1"],
+        probe=probe,
+        web_ports=[80],
+        max_requests=10,
+        deep=True,
+    )
+
+    documents = summary["findings"][0]["documents"]
+    assert documents["/.well-known/security.txt"]["contacts"] == [
+        "mailto:security@lab.test"
+    ]
+    assert documents["/robots.txt"]["status"] == 200
 
 
 # --------------------------------------------------------------------------- #
