@@ -24,6 +24,7 @@ from core.async_engine import (
     jittered_backoff,
 )
 from core.daemon import AutonomousDaemon
+from core.input_guard import MAX_BANNER_BYTES
 
 
 class FakeReader:
@@ -182,6 +183,20 @@ def test_a_silent_service_is_still_open(monkeypatch):
     result = asyncio.run(adaptive_banner_probe("10.0.0.1", 8080))
     assert result["open"] is True
     assert result["banner"] == ""
+
+
+def test_control_characters_are_removed_at_the_network_boundary(monkeypatch):
+    """A target must not be able to steer downstream parsers with NULs/escapes."""
+    _patch_connection(monkeypatch, b"SSH-2.0\x00 OpenSSH\x01\x1b\r\n")
+    result = asyncio.run(adaptive_banner_probe("10.0.0.1", 22))
+    assert result["banner"] == "SSH-2.0 OpenSSH"
+
+
+def test_an_oversized_banner_is_capped_before_it_leaves_the_probe(monkeypatch):
+    """A service that dumps megabytes must not hand them to a core."""
+    _patch_connection(monkeypatch, b"A" * (MAX_BANNER_BYTES * 4))
+    result = asyncio.run(adaptive_banner_probe("10.0.0.1", 80))
+    assert len(result["banner"]) == MAX_BANNER_BYTES
 
 
 class ExplodingReader(FakeReader):

@@ -342,6 +342,11 @@ def test_a_banner_is_returned_decoded_and_trimmed(monkeypatch):
     assert result["port"] == 22
 
 
+def test_control_characters_from_a_service_are_removed(monkeypatch):
+    _patch_socket(monkeypatch, "open", reply=b"SSH\x00-2.0\x01 OpenSSH\r\n")
+    assert fingerprint.banner_grab("10.0.0.1", 22)["banner"] == "SSH-2.0 OpenSSH"
+
+
 def test_the_default_probe_is_sent_before_reading(monkeypatch):
     made = _patch_socket(monkeypatch, "open", reply=b"hi")
     fingerprint.banner_grab("10.0.0.1", 80)
