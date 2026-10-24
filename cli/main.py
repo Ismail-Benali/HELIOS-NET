@@ -52,8 +52,13 @@ def cmd_recon(args: Any) -> int:
         print(f"[HELIOS] refused: {exc}")
         return 2
     orch = _build_orchestrator(args.data, scope=scope)
+    intelligence = (
+        [{"module": "asset", "params": {"ct": True}}]
+        if getattr(args, "ct", False)
+        else None
+    )
     try:
-        state = orch.run_campaign(args.target)
+        state = orch.run_campaign(args.target, intelligence)
     except ScopeError as exc:
         print(f"[HELIOS] refused: {exc}")
         return 2
@@ -127,6 +132,68 @@ def cmd_probe(args: Any) -> int:
         print(f"  {result['host']}:{result['port']}  {banner[:120]!r}")
     print(f"[HELIOS] probed {len(results)} port(s) via adaptive engine")
     return 0
+
+
+def _parse_port_list(raw: str | None) -> list[int] | None:
+    if not raw:
+        return None
+    return [int(part) for part in raw.split(",") if part.strip()]
+
+
+def cmd_assets(args: Any) -> int:
+    """Discovers scoped assets from names, CT entries, and HTTP metadata."""
+    from modules.registry import asset_runner
+
+    try:
+        scope = _load_scope(getattr(args, "scope", None))
+        scope.check(args.target)
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
+
+    web_ports = _parse_port_list(getattr(args, "web_ports", None))
+    if web_ports:
+        try:
+            scope.check_ports(web_ports)
+        except ScopeError as exc:
+            print(f"[HELIOS] refused: {exc}")
+            return 2
+
+    params: dict[str, Any] = {
+        "ct": bool(getattr(args, "ct", False)),
+        "depth": getattr(args, "depth", 1),
+        "max_hosts": getattr(args, "max_hosts", 50),
+        "max_requests": getattr(args, "max_requests", 200),
+    }
+    if web_ports:
+        params["web_ports"] = web_ports
+    raw_seeds = getattr(args, "seeds", None)
+    if raw_seeds:
+        params["seeds"] = [
+            seed.strip() for seed in raw_seeds.split(",") if seed.strip()
+        ]
+
+    step = PlanStep(
+        step_id=1, module="asset", action="discover", target=args.target, params=params
+    )
+    ctx: dict[str, Any] = {"scope": scope, "scope_ports": list(scope.ports)}
+    summary = asset_runner(step, ctx)
+
+    for finding in ctx.get("findings", []):
+        title = finding.get("title", "")
+        vhost = " vhost" if finding.get("vhost") else ""
+        print(
+            f"  {finding['host']} -> {finding['ip']}:{finding['port']} "
+            f"[{finding.get('status', '?')}] {title}{vhost}".rstrip()
+        )
+    for entry in summary.get("blocked", []):
+        print(f"  blocked {entry['host']}: {entry['reason']}")
+    print(
+        f"[HELIOS] hosts={len(summary.get('hosts', []))} "
+        f"assets={summary.get('assets', 0)} requests={summary.get('requests', 0)} "
+        f"ct={params['ct']}"
+    )
+    return 2 if summary.get("error") else 0
 
 
 def cmd_recover(args: Any) -> int:
@@ -326,6 +393,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     r = sub.add_parser("recon", help="Run full recon campaign")
     r.add_argument("--target", required=True, help="Target (authorized/owned)")
+    r.add_argument(
+        "--ct",
+        action="store_true",
+        help="Expand discovered names through Certificate Transparency",
+    )
     r.set_defaults(fn=cmd_recon)
 
     j = sub.add_parser("judge", help="Classify open ports via verdict engine")
@@ -338,6 +410,31 @@ def build_parser() -> argparse.ArgumentParser:
         "--ports", default=None, help="Comma-separated ports; defaults to the scope"
     )
     pr.set_defaults(fn=cmd_probe)
+
+    a = sub.add_parser(
+        "assets", help="Discover scoped assets from names, CT and HTTP metadata"
+    )
+    a.add_argument("--target", required=True, help="Seed host (authorized/owned)")
+    a.add_argument(
+        "--ct",
+        action="store_true",
+        help="Expand names through Certificate Transparency",
+    )
+    a.add_argument("--depth", type=int, default=1, help="CT expansion hops")
+    a.add_argument("--max-hosts", type=int, default=50, dest="max_hosts")
+    a.add_argument("--max-requests", type=int, default=200, dest="max_requests")
+    a.add_argument(
+        "--seeds",
+        default=None,
+        help="Comma-separated additional seed names (still scope-checked)",
+    )
+    a.add_argument(
+        "--web-ports",
+        default=None,
+        dest="web_ports",
+        help="Comma-separated web ports to probe; defaults to the scope",
+    )
+    a.set_defaults(fn=cmd_assets)
 
     rc = sub.add_parser("recover", help="Recover campaign state from disk")
     rc.add_argument("campaign_id")
