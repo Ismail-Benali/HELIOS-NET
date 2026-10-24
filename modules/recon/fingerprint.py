@@ -26,6 +26,8 @@ from __future__ import annotations
 import socket
 from typing import Any
 
+from core.input_guard import sanitize_banner
+
 #: Signals the Bayesian model can work from.
 DEFAULT_SIGNAL = {"ttl": 64, "window": 64240, "tcp_options_len": 20}
 
@@ -118,7 +120,7 @@ def banner_grab(
         s.connect((host, port))
         s.sendall(probe)
         data = s.recv(512)
-        banner = data.decode("utf-8", errors="replace").strip()
+        banner = sanitize_banner(data.decode("utf-8", errors="replace").strip())
     except OSError as exc:
         banner = f"<error: {exc}>"
     finally:

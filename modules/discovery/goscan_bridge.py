@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from core.envelope import parse_envelope
+from core.input_guard import sanitize_banner
 
 ROOT = Path(__file__).resolve().parents[2]
 _EXE = ".exe" if os.name == "nt" else ""
@@ -173,6 +174,9 @@ async def run_go_scan_async(
                 except json.JSONDecodeError:
                     continue
                 if isinstance(data, dict) and data.get("open"):
+                    banner = data.get("banner", "")
+                    if not isinstance(banner, str):
+                        banner = ""
                     # Preserve everything the core reported. The previous bridge
                     # discarded the banner, the detected service and the latency,
                     # and hardcoded a generic "tcp-native" service, throwing away
@@ -189,7 +193,7 @@ async def run_go_scan_async(
                             # service as no service, and modules/core.py keys its
                             # service graph node off exactly that check.
                             "service": data.get("service") or "",
-                            "banner": data.get("banner", ""),
+                            "banner": sanitize_banner(banner),
                             "latency_ms": data.get("latency_ms"),
                             "time": data.get("time", ""),
                             "open": True,

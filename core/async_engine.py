@@ -14,6 +14,8 @@ import random
 import time
 from typing import Any
 
+from core.input_guard import sanitize_banner
+
 
 async def jittered_backoff(
     base_delay: float = 0.05, max_delay: float = 1.0, attempt: int = 1
@@ -60,7 +62,9 @@ async def adaptive_banner_probe(
             writer.write(b"HEAD / HTTP/1.0\r\n\r\n")
             await writer.drain()
             banner_data = await asyncio.wait_for(reader.read(256), timeout=1.0)
-            banner = banner_data.decode("utf-8", errors="replace").strip()
+            banner = sanitize_banner(
+                banner_data.decode("utf-8", errors="replace").strip()
+            )
         except Exception:
             banner = ""
 
