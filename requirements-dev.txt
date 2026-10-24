@@ -1,0 +1,9 @@
+# Development and CI toolchain.
+#
+# Pinned so that a green run means the same thing tomorrow: an unpinned ruff
+# can add rules, and an unpinned mypy can change inference, either of which
+# turns an untouched commit red. Runtime code in core/ uses only the stdlib.
+pytest==8.3.4
+ruff==0.16.2
+bandit==1.9.4
+mypy==2.3.0

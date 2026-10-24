@@ -21,6 +21,10 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
+#: Marks the v2 record layout so legacy records remain readable.
+_MAGIC = b"HWL2"
+_KEYSTREAM_LABEL = b"helios-wal-v2-keystream"
+
 
 class TransactionalWAL:
     """Secure encrypted transactional WAL.
@@ -145,36 +149,74 @@ class TransactionalWAL:
                 self.path,
             )
 
-    def _generate_keystream(
-        self, derived_key: bytes, salt: bytes, length: int
-    ) -> bytes:
-        """Generates a cryptographic keystream of arbitrary length using counter-mode SHA-256 (no repeating keystream vulnerability)."""
+    def _derive_keys(self, salt: bytes) -> tuple[bytes, bytes]:
+        """Splits one PBKDF2 stretch into independent encryption and MAC keys."""
+        material = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 64)
+        return material[:32], material[32:]
+
+    def _generate_keystream(self, enc_key: bytes, salt: bytes, length: int) -> bytes:
+        """Expands an HMAC-SHA256 counter-mode keystream.
+
+        The previous construction hashed ``key || salt || counter``, which is a
+        plain hash of a known prefix and therefore a weaker PRF than HMAC; it
+        also reused one derived key for both encryption and authentication.
+        """
         keystream = bytearray()
         counter = 0
         while len(keystream) < length:
-            block = hashlib.sha256(
-                derived_key + salt + struct.pack("!I", counter)
+            block = hmac.new(
+                enc_key,
+                _KEYSTREAM_LABEL + salt + struct.pack("!Q", counter),
+                hashlib.sha256,
             ).digest()
             keystream.extend(block)
             counter += 1
         return bytes(keystream[:length])
 
     def _encrypt(self, plaintext: bytes) -> bytes:
-        """Authenticated encryption using HMAC-SHA256, PBKDF2 (100,000 iterations), and counter-mode stream cipher."""
+        """Encrypts a record with HMAC-SHA256 streams and a separate MAC key.
+
+        Layout: ``HWL2 | mac(32) | salt(16) | ciphertext``.
+        """
         salt = os.urandom(16)
-        derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 32)
+        enc_key, mac_key = self._derive_keys(salt)
 
-        # Cryptographic stream cipher with full-length keystream expansion
-        stream = self._generate_keystream(derived_key, salt, len(plaintext))
-        ciphertext = bytearray(b ^ stream[i] for i, b in enumerate(plaintext))
+        stream = self._generate_keystream(enc_key, salt, len(plaintext))
+        ciphertext = bytes(b ^ stream[i] for i, b in enumerate(plaintext))
 
-        # Calculate HMAC signature for integrity
-        sig = hmac.new(derived_key, salt + bytes(ciphertext), hashlib.sha256).digest()
-
-        return sig + salt + bytes(ciphertext)
+        sig = hmac.new(mac_key, _MAGIC + salt + ciphertext, hashlib.sha256).digest()
+        return _MAGIC + sig + salt + ciphertext
 
     def _decrypt(self, raw_data: bytes) -> bytes | None:
-        """Verifies HMAC and decrypts record securely."""
+        """Verifies and decrypts a record, accepting the legacy v1 layout."""
+        if raw_data.startswith(_MAGIC):
+            return self._decrypt_v2(raw_data)
+        return self._decrypt_legacy(raw_data)
+
+    def _decrypt_v2(self, raw_data: bytes) -> bytes | None:
+        body = raw_data[len(_MAGIC) :]
+        if len(body) < 48:
+            return None
+        sig = body[:32]
+        salt = body[32:48]
+        ciphertext = body[48:]
+
+        enc_key, mac_key = self._derive_keys(salt)
+        expected_sig = hmac.new(
+            mac_key, _MAGIC + salt + ciphertext, hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+
+        stream = self._generate_keystream(enc_key, salt, len(ciphertext))
+        return bytes(b ^ stream[i] for i, b in enumerate(ciphertext))
+
+    def _decrypt_legacy(self, raw_data: bytes) -> bytes | None:
+        """Reads records written before the v2 PRF change.
+
+        Removing this would make existing journals unreadable, so the old
+        single-key construction is kept for verification only.
+        """
         if len(raw_data) < 48:
             return None
         sig = raw_data[:32]
@@ -183,13 +225,18 @@ class TransactionalWAL:
 
         derived_key = hashlib.pbkdf2_hmac("sha256", self._key, salt, 100000, 32)
         expected_sig = hmac.new(derived_key, salt + ciphertext, hashlib.sha256).digest()
-
         if not hmac.compare_digest(sig, expected_sig):
-            return None  # Tampered or corrupted data
+            return None
 
-        stream = self._generate_keystream(derived_key, salt, len(ciphertext))
-        plaintext = bytes(b ^ stream[i] for i, b in enumerate(ciphertext))
-        return plaintext
+        keystream = bytearray()
+        counter = 0
+        while len(keystream) < len(ciphertext):
+            keystream.extend(
+                hashlib.sha256(derived_key + salt + struct.pack("!I", counter)).digest()
+            )
+            counter += 1
+        stream = bytes(keystream[: len(ciphertext)])
+        return bytes(b ^ stream[i] for i, b in enumerate(ciphertext))
 
     def _init_lsn(self) -> None:
         if self.path.exists():

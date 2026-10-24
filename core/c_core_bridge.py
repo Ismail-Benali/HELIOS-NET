@@ -835,6 +835,17 @@ def _load_signatures(sig_path: Path) -> list[tuple[str, str]]:
     return pairs
 
 
+def load_signatures(
+    sig_path: str | Path,
+) -> list[tuple[str, str]]:
+    """Reads a signature file with the same parser the native core mirrors.
+
+    Public entry point for callers that need the (name, pattern) pairs, so they
+    do not depend on a private helper of this module.
+    """
+    return _load_signatures(Path(sig_path))
+
+
 def _python_fallback(banners: Iterable[str], sig_path: Path) -> list[dict[str, Any]]:
     """Pure-Python equivalent of `scan_banners`, used when the binary is absent.
 

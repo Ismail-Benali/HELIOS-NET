@@ -22,23 +22,41 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.orchestrator import Orchestrator  # noqa: E402
+from core.planner import PlanStep  # noqa: E402
+from core.scope import ScopeEnforcer, ScopeError  # noqa: E402
 from core.state import StateStore  # noqa: E402
 from engine.plugins import plugin_registry  # noqa: E402
 from engine.verdict import VerdictEngine, default_rules  # noqa: E402
-from modules.registry import default_registry  # noqa: E402
+from modules.registry import default_registry, discovery_runner  # noqa: E402
 
 DEFAULT_DATA = ROOT / "data"
 
 
-def _build_orchestrator(data_dir: str) -> Orchestrator:
+def _load_scope(scope_path: str | None) -> ScopeEnforcer:
+    """Loads the authorized scope, refusing to run when it cannot be trusted."""
+    return ScopeEnforcer.from_config(scope_path)
+
+
+def _build_orchestrator(
+    data_dir: str, scope: ScopeEnforcer | None = None
+) -> Orchestrator:
     store = StateStore(data_dir)
-    orch = Orchestrator(store=store, reg=default_registry())
+    orch = Orchestrator(store=store, reg=default_registry(), scope=scope)
     return orch
 
 
 def cmd_recon(args: Any) -> int:
-    orch = _build_orchestrator(args.data)
-    state = orch.run_campaign(args.target)
+    try:
+        scope = _load_scope(getattr(args, "scope", None))
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
+    orch = _build_orchestrator(args.data, scope=scope)
+    try:
+        state = orch.run_campaign(args.target)
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
     rep = orch.report(state)
     print(f"[HELIOS] campaign {state.campaign_id} -> {state.status}")
     print(
@@ -52,9 +70,20 @@ def cmd_recon(args: Any) -> int:
 
 
 def cmd_judge(args: Any) -> int:
-    from modules.discovery.service import discover_ports
+    try:
+        scope = _load_scope(getattr(args, "scope", None))
+        scope.check(args.target)
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
 
-    findings = discover_ports(args.target, ports=[22, 80, 443, 3306, 3389])
+    step = PlanStep(step_id=1, module="discovery", action="scan", target=args.target)
+    ctx: dict[str, Any] = {
+        "scope_ports": list(scope.ports) or [22, 80, 443, 3306, 3389]
+    }
+    outcome = discovery_runner(step, ctx)
+    findings = [f for f in ctx.get("findings", []) if f.get("open")]
+
     ve = VerdictEngine(rules=default_rules())
     ve.load_plugins(plugin_registry())
     for v in ve.judge_all(findings):
@@ -62,6 +91,41 @@ def cmd_judge(args: Any) -> int:
             f"  {v.finding.get('host')}:{v.finding.get('port')} <- {v.finding.get('service')}"
         )
         print(f"    severity={v.to_dict()['severity']} rules={v.rules_hit}")
+    print(f"[HELIOS] engine={outcome['engine']} open={outcome['count']}")
+    return 0
+
+
+def cmd_probe(args: Any) -> int:
+    """Grabs banners asynchronously through the adaptive engine."""
+    import asyncio
+
+    from core.async_engine import enterprise_adaptive_recon
+
+    try:
+        scope = _load_scope(getattr(args, "scope", None))
+        scope.check(args.target)
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
+
+    raw_ports: str | None = getattr(args, "ports", None)
+    if raw_ports:
+        ports = [int(port) for port in raw_ports.split(",") if port.strip()]
+    else:
+        ports = list(scope.ports) or [22, 80, 443]
+    try:
+        scope.check_ports(ports)
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
+
+    results = asyncio.run(enterprise_adaptive_recon(args.target, ports))
+    for result in results:
+        if not result.get("open"):
+            continue
+        banner = result.get("banner", "")
+        print(f"  {result['host']}:{result['port']}  {banner[:120]!r}")
+    print(f"[HELIOS] probed {len(results)} port(s) via adaptive engine")
     return 0
 
 
@@ -217,6 +281,13 @@ def cmd_daemon(args: Any) -> int:
 
     from core.daemon import AutonomousDaemon
 
+    try:
+        scope = _load_scope(getattr(args, "scope", None))
+        scope.check(args.target)
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
+
     print(f"[DEMIURG-DAEMON] Activating autonomous agent for target: {args.target}")
     print("[DEMIURG-DAEMON] Press Ctrl+C to terminate the living daemon loop.")
 
@@ -246,6 +317,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="HELIOS-NET - Autonomous Red Teaming & Attack Surface Management Orchestrator",
     )
     p.add_argument("--data", default=str(DEFAULT_DATA), help="Campaign data directory")
+    p.add_argument(
+        "--scope",
+        default=None,
+        help="Scope file (JSON or supported YAML subset); defaults to config/scope.yaml",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     r = sub.add_parser("recon", help="Run full recon campaign")
@@ -255,6 +331,13 @@ def build_parser() -> argparse.ArgumentParser:
     j = sub.add_parser("judge", help="Classify open ports via verdict engine")
     j.add_argument("--target", required=True, help="Target host (authorized/owned)")
     j.set_defaults(fn=cmd_judge)
+
+    pr = sub.add_parser("probe", help="Grab banners through the adaptive engine")
+    pr.add_argument("--target", required=True, help="Target host (authorized/owned)")
+    pr.add_argument(
+        "--ports", default=None, help="Comma-separated ports; defaults to the scope"
+    )
+    pr.set_defaults(fn=cmd_probe)
 
     rc = sub.add_parser("recover", help="Recover campaign state from disk")
     rc.add_argument("campaign_id")

@@ -22,7 +22,12 @@ import pytest
 
 from core.orchestrator import Orchestrator
 from core.planner import Planner, PlanStep
+from core.scope import ScopeEnforcer
 from core.state import CampaignState, StateStore
+
+#: The orchestrator is deny-all unless given a scope; these tests exercise the
+#: lifecycle, not authorization, so they run against an explicit lab range.
+_SCOPE = ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"], ports=[22, 80, 443, 3306])
 
 # --------------------------------------------------------------------------- #
 # Planner
@@ -52,7 +57,7 @@ def test_recon_and_collect_depend_on_everything_before_them():
         [
             {"module": "discovery", "action": "scan"},
             {"module": "recon", "action": "fingerprint"},
-            {"module": "exfil"},
+            {"module": "collector"},
         ],
         "10.0.0.1",
     )
@@ -96,7 +101,7 @@ def test_schedule_never_places_a_step_before_its_dependencies():
             {"module": "discovery", "action": "scan"},
             {"module": "recon", "action": "fingerprint"},
             {"module": "recon", "action": "banner"},
-            {"module": "exfil"},
+            {"module": "collector"},
         ],
         "10.0.0.1",
     )
@@ -311,8 +316,8 @@ FULL_INTEL = [
 
 def test_campaign_runs_every_module_and_reaches_done(tmp_path):
     store = StateStore(tmp_path)
-    orch = Orchestrator(store, max_workers=2)
-    for name in ("discovery", "recon", "stealth", "exfil"):
+    orch = Orchestrator(store, max_workers=2, scope=_SCOPE)
+    for name in ("discovery", "recon", "stealth", "collector"):
         orch.register(name, _ok_runner(name))
 
     state = orch.run_campaign("10.0.0.1", FULL_INTEL)
@@ -340,8 +345,8 @@ def test_recon_and_stealth_are_skipped_without_corresponding_intelligence(tmp_pa
     every registered module to run would silently get only two steps.
     """
     store = StateStore(tmp_path)
-    orch = Orchestrator(store)
-    for name in ("discovery", "recon", "stealth", "exfil"):
+    orch = Orchestrator(store, scope=_SCOPE)
+    for name in ("discovery", "recon", "stealth", "collector"):
         orch.register(name, _ok_runner(name))
 
     state = orch.run_campaign("10.0.0.1")
@@ -351,13 +356,13 @@ def test_recon_and_stealth_are_skipped_without_corresponding_intelligence(tmp_pa
         for e in store.read_log(state.campaign_id)
         if e["event"] == "step_start"
     }
-    assert ran == {"discovery", "exfil"}, ran
+    assert ran == {"discovery", "collector"}, ran
     assert state.meta["report_count"] == 2
 
 
 def test_a_failing_module_is_isolated_and_does_not_sink_the_campaign(tmp_path):
     store = StateStore(tmp_path)
-    orch = Orchestrator(store, max_workers=4)
+    orch = Orchestrator(store, max_workers=4, scope=_SCOPE)
 
     def explode(step: PlanStep, ctx: dict) -> dict:
         raise RuntimeError("module blew up")
@@ -365,7 +370,7 @@ def test_a_failing_module_is_isolated_and_does_not_sink_the_campaign(tmp_path):
     orch.register("discovery", _ok_runner("discovery"))
     orch.register("recon", explode)
     orch.register("stealth", _ok_runner("stealth"))
-    orch.register("exfil", _ok_runner("exfil"))
+    orch.register("collector", _ok_runner("collector"))
 
     state = orch.run_campaign("10.0.0.1", FULL_INTEL)
 
@@ -380,7 +385,7 @@ def test_a_failing_module_is_isolated_and_does_not_sink_the_campaign(tmp_path):
 
 def test_a_missing_module_is_logged_and_skipped(tmp_path):
     store = StateStore(tmp_path)
-    orch = Orchestrator(store)
+    orch = Orchestrator(store, scope=_SCOPE)
     orch.register("discovery", _ok_runner("discovery"))
     # recon is deliberately never registered.
 
@@ -389,17 +394,17 @@ def test_a_missing_module_is_logged_and_skipped(tmp_path):
     events = store.read_log(state.campaign_id)
     missing = [e for e in events if e["event"] == "module_missing"]
     assert missing, "an unregistered module must be recorded, not silently ignored"
-    assert {e["module"] for e in missing} <= {"recon", "stealth", "exfil"}
+    assert {e["module"] for e in missing} <= {"recon", "stealth", "collector"}
 
 
 def test_registering_a_non_callable_is_rejected(tmp_path):
-    orch = Orchestrator(StateStore(tmp_path))
+    orch = Orchestrator(StateStore(tmp_path), scope=_SCOPE)
     with pytest.raises(TypeError):
         orch.register("bad", "not a function")  # type: ignore[arg-type]
 
 
 def test_campaign_with_no_registered_modules_still_completes(tmp_path):
-    state = Orchestrator(StateStore(tmp_path)).run_campaign("10.0.0.1")
+    state = Orchestrator(StateStore(tmp_path), scope=_SCOPE).run_campaign("10.0.0.1")
     assert state.status == "done"
     assert state.meta["findings_count"] == 0
 
@@ -412,7 +417,7 @@ def test_an_aborted_state_stops_further_waves(tmp_path):
     state.status, not the shared context.
     """
     store = StateStore(tmp_path)
-    orch = Orchestrator(store, max_workers=1)
+    orch = Orchestrator(store, max_workers=1, scope=_SCOPE)
     ran: list[str] = []
 
     def record(step: PlanStep, ctx: dict) -> dict:
@@ -433,8 +438,8 @@ def test_an_aborted_state_stops_further_waves(tmp_path):
 
 
 def test_graph_summary_is_recorded_from_findings(tmp_path):
-    orch = Orchestrator(StateStore(tmp_path))
-    for name in ("discovery", "recon", "stealth", "exfil"):
+    orch = Orchestrator(StateStore(tmp_path), scope=_SCOPE)
+    for name in ("discovery", "recon", "stealth", "collector"):
         orch.register(name, _ok_runner(name))
 
     state = orch.run_campaign("10.0.0.1")
@@ -446,11 +451,11 @@ def test_graph_summary_is_recorded_from_findings(tmp_path):
 
 def test_report_reflects_the_stored_timeline(tmp_path):
     store = StateStore(tmp_path)
-    orch = Orchestrator(store)
+    orch = Orchestrator(store, scope=_SCOPE)
     orch.register("discovery", _ok_runner("discovery"))
     orch.register("recon", _ok_runner("recon"))
     orch.register("stealth", _ok_runner("stealth"))
-    orch.register("exfil", _ok_runner("exfil"))
+    orch.register("collector", _ok_runner("collector"))
 
     state = orch.run_campaign("10.0.0.1", FULL_INTEL)
     report = orch.report(state)
@@ -467,14 +472,14 @@ def test_report_reflects_the_stored_timeline(tmp_path):
 
 def test_recover_returns_the_state_that_was_persisted(tmp_path):
     store = StateStore(tmp_path)
-    orch = Orchestrator(store)
+    orch = Orchestrator(store, scope=_SCOPE)
     orch.register("discovery", _ok_runner("discovery"))
     orch.register("recon", _ok_runner("recon"))
     orch.register("stealth", _ok_runner("stealth"))
-    orch.register("exfil", _ok_runner("exfil"))
+    orch.register("collector", _ok_runner("collector"))
 
     original = orch.run_campaign("10.0.0.1")
-    fresh = Orchestrator(StateStore(tmp_path))
+    fresh = Orchestrator(StateStore(tmp_path), scope=_SCOPE)
     recovered = fresh.recover(original.campaign_id)
 
     assert recovered.campaign_id == original.campaign_id

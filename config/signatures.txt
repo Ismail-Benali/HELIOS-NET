@@ -1,0 +1,26 @@
+# HELIOS-NET :: Service signature set
+#
+# Format: <name><TAB><pattern>
+# Parsed by the same contract as the native core: '#' comments and blank lines
+# are ignored, an omitted pattern uses the name, matching is ASCII-case-
+# insensitive, and positions are UTF-8 byte offsets.
+#
+# Keep patterns short and distinctive: the matcher reports every occurrence, so
+# a pattern that appears in unrelated banners produces false identifications.
+
+openssh	SSH-
+dropbear	dropbear
+nginx	nginx
+apache	Apache
+microsoft-iis	Microsoft-IIS
+lighttpd	lighttpd
+caddy	Caddy
+openssl	OpenSSL
+mysql_native	mysql_native_password
+mariadb	mariadb
+postgresql	PostgreSQL
+redis	redis
+memcached	STAT
+smtp	SMTP
+ftp	FTP
+telnet	Telnet

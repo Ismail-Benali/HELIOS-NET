@@ -28,9 +28,6 @@ from typing import Any
 
 from core.input_guard import sanitize_banner
 
-#: Signals the Bayesian model can work from.
-DEFAULT_SIGNAL = {"ttl": 64, "window": 64240, "tcp_options_len": 20}
-
 
 def _ttl_family(observed_ttl: int | None) -> str:
     """Maps a measured TTL to a coarse OS family.
@@ -69,10 +66,24 @@ def fingerprint_host(
     Returns:
       A precise fingerprint sheet shaped like
       {module, host, os_guess, confidence, method, source}.
+
+    A caller that supplies no observed signals gets "Unknown". An earlier
+    version substituted a fixed TTL/window tuple, which made every unmeasured
+    target report the same Linux-like answer: a guess presented as a result.
     """
     from engine.algorithms.fingerprint import fingerprint_sig
 
-    sig = observed_sig or dict(DEFAULT_SIGNAL)
+    if not observed_sig:
+        return {
+            "module": "recon",
+            "host": host,
+            "os_guess": "Unknown (no observed signals)",
+            "confidence": 0.0,
+            "method": "no-observed-signals",
+            "source": "none",
+        }
+
+    sig = dict(observed_sig)
 
     try:
         bayes_res = fingerprint_sig(sig, kind="bayes")

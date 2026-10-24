@@ -23,20 +23,39 @@ def data_dir(tmp_path):
     return str(tmp_path / "campaigns-data")
 
 
+@pytest.fixture(autouse=True)
+def _permissive_scope(monkeypatch):
+    """These tests cover the CLI contract, not authorization.
+
+    The real default scope file is an allowlist for example.test/lab.test, so
+    commands would legitimately refuse 10.0.0.x. Stub the loader with an
+    explicit lab range and leave scope enforcement to tests/test_scope.py.
+    """
+    from core.scope import ScopeEnforcer
+
+    monkeypatch.setattr(
+        cli,
+        "_load_scope",
+        lambda _path=None: ScopeEnforcer(
+            allowed_cidrs=["10.0.0.0/8"], ports=[22, 80, 443]
+        ),
+    )
+
+
 def _stub_orchestrator(monkeypatch, registry: dict | None = None):
     """Replaces the real registry so no test reaches the network."""
     from core.orchestrator import Orchestrator
 
-    def fake_build(path: str) -> Orchestrator:
+    def fake_build(path: str, scope=None) -> Orchestrator:
         reg = (
             registry
             if registry is not None
             else {
                 name: (lambda step, ctx, n=name: {"module": n, "step": step.step_id})
-                for name in ("discovery", "recon", "stealth", "exfil")
+                for name in ("discovery", "recon", "stealth", "collector")
             }
         )
-        return Orchestrator(StateStore(path), reg=reg, max_workers=2)
+        return Orchestrator(StateStore(path), reg=reg, max_workers=2, scope=scope)
 
     monkeypatch.setattr(cli, "_build_orchestrator", fake_build)
     return fake_build
@@ -162,32 +181,33 @@ def test_info_prints_a_parseable_inventory(capsys):
 
 
 def test_judge_classifies_findings(capsys, monkeypatch):
-    from modules.discovery import service
+    def fake_discovery(step, ctx):
+        finding = {
+            "module": "discovery",
+            "host": step.target,
+            "port": 22,
+            "service": "ssh",
+            "open": True,
+            "banner": "SSH-2.0-OpenSSH_9.6",
+        }
+        ctx.setdefault("findings", []).append(finding)
+        return {
+            "module": "discovery",
+            "host": step.target,
+            "open_ports": [22],
+            "count": 1,
+            "engine": "go-native",
+            "reason": "ok",
+        }
 
-    monkeypatch.setattr(
-        service,
-        "discover_ports",
-        lambda host, ports=None: [
-            {
-                "module": "discovery",
-                "host": host,
-                "port": 22,
-                "service": "ssh",
-                "open": True,
-                "banner": "SSH-2.0-OpenSSH_9.6",
-            }
-        ],
-    )
-    # The command imports the symbol directly, so patch it where it is used.
-    monkeypatch.setattr(
-        "modules.discovery.service.discover_ports", service.discover_ports
-    )
+    monkeypatch.setattr(cli, "discovery_runner", fake_discovery)
 
     assert cli.cmd_judge(_args(target="10.0.0.1")) == 0
     out = capsys.readouterr().out
     assert "10.0.0.1:22" in out
     assert "ssh" in out
     assert "severity=" in out
+    assert "engine=go-native" in out
 
 
 def test_daemon_starts_and_stops_cleanly(capsys, monkeypatch, data_dir):

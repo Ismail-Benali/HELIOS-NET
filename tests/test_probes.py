@@ -281,12 +281,15 @@ def test_the_ttl_bands_match_their_documented_thresholds(ttl, expected):
 # --------------------------------------------------------------------------- #
 
 
-def test_the_default_signal_resolves_to_linux():
+def test_a_missing_signal_is_reported_as_unknown_not_guessed():
+    """Regression: a fixed TTL/window tuple used to stand in for measurements,
+    so every unprobed host reported the same confident Linux answer."""
     result = fingerprint.fingerprint_host("10.0.0.1")
-    assert result["source"] == "bayes-multi-signal"
-    assert result["method"] == "bayes"
-    assert result["os_guess"].startswith("Linux")
-    assert 0.0 < result["confidence"] <= 1.0
+
+    assert result["source"] == "none"
+    assert result["method"] == "no-observed-signals"
+    assert result["confidence"] == 0.0
+    assert result["os_guess"].startswith("Unknown")
 
 
 def test_a_windows_signal_is_identified_as_windows():
@@ -297,7 +300,9 @@ def test_a_windows_signal_is_identified_as_windows():
 
 
 def test_the_confidence_is_carried_through_to_the_sheet():
-    result = fingerprint.fingerprint_host("10.0.0.1")
+    result = fingerprint.fingerprint_host(
+        "10.0.0.1", {"ttl": 64, "window": 64240, "tcp_options_len": 20}
+    )
     assert isinstance(result["confidence"], float)
 
 

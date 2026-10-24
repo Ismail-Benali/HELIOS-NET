@@ -81,35 +81,32 @@ def test_every_registered_runner_is_callable():
         assert callable(runner), f"{name} is registered but is not callable"
 
 
-def test_discovery_runner_collects_findings_and_confirms_with_the_native_probe(
-    monkeypatch,
-):
-    # registry imports these names directly, so they must be replaced there.
+def test_discovery_runner_routes_every_port_through_the_accelerator(monkeypatch):
+    """Regression: the runner scanned with sockets and re-confirmed one port
+    with Go, so the native cores were decoration on the critical path."""
     import modules.registry as registry
 
-    monkeypatch.setattr(
-        registry,
-        "discover_ports",
-        lambda host, ports=None, **kwargs: [
+    calls: list[tuple[str, list[int]]] = []
+
+    class Outcome:
+        engine = "go-native"
+        reason = "ok"
+        rows = [
             {
-                "module": "discovery",
-                "host": host,
                 "port": 22,
+                "state": "open",
                 "service": "ssh",
-                "open": True,
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        registry,
-        "native_connect_probe",
-        lambda host, port, **kwargs: {
-            "host": host,
-            "port": port,
-            "open": True,
-            "probe": "connect",
-        },
-    )
+                "banner": "SSH-2.0-OpenSSH_9.6",
+                "latency_ms": 12,
+            },
+            {"port": 80, "state": "open", "service": "http"},
+        ]
+
+    def fake_scan(host, ports):
+        calls.append((host, list(ports)))
+        return Outcome()
+
+    monkeypatch.setattr(registry.accel, "scan_ports", fake_scan)
 
     step = PlanStep(
         step_id=1,
@@ -121,57 +118,51 @@ def test_discovery_runner_collects_findings_and_confirms_with_the_native_probe(
     ctx: dict = {}
     result = registry.discovery_runner(step, ctx)
 
-    assert result["open_ports"] == [22]
-    assert result["count"] == 1
-    assert result["native"]["port"] == 22
-    assert any(
-        f.get("port") == 22 and f.get("probe") == "connect" for f in ctx["findings"]
-    ), "the confirmed finding must be recorded"
+    assert calls == [("10.0.0.1", [22, 80])], (
+        "the whole port set must go to the accelerated core at once"
+    )
+    assert result["open_ports"] == [22, 80]
+    assert result["count"] == 2
+    assert result["engine"] == "go-native"
+    assert result["reason"] == "ok"
+    assert ctx["findings"][0]["banner"] == "SSH-2.0-OpenSSH_9.6"
+    assert all(f["engine"] == "go-native" for f in ctx["findings"])
 
 
-def test_discovery_runner_skips_the_native_probe_without_ports(monkeypatch):
+def test_discovery_runner_prefers_the_scope_ports_from_context(monkeypatch):
     import modules.registry as registry
 
+    seen: list[list[int]] = []
+
+    class Outcome:
+        engine = "socket-probe"
+        reason = "go-binary-missing"
+        rows: list[dict] = []
+
     monkeypatch.setattr(
-        registry, "discover_ports", lambda host, ports=None, **kwargs: []
-    )
-    called: list[tuple] = []
-    monkeypatch.setattr(
-        registry,
-        "native_connect_probe",
-        lambda host, port, **kwargs: called.append((host, port)),
+        registry.accel,
+        "scan_ports",
+        lambda host, ports: (seen.append(list(ports)), Outcome())[1],
     )
 
-    step = PlanStep(
-        step_id=1, module="discovery", action="scan", target="10.0.0.1", params={}
-    )
-    result = registry.discovery_runner(step, {})
+    step = PlanStep(step_id=1, module="discovery", action="scan", target="10.0.0.1")
+    result = registry.discovery_runner(step, {"scope_ports": [443]})
 
-    assert called == [], "the probe has no port to confirm without one"
-    assert result["native"] is None
+    assert seen == [[443]]
+    assert result["count"] == 0
+    assert result["engine"] == "socket-probe"
+    assert result["reason"] == "go-binary-missing"
 
 
-def test_a_closed_port_is_not_recorded_as_a_finding(monkeypatch):
+def test_a_successful_scan_records_only_rows_it_received(monkeypatch):
     import modules.registry as registry
 
-    monkeypatch.setattr(
-        registry,
-        "discover_ports",
-        lambda host, ports=None, **kwargs: [
-            {
-                "module": "discovery",
-                "host": host,
-                "port": 22,
-                "service": "ssh",
-                "open": True,
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        registry,
-        "native_connect_probe",
-        lambda host, port, **kwargs: {"host": host, "port": port, "open": False},
-    )
+    class Outcome:
+        engine = "socket-probe"
+        reason = "ok"
+        rows: list[dict] = []
+
+    monkeypatch.setattr(registry.accel, "scan_ports", lambda host, ports: Outcome())
 
     ctx: dict = {}
     result = registry.discovery_runner(
@@ -185,32 +176,89 @@ def test_a_closed_port_is_not_recorded_as_a_finding(monkeypatch):
         ctx,
     )
 
-    assert result["native"]["open"] is False
-    assert all(f.get("probe") != "connect" for f in ctx["findings"]), (
-        "a refused connection is not a finding"
+    assert result["count"] == 0
+    assert all(f.get("open") for f in ctx.get("findings", [])), (
+        "an empty scan must not invent an open port"
     )
 
 
-def test_recon_runner_records_which_estimator_answered(tmp_path, monkeypatch):
+def test_recon_runner_matches_banners_through_the_signature_core(tmp_path, monkeypatch):
     import modules.registry as registry
 
     monkeypatch.setattr(
         registry,
-        "fingerprint_host",
-        lambda host: {"host": host, "source": "http-banners"},
+        "banner_grab",
+        lambda host, port: {"banner": "SSH-2.0-OpenSSH_9.6"},
     )
+    monkeypatch.setattr(registry, "_signature_pairs", lambda: [("openssh", "SSH-")])
 
-    ctx: dict = {}
+    ctx = {
+        "findings": [
+            {"module": "discovery", "host": "10.0.0.1", "port": 22, "open": True}
+        ]
+    }
     result = recon_runner(
         PlanStep(step_id=1, module="recon", action="fingerprint", target="10.0.0.1"),
         ctx,
     )
 
-    assert result["source"] == "http-banners"
-    assert ctx["fingerprint_source"] == "http-banners", (
-        "the estimator identity must be recorded, not guessed from a literal"
+    assert result["source"] == "banner-signature"
+    assert result["signature_matches"] == 1
+    assert result["probes"][0]["matches"][0]["signature"] == "openssh"
+    assert result["probes"][0]["service"] == "openssh"
+    assert result["engines"] == ["signature-core"]
+    assert ctx["fingerprint_source"] == "banner-signature"
+    assert ctx["findings"][-1] is result
+
+
+def test_recon_runner_reuses_a_banner_discovery_already_collected(monkeypatch):
+    import modules.registry as registry
+
+    def fail_grab(host, port):
+        raise AssertionError("a collected banner must not be fetched twice")
+
+    monkeypatch.setattr(registry, "banner_grab", fail_grab)
+    monkeypatch.setattr(registry, "_signature_pairs", lambda: [("nginx", "nginx")])
+
+    ctx = {
+        "findings": [
+            {
+                "module": "discovery",
+                "host": "10.0.0.1",
+                "port": 80,
+                "open": True,
+                "banner": "HTTP/1.1 200 OK\r\nServer: nginx/1.27",
+            }
+        ]
+    }
+    result = recon_runner(
+        PlanStep(step_id=1, module="recon", action="fingerprint", target="10.0.0.1"),
+        ctx,
     )
-    assert ctx["findings"] == [result]
+
+    assert result["probes"][0]["matches"][0]["signature"] == "nginx"
+
+
+def test_recon_runner_skips_error_banners(monkeypatch):
+    import modules.registry as registry
+
+    monkeypatch.setattr(
+        registry, "banner_grab", lambda host, port: {"banner": "<error:timeout>"}
+    )
+    monkeypatch.setattr(registry, "_signature_pairs", lambda: [("openssh", "SSH-")])
+
+    ctx = {
+        "findings": [
+            {"module": "discovery", "host": "10.0.0.1", "port": 22, "open": True}
+        ]
+    }
+    result = recon_runner(
+        PlanStep(step_id=1, module="recon", action="fingerprint", target="10.0.0.1"),
+        ctx,
+    )
+
+    assert result["probes"][0]["matches"] == []
+    assert result["signature_matches"] == 0
 
 
 def test_exfil_runner_collects_what_discovery_found(tmp_path):
