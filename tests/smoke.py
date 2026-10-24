@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.orchestrator import Orchestrator  # noqa: E402
 from core.planner import Planner  # noqa: E402
+from core.scope import ScopeEnforcer  # noqa: E402
 from core.state import CampaignState, StateStore  # noqa: E402
 from engine.plugins import plugin_registry  # noqa: E402
 from engine.scanner import Scanner, ScanTask  # noqa: E402
@@ -52,9 +53,9 @@ def test_planner_waves():
     waves = p.schedule(steps)
     # no batch exceeds the concurrency limit.
     assert all(len(w) <= 2 for w in waves)
-    # exfil is aggregate at the end: it depends on all the steps.
-    exfil = [s for s in steps if s.module == "exfil"]
-    assert exfil and len(exfil[0].depends_on) == len(steps) - 1
+    # collector is aggregate at the end: it depends on all the steps.
+    collector = [s for s in steps if s.module == "collector"]
+    assert collector and len(collector[0].depends_on) == len(steps) - 1
     print("planner: OK")
 
 
@@ -81,8 +82,11 @@ def test_orchestrator_runs():
         def fake_stealth(step, ctx):
             return {"module": "stealth"}
 
-        def fake_exfil(step, ctx):
-            return {"module": "exfil", "total": len(ctx.get("findings", []))}
+        def fake_asset(step, ctx):
+            return {"module": "asset", "assets": 0}
+
+        def fake_collector(step, ctx):
+            return {"module": "collector", "total": len(ctx.get("findings", []))}
 
         orch = Orchestrator(
             store=store,
@@ -90,8 +94,10 @@ def test_orchestrator_runs():
                 "discovery": fake_discovery,
                 "recon": fake_recon,
                 "stealth": fake_stealth,
-                "exfil": fake_exfil,
+                "asset": fake_asset,
+                "collector": fake_collector,
             },
+            scope=ScopeEnforcer(allowed_domains=["lab.test"]),
         )
         state = orch.run_campaign("lab.test")
         assert state.status == "done"
