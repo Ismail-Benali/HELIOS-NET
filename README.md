@@ -36,11 +36,12 @@
 ## ⚙️ Core Capabilities
 
 1. **Closed-Loop Orchestration:** Manages campaign state, dependency planning, and parallel wave execution with absolute fault isolation.
-2. **Encrypted Transactional WAL:** Crash recovery and secure transaction logging secured by PBKDF2 (100,000 iterations) and Counter-Mode SHA-256 authenticated encryption.
-3. **High-Performance Go Scanning:** Leverages thousands of lightweight Goroutines (`goscan`) streaming open ports via NDJSON.
-4. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
-5. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
-6. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
+2. **Encrypted Transactional WAL:** Crash recovery and secure transaction logging with PBKDF2 (100,000 iterations), an HMAC-SHA256 counter-mode keystream, and separate encryption and MAC keys. Records written by the earlier single-key layout remain readable.
+3. **Fail-Closed Scope Enforcement:** `core/scope.py` denies every target unless the scope file authorizes it. An unreadable, malformed, or `*` scope is an error, not a wildcard; the refusal names the reason.
+4. **High-Performance Go Scanning:** Leverages thousands of lightweight Goroutines (`goscan`) streaming open ports via NDJSON.
+5. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
+6. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
+7. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
 
 ---
 
@@ -75,6 +76,11 @@
 
 HELIOS-NET requires **zero external pip dependencies** for its core control plane.
 
+Every network command is scope-checked. Edit `config/scope.yaml` (or pass
+`--scope path.json`) to list the domains, CIDRs, and ports you are authorized to
+touch. The default file covers `example.test`, `lab.test`, and a loopback range;
+anything outside it is refused with exit code `2` before a socket is opened.
+
 ### 1. Run a Full Reconnaissance Campaign
 ```bash
 python run.py recon --target 127.0.0.1
@@ -85,18 +91,53 @@ python run.py recon --target 127.0.0.1
 python run.py judge --target 127.0.0.1
 ```
 
-### 3. Run the End-to-End Simulation
+### 3. Probe Banners Through the Adaptive Engine
+```bash
+python run.py probe --target 127.0.0.1 --ports 22,80,443
+```
+
+Discovery routes every port through `core.accel.scan_ports` (Go when built,
+socket probe otherwise), and recon matches the collected banners through the
+C/Rust/Python signature core. Each finding records the engine that answered.
+
+### 4. Run the End-to-End Simulation
 ```bash
 python run_simulation.py
 ```
 
 ---
 
+## Performance Measurement
+
+The numeric claims live in `tools/bench_scan.py` rather than in this file:
+
+```bash
+python tools/bench_scan.py --host 127.0.0.1 --ports 1-1024 --repeat 3
+```
+
+It reports the median wall time, ports/second, which backend answered, and the
+spread across runs. Numbers depend on the host, the open/closed mix, and whether
+the Go binary was built (`python build.py`), so measure on the machine you care
+about.
+
+---
+
 ## ✅ Automated Testing
 
-Execute the comprehensive self-verification test suite:
+Install the pinned development toolchain, then run the suite:
+
 ```bash
-python tests/smoke.py
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+`tests/test_end_to_end.py` is the integration gate: it starts a real local TCP
+server, runs a campaign through the CLI and the real cores, asserts the banner
+is identified, and asserts an out-of-scope target is refused before any
+connection is made. The C golden contract is checked separately:
+
+```bash
+python tools/gen_c_reference.py --check
 ```
 
 ## Continuous Integration

@@ -40,14 +40,28 @@ class PlanStep:
         }
 
 
+_LEGACY_MODULE_NAMES = {"exfil": "collector"}
+
+
+def _canonical_module(item: dict[str, Any]) -> dict[str, Any]:
+    """Maps retired module names onto their current ones."""
+    module = item.get("module")
+    if not isinstance(module, str):
+        return item
+    canonical = _LEGACY_MODULE_NAMES.get(module, module)
+    if canonical == module:
+        return item
+    return {**item, "module": canonical}
+
+
 class Planner:
     """Transforms raw intelligence into executable step plans."""
 
     MODULE_PRIORITY = {
+        "stealth": 5,
         "discovery": 10,
         "recon": 20,
-        "stealth": 30,
-        "exfil": 40,
+        "collector": 40,
     }
 
     def __init__(self, max_concurrency: int = 8):
@@ -60,14 +74,28 @@ class Planner:
 
     def plan(self, intelligence: list[dict[str, Any]], target: str) -> list[PlanStep]:
         steps: list[PlanStep] = []
+        normalised = [_canonical_module(item) for item in intelligence]
 
-        discovery_items = [i for i in intelligence if i.get("module") == "discovery"]
-        recon_items = [i for i in intelligence if i.get("module") == "recon"]
+        discovery_items = [i for i in normalised if i.get("module") == "discovery"]
+        recon_items = [i for i in normalised if i.get("module") == "recon"]
         extra_items = [
             i
-            for i in intelligence
-            if i.get("module") not in ("discovery", "recon", "stealth", "exfil")
+            for i in normalised
+            if i.get("module") not in ("discovery", "recon", "stealth", "collector")
         ]
+
+        # 0) Pacing is a policy, not a result: it must exist before the first
+        #    network step, so it is planned first and depends on nothing.
+        for it in [i for i in normalised if i.get("module") == "stealth"]:
+            steps.append(
+                self._mk(
+                    "stealth",
+                    it.get("action", "pace"),
+                    target,
+                    it.get("priority", self.MODULE_PRIORITY["stealth"]),
+                    params=dict(it.get("params") or {}),
+                )
+            )
 
         # 1) Discovery is always guaranteed on the target
         if not discovery_items:
@@ -110,26 +138,14 @@ class Planner:
                 )
             )
 
-        # 3) Stealth pacing
-        for it in [i for i in intelligence if i.get("module") == "stealth"]:
-            steps.append(
-                self._mk(
-                    "stealth",
-                    it.get("action", "pace"),
-                    target,
-                    self.MODULE_PRIORITY["stealth"],
-                    depends_on=[s.step_id for s in steps],
-                )
-            )
-
-        # 4) Data collection / reporting
+        # 3) Data collection / reporting
         if steps:
             steps.append(
                 self._mk(
-                    "exfil",
+                    "collector",
                     "collect",
                     target,
-                    self.MODULE_PRIORITY["exfil"],
+                    self.MODULE_PRIORITY["collector"],
                     depends_on=[s.step_id for s in steps],
                 )
             )
@@ -144,6 +160,7 @@ class Planner:
         target: str,
         priority: int,
         depends_on: list[int] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> PlanStep:
         return PlanStep(
             step_id=self._next_id(),
@@ -152,6 +169,7 @@ class Planner:
             target=target,
             priority=priority,
             depends_on=list(depends_on or []),
+            params=dict(params or {}),
         )
 
     def schedule(self, steps: list[PlanStep]) -> list[list[PlanStep]]:

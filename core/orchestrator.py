@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from .planner import Planner, PlanStep
+from .scope import ScopeEnforcer
 from .state import CampaignState, StateStore
 
 ModuleRunner = Callable[[PlanStep, dict[str, Any]], dict[str, Any]]
@@ -29,16 +30,19 @@ class Orchestrator:
         store: StateStore,
         reg: dict[str, ModuleRunner] | None = None,
         max_workers: int = 8,
+        scope: ScopeEnforcer | None = None,
     ):
         self.store = store
         self.planner = Planner(max_concurrency=max_workers)
         self.max_workers = max_workers
+        self.scope = scope or ScopeEnforcer()
         self._registry: dict[str, ModuleRunner] = dict(reg or {})
         self._context: dict[str, Any] = {
             "timestamps": {},
             "findings": [],
             "reports": [],
             "meta": {},
+            "scope_ports": list(self.scope.ports),
         }
 
     def register(self, name: str, runner: ModuleRunner) -> None:
@@ -50,12 +54,14 @@ class Orchestrator:
         self, target: str, intelligence: list[dict[str, Any]] | None = None
     ) -> CampaignState:
         """Executes a full campaign against the specified target."""
+        self.scope.check(target)
         state = CampaignState(target=target)
         state.transition("planning")
         self.store.save(state)
         self.store.log_event(state, "campaign_start", target=target)
 
         steps = self.planner.plan(list(intelligence or []), target)
+        self._authorize_steps(steps)
         waves = self.planner.schedule(steps)
 
         state.transition("scanning")
@@ -85,6 +91,14 @@ class Orchestrator:
             state, "campaign_done", findings=state.meta["findings_count"]
         )
         return state
+
+    def _authorize_steps(self, steps: list[PlanStep]) -> None:
+        """Fails before any step runs when a step leaves the authorized scope."""
+        for step in steps:
+            self.scope.check(step.target)
+            requested = step.params.get("ports")
+            if requested:
+                self.scope.check_ports([int(port) for port in requested])
 
     def _finalize_graph(self, state: CampaignState) -> None:
         """Builds asset graph from findings and records high-centrality targets."""
