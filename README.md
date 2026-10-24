@@ -38,10 +38,11 @@
 1. **Closed-Loop Orchestration:** Manages campaign state, dependency planning, and parallel wave execution with absolute fault isolation.
 2. **Encrypted Transactional WAL:** Crash recovery and secure transaction logging with PBKDF2 (100,000 iterations), an HMAC-SHA256 counter-mode keystream, and separate encryption and MAC keys. Records written by the earlier single-key layout remain readable.
 3. **Fail-Closed Scope Enforcement:** `core/scope.py` denies every target unless the scope file authorizes it. An unreadable, malformed, or `*` scope is an error, not a wildcard; the refusal names the reason.
-4. **High-Performance Go Scanning:** Leverages thousands of lightweight Goroutines (`goscan`) streaming open ports via NDJSON.
-5. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
-6. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
-7. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
+4. **Scope-Bound Asset Discovery:** Expands seeds through Certificate Transparency, resolves each name, drops every address the scope does not authorize before a socket is opened, and records HTTP/TLS metadata and virtual-host evidence.
+5. **High-Performance Go Scanning:** Leverages thousands of lightweight Goroutines (`goscan`) streaming open ports via NDJSON.
+6. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
+7. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
+8. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
 
 ---
 
@@ -96,11 +97,22 @@ python run.py judge --target 127.0.0.1
 python run.py probe --target 127.0.0.1 --ports 22,80,443
 ```
 
+### 4. Map the Scoped Asset Surface
+```bash
+python run.py assets --target example.test --ct --depth 1
+```
+
+`assets` expands names through Certificate Transparency, refuses to probe any
+name or address outside the scope, and reports virtual hosts separately from the
+address-default response. `--max-hosts` and `--max-requests` bound the loop;
+`--seeds` adds names that are still scope-checked. A campaign plans this step by
+default (without CT); `recon --ct` opts into expansion.
+
 Discovery routes every port through `core.accel.scan_ports` (Go when built,
 socket probe otherwise), and recon matches the collected banners through the
 C/Rust/Python signature core. Each finding records the engine that answered.
 
-### 4. Run the End-to-End Simulation
+### 5. Run the End-to-End Simulation
 ```bash
 python run_simulation.py
 ```

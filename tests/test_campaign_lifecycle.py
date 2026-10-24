@@ -41,6 +41,21 @@ def test_discovery_is_always_planned_even_with_no_intelligence():
     assert steps[0].priority == Planner.MODULE_PRIORITY["discovery"]
 
 
+def test_asset_expansion_is_planned_once_and_keeps_intel_params():
+    default = Planner().plan([], "10.0.0.1")
+    assets = [s for s in default if s.module == "asset"]
+    assert len(assets) == 1
+    assert assets[0].priority == Planner.MODULE_PRIORITY["asset"]
+    assert assets[0].depends_on, "asset work must follow discovery"
+
+    custom = Planner().plan(
+        [{"module": "asset", "params": {"ct": True, "depth": 2}}], "10.0.0.1"
+    )
+    assets = [s for s in custom if s.module == "asset"]
+    assert len(assets) == 1, "an explicit asset item must not be duplicated"
+    assert assets[0].params == {"ct": True, "depth": 2}
+
+
 def test_step_ids_are_unique_and_json_round_trips():
     planner = Planner()
     steps = planner.plan([{"module": "recon", "action": "fingerprint"}], "10.0.0.1")
@@ -66,8 +81,12 @@ def test_recon_and_collect_depend_on_everything_before_them():
     collect = next(s for s in steps if s.action == "collect")
 
     discovery_ids = {s.step_id for s in steps if s.module == "discovery"}
-    assert set(recon.depends_on) == discovery_ids, (
-        "recon must depend on exactly the discovery work"
+    assert discovery_ids <= set(recon.depends_on), (
+        "recon must depend on the discovery work"
+    )
+    prior = {s.step_id for s in steps if s.step_id < recon.step_id}
+    assert set(recon.depends_on) == prior, (
+        "recon must depend on every step planned before it, including assets"
     )
     assert set(collect.depends_on) == {s.step_id for s in steps if s is not collect}
     # A dependency must never point forward at a step that runs later.
@@ -394,7 +413,7 @@ def test_a_missing_module_is_logged_and_skipped(tmp_path):
     events = store.read_log(state.campaign_id)
     missing = [e for e in events if e["event"] == "module_missing"]
     assert missing, "an unregistered module must be recorded, not silently ignored"
-    assert {e["module"] for e in missing} <= {"recon", "stealth", "collector"}
+    assert {e["module"] for e in missing} <= {"asset", "recon", "stealth", "collector"}
 
 
 def test_registering_a_non_callable_is_rejected(tmp_path):

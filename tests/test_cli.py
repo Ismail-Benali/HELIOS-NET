@@ -37,7 +37,9 @@ def _permissive_scope(monkeypatch):
         cli,
         "_load_scope",
         lambda _path=None: ScopeEnforcer(
-            allowed_cidrs=["10.0.0.0/8"], ports=[22, 80, 443]
+            allowed_cidrs=["10.0.0.0/8"],
+            allowed_domains=["app.test"],
+            ports=[22, 80, 443],
         ),
     )
 
@@ -75,7 +77,17 @@ def test_every_documented_subcommand_is_registered():
     actions = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
     assert actions, "the parser must define subcommands"
     names = set(actions[0].choices)
-    assert {"recon", "judge", "recover", "info", "status", "daemon", "sim"} <= names
+    assert {
+        "recon",
+        "judge",
+        "probe",
+        "assets",
+        "recover",
+        "info",
+        "status",
+        "daemon",
+        "sim",
+    } <= names
 
 
 def test_recon_and_daemon_require_a_target():
@@ -208,6 +220,75 @@ def test_judge_classifies_findings(capsys, monkeypatch):
     assert "ssh" in out
     assert "severity=" in out
     assert "engine=go-native" in out
+
+
+def test_assets_command_prints_hosts_assets_and_blocked_entries(capsys, monkeypatch):
+    import modules.registry as registry
+
+    def fake_runner(step, ctx):
+        ctx.setdefault("findings", []).append(
+            {
+                "host": "app.test",
+                "ip": "127.0.0.1",
+                "port": 80,
+                "status": 200,
+                "title": "App",
+                "vhost": True,
+            }
+        )
+        return {
+            "module": "asset",
+            "host": step.target,
+            "hosts": ["app.test"],
+            "assets": 1,
+            "requests": 2,
+            "blocked": [{"host": "x.test", "reason": "name-outside-scope"}],
+        }
+
+    monkeypatch.setattr(registry, "asset_runner", fake_runner)
+
+    code = cli.cmd_assets(
+        _args(
+            target="app.test",
+            ct=False,
+            depth=1,
+            max_hosts=5,
+            max_requests=10,
+            web_ports=None,
+        )
+    )
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "app.test -> 127.0.0.1:80 [200] App vhost" in out
+    assert "blocked x.test: name-outside-scope" in out
+    assert "assets=1" in out
+
+
+def test_assets_command_refuses_web_ports_outside_the_scope(capsys):
+    code = cli.cmd_assets(
+        _args(
+            target="10.0.0.1",
+            ct=False,
+            depth=1,
+            max_hosts=5,
+            max_requests=10,
+            web_ports="3306",
+        )
+    )
+
+    assert code == 2
+    assert "outside the authorized scope" in capsys.readouterr().out
+
+
+def test_assets_defaults_are_bounded():
+    args = cli.build_parser().parse_args(["assets", "--target", "app.test"])
+
+    assert args.ct is False
+    assert args.depth == 1
+    assert args.max_hosts == 50
+    assert args.max_requests == 200
+    assert args.web_ports is None
 
 
 def test_daemon_starts_and_stops_cleanly(capsys, monkeypatch, data_dir):

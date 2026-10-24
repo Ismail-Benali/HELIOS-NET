@@ -27,8 +27,10 @@ from typing import Any
 
 from core import accel
 from core.planner import PlanStep
+from core.scope import ScopeEnforcer
 from modules.core import discover, list_modules
 from modules.discovery import goscan_bridge
+from modules.discovery.assets import WEB_PORTS, discover_assets
 from modules.discovery.service import COMMON_PORTS
 from modules.exfil.collector import Collector
 from modules.recon.fingerprint import banner_grab
@@ -174,6 +176,51 @@ def recon_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def asset_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
+    """Expands the authorized surface from names into scoped asset findings.
+
+    The runner refuses to fall back to a permissive scope: without the
+    campaign's enforcer it reports why it did nothing instead of probing.
+    """
+    scope = ctx.get("scope")
+    if not isinstance(scope, ScopeEnforcer):
+        return {
+            "module": "asset",
+            "host": step.target,
+            "assets": 0,
+            "hosts": [],
+            "blocked": [],
+            "error": "scope unavailable; asset discovery not attempted",
+        }
+
+    seeds = [step.target]
+    seeds.extend(str(seed) for seed in step.params.get("seeds", []) if seed)
+    seeds.extend(str(seed) for seed in ctx.get("seeds", []) if seed)
+
+    web_ports = step.params.get("web_ports")
+    if web_ports is None:
+        web_ports = [
+            port for port in WEB_PORTS if not scope.ports or port in scope.ports
+        ]
+
+    summary = discover_assets(
+        scope,
+        list(dict.fromkeys(seeds)),
+        ct=bool(step.params.get("ct", False)),
+        depth=int(step.params.get("depth", 1)),
+        max_hosts=int(step.params.get("max_hosts", 50)),
+        max_requests=int(step.params.get("max_requests", 200)),
+        web_ports=[int(port) for port in web_ports],
+        pace=lambda: _pace(ctx),
+    )
+    findings = summary.pop("findings", [])
+    ctx.setdefault("findings", []).extend(findings)
+    ctx["discovered_hosts"] = summary["hosts"]
+    summary["module"] = "asset"
+    summary["host"] = step.target
+    return summary
+
+
 def stealth_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
     """Installs the pacing policy that network-facing runners must honour.
 
@@ -213,12 +260,13 @@ def collector_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
 # described data exfiltration; it only ever collected findings in memory.
 exfil_runner = collector_runner
 
-CORE_MODULES = ("discovery", "recon", "stealth", "collector")
+CORE_MODULES = ("asset", "discovery", "recon", "stealth", "collector")
 
 
 # Unified registry - passed to Orchestrator.register per module.
 def default_registry() -> dict[str, Any]:
     reg = {
+        "asset": asset_runner,
         "discovery": discovery_runner,
         "recon": recon_runner,
         "stealth": stealth_runner,
@@ -251,6 +299,7 @@ def discovered_plugins() -> dict[str, Any]:
 __all__ = [
     "DEFAULT_SIGNATURES",
     "collector_runner",
+    "asset_runner",
     "default_registry",
     "discovery_runner",
     "goscan_bridge",

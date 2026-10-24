@@ -42,6 +42,7 @@ class Orchestrator:
             "findings": [],
             "reports": [],
             "meta": {},
+            "scope": self.scope,
             "scope_ports": list(self.scope.ports),
         }
 

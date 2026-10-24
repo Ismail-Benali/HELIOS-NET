@@ -60,6 +60,7 @@ class Planner:
     MODULE_PRIORITY = {
         "stealth": 5,
         "discovery": 10,
+        "asset": 15,
         "recon": 20,
         "collector": 40,
     }
@@ -77,11 +78,13 @@ class Planner:
         normalised = [_canonical_module(item) for item in intelligence]
 
         discovery_items = [i for i in normalised if i.get("module") == "discovery"]
+        asset_items = [i for i in normalised if i.get("module") == "asset"]
         recon_items = [i for i in normalised if i.get("module") == "recon"]
         extra_items = [
             i
             for i in normalised
-            if i.get("module") not in ("discovery", "recon", "stealth", "collector")
+            if i.get("module")
+            not in ("discovery", "asset", "recon", "stealth", "collector")
         ]
 
         # 0) Pacing is a policy, not a result: it must exist before the first
@@ -112,7 +115,31 @@ class Planner:
                 )
             )
 
-        # 2) Deep recon depends on discovery results
+        # 2) Asset expansion turns reported names into a scoped surface
+        asset_deps = [s.step_id for s in steps]
+        if not asset_items:
+            steps.append(
+                self._mk(
+                    "asset",
+                    "discover",
+                    target,
+                    self.MODULE_PRIORITY["asset"],
+                    depends_on=asset_deps,
+                )
+            )
+        for it in asset_items:
+            steps.append(
+                self._mk(
+                    "asset",
+                    it.get("action", "discover"),
+                    target,
+                    it.get("priority", self.MODULE_PRIORITY["asset"]),
+                    depends_on=asset_deps,
+                    params=dict(it.get("params") or {}),
+                )
+            )
+
+        # 3) Deep recon depends on discovery results
         for it in recon_items:
             dep_ids = [s.step_id for s in steps]
             steps.append(
