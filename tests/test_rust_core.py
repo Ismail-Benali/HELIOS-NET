@@ -42,6 +42,7 @@ FNV_FOOBAR_32 = 0xBF9CF968
 # ----------------------------------------------------------------- discovery
 
 
+@requires_core
 def test_library_is_found():
     assert rust_available()
 
@@ -238,6 +239,7 @@ def _random_graph(rng: random.Random, nodes: int, density: float) -> AssetGraph:
     return g
 
 
+@requires_core
 @pytest.mark.parametrize("seed", [1, 7, 42, 1337, 90210])
 def test_engine_agrees_with_its_python_reference(seed):
     """The Rust path and the Python fallback must produce identical output.

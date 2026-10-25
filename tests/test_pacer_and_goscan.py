@@ -865,6 +865,9 @@ def test_the_sync_wrapper_records_a_non_strict_failure(monkeypatch):
 
 
 def test_a_healthy_worker_answers_without_the_one_shot_path(monkeypatch):
+    # run_go_scan only consults the worker when the binary exists; the worker
+    # itself is faked here, so the test must not depend on an installed core.
+    monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: True)
     calls: list[tuple[str, str, float]] = []
 
     def fake_scan(target, port_arg, timeout):
@@ -901,6 +904,10 @@ def test_a_worker_failure_falls_back_and_clears_the_error(monkeypatch):
 
 
 def test_both_paths_failing_keeps_both_reasons(monkeypatch):
+    # Both paths are faked; only their orchestration is under test here, not
+    # whether the Go core happens to be installed on this host.
+    monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: True)
+
     async def broken_async(target, port_arg="common", strict=False):
         raise RuntimeError("one-shot boom")
 
