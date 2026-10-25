@@ -228,7 +228,7 @@ def _stream_of(*lines: str):
     return Stream()
 
 
-def test_fields_from_the_core_survive_the_bridge(monkeypatch):
+def test_fields_from_the_core_survive_the_bridge(monkeypatch, tmp_path):
     """Banner, service and latency are the reason the Go core exists.
 
     The previous bridge hardcoded a generic service name and dropped the rest,
@@ -254,6 +254,12 @@ def test_fields_from_the_core_survive_the_bridge(monkeypatch):
     async def fake_create(*args, **kwargs):
         return FakeProc()
 
+    # The bridge refuses to start a scan before it reaches the (faked)
+    # subprocess when the binary is absent, so point it at a stand-in. These
+    # tests exercise the stream parsing, not the installation.
+    fake_bin = tmp_path / "goscan"
+    fake_bin.write_text("", encoding="utf-8")
+    monkeypatch.setattr(goscan_bridge, "GOSCAN_BIN", fake_bin)
     monkeypatch.setattr(goscan_bridge, "core_available", lambda: True)
     monkeypatch.setattr(goscan_bridge.asyncio, "create_subprocess_exec", fake_create)
 
@@ -269,7 +275,7 @@ def test_fields_from_the_core_survive_the_bridge(monkeypatch):
     assert "Go" in row["source"]
 
 
-def test_unidentified_service_is_not_given_an_invented_name(monkeypatch):
+def test_unidentified_service_is_not_given_an_invented_name(monkeypatch, tmp_path):
     """An unidentified service must stay unidentified.
 
     The bridge used to fall back to `data.get("service") or "tcp-native"`. That
@@ -289,6 +295,9 @@ def test_unidentified_service_is_not_given_an_invented_name(monkeypatch):
     async def fake_create(*args, **kwargs):
         return FakeProc()
 
+    fake_bin = tmp_path / "goscan"
+    fake_bin.write_text("", encoding="utf-8")
+    monkeypatch.setattr(goscan_bridge, "GOSCAN_BIN", fake_bin)
     monkeypatch.setattr(goscan_bridge, "core_available", lambda: True)
     monkeypatch.setattr(goscan_bridge.asyncio, "create_subprocess_exec", fake_create)
 
@@ -303,7 +312,7 @@ def test_unidentified_service_is_not_given_an_invented_name(monkeypatch):
     assert "tcp-native" not in json.dumps(row)
 
 
-def test_closed_ports_are_not_reported_as_open(monkeypatch):
+def test_closed_ports_are_not_reported_as_open(monkeypatch, tmp_path):
     """`open: false` lines are results of their own and must not leak through."""
 
     class FakeProc:
@@ -317,6 +326,9 @@ def test_closed_ports_are_not_reported_as_open(monkeypatch):
     async def fake_create(*args, **kwargs):
         return FakeProc()
 
+    fake_bin = tmp_path / "goscan"
+    fake_bin.write_text("", encoding="utf-8")
+    monkeypatch.setattr(goscan_bridge, "GOSCAN_BIN", fake_bin)
     monkeypatch.setattr(goscan_bridge, "core_available", lambda: True)
     monkeypatch.setattr(goscan_bridge.asyncio, "create_subprocess_exec", fake_create)
 

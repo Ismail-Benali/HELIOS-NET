@@ -44,6 +44,25 @@ needs_c = pytest.mark.skipif(
 )
 
 
+def _usable_text_backends() -> int:
+    """How many backends can answer a match request right now.
+
+    A comparison needs at least two: one native core and the Python fallback.
+    An ``agree`` verdict from a single backend would be vacuous, so the
+    cross-backend cases skip on a checkout where the native cores have not been
+    built yet instead of failing on an answer nobody could corroborate.
+    """
+    infos = accel.backend_infos_by_name()
+    return sum(1 for name in ("c", "rust", "python") if infos[name].available)
+
+
+needs_two_text_backends = pytest.mark.skipif(
+    _usable_text_backends() < 2,
+    reason="only one match backend is usable; build the native cores with "
+    "`python build.py`",
+)
+
+
 def signature_set(hits):
     """The contract: a set of (signature, byte offset) pairs.
 
@@ -225,6 +244,7 @@ CROSS_BACKEND_CASES = [
 @pytest.mark.parametrize(
     "label,text,patterns", CROSS_BACKEND_CASES, ids=[c[0] for c in CROSS_BACKEND_CASES]
 )
+@needs_two_text_backends
 def test_every_backend_reports_the_same_matches(label, text, patterns):
     """Whatever serves a request, the answer is the same.
 

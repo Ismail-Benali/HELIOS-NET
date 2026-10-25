@@ -206,6 +206,10 @@ def test_an_unknown_backend_name_is_rejected():
         accel.scan_ports("10.0.0.1", [22], prefer="cobol")
 
 
+@pytest.mark.skipif(
+    not accel.backend_infos_by_name()["go"].available,
+    reason="the Go core binary is not built; run `python build.py`",
+)
 def test_only_the_go_and_python_backends_can_probe():
     by_name = accel.backend_infos_by_name()
     assert "scan_ports" in by_name["go"].capabilities

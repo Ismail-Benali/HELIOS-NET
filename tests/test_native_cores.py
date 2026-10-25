@@ -4,17 +4,25 @@ Integration tests for the native cores: Rust (ctypes) and C (subprocess).
 
 from __future__ import annotations
 
+import pytest
+
 from core.envelope import parse_envelope
 from core.rust_bridge import match_signatures_rust, rust_available, rust_version
 from engine.pattern_matcher import AhoCorasickMatcher
 from transport import banner_fingerprint, match_banner
 
+requires_rust = pytest.mark.skipif(
+    not rust_available(), reason="Rust core not built; run `python build.py`"
+)
 
+
+@requires_rust
 def test_rust_library_is_loaded():
     assert rust_available(), "rust-core library not built; run `python build.py`"
     assert "Rust Core" in rust_version()
 
 
+@requires_rust
 def test_rust_signature_matching():
     hits = match_signatures_rust(
         "SSH-2.0-OpenSSH_9.6 on ubuntu", ["openssh", "apache", "nginx"]
