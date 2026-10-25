@@ -24,6 +24,7 @@ from core.c_core_bridge import (
     scan_banners,
     selftest,
 )
+from core.envelope import REQUIRED_KEYS, parse_envelope
 
 ROOT = Path(__file__).resolve().parent.parent
 SIGS = ROOT / "config" / "scope.yaml"
@@ -414,4 +415,8 @@ def test_cli_reports_missing_signature_file():
         errors="replace",
     )
     assert proc.returncode == 3
-    assert json.loads(proc.stderr.strip())["code"] == "SIG_LOAD_FAILED"
+    envelope = parse_envelope(proc.stderr)
+    assert envelope is not None, "the C core must emit a parseable SEE on stderr"
+    assert set(REQUIRED_KEYS) <= set(envelope)
+    assert envelope["code"] == "SIG_LOAD_FAILED"
+    assert envelope["component"] == "transport/c_core"

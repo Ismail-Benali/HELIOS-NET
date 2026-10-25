@@ -37,7 +37,13 @@ static int mode_match(const char *sig_file) {
     size_t count = 0;
     hc_ac_t *ac = hc_sig_load(sig_file, &count);
     if (ac == NULL) {
-        fprintf(stderr, "{\"status\":\"error\",\"code\":\"SIG_LOAD_FAILED\"}\n");
+        /* A scripted caller expects the standardized error envelope, so this
+         * line carries the same status/code/message/component keys as every
+         * other native failure instead of a bare code the parser would drop. */
+        fprintf(stderr,
+                "{\"status\":\"error\",\"code\":\"SIG_LOAD_FAILED\","
+                "\"message\":\"cannot load signatures\","
+                "\"component\":\"transport/c_core\"}\n");
         return 3;
     }
     fprintf(stderr, "c_core: loaded %zu signatures from '%s'\n", count, sig_file);
@@ -50,10 +56,14 @@ static int mode_match(const char *sig_file) {
 
         size_t out_len = sizeof(result_buf);
         if (hc_batch_match_json(ac, banner_buf, result_buf, &out_len, NULL, NULL) != HC_OK) {
-            /* A dropped banner must be visible, not silently absent: the
-             * consumer counts lines, and a line that vanishes is a detection
-             * that never happened. */
-            printf("{\"status\":\"error\",\"error\":\"encode_failed\"}\n");
+            /* A dropped banner must be visible, not silently absent. It goes
+             * to stderr as a standardized envelope: stdout is the result
+             * stream, and a malformed object there would be discarded by the
+             * same status check that is meant to preserve it. */
+            fprintf(stderr,
+                    "{\"status\":\"error\",\"code\":\"ENCODE_FAILED\","
+                    "\"message\":\"could not encode the result\","
+                    "\"component\":\"transport/c_core\"}\n");
             continue;
         }
         fputs(result_buf, stdout);
@@ -73,7 +83,10 @@ static int mode_fp(void) {
 
         size_t out_len = sizeof(result_buf);
         if (hc_batch_fp_json(banner_buf, result_buf, &out_len) != HC_OK) {
-            printf("{\"status\":\"error\",\"error\":\"encode_failed\"}\n");
+            fprintf(stderr,
+                    "{\"status\":\"error\",\"code\":\"ENCODE_FAILED\","
+                    "\"message\":\"could not encode the result\","
+                    "\"component\":\"transport/c_core\"}\n");
             continue;
         }
         fputs(result_buf, stdout);
