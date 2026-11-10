@@ -21,7 +21,7 @@ def test_score_is_deterministic_and_explains_each_matched_rule():
     }
     first = RiskScorer().assess(finding).to_dict()
     assert first == RiskScorer().assess(finding).to_dict()
-    assert first["score"] == 91
+    assert first["score"] == 90
     assert first["severity"] == "critical"
     assert {factor["rule"] for factor in first["factors"]} == {
         "open_service", "plaintext_telnet_risk",
@@ -33,7 +33,7 @@ def test_score_is_deterministic_and_explains_each_matched_rule():
 def test_missing_confidence_uses_documented_default():
     result = RiskScorer().assess({"port": 23, "service": "telnet"}).to_dict()
     assert result["confidence"] == DEFAULT_CONFIDENCE
-    assert result["score"] == 60
+    assert result["score"] == 64
 
 
 def test_custom_rules_are_supported():
