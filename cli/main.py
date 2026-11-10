@@ -201,7 +201,7 @@ def cmd_assets(args: Any) -> int:
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(
-                json.dumps(graph_payload, ensure_ascii=False, indent=2) + "\\n",
+                json.dumps(graph_payload, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
         except OSError as exc:
@@ -249,21 +249,21 @@ def cmd_graph(args: Any) -> int:
         f"assets={summary['assets']} relationships={summary['typed_relationships']} "
         f"topology_edges={summary['topology_edges']} components={summary['components']}"
     )
-    print("\\nDegree centrality (highest first):")
+    print("\nDegree centrality (highest first):")
     for row in result["degree_centrality"][: args.limit]:
         print(f"  {row['score']:>7.4f}  {row['type']:<12} {row['value']} [{row['id']}]")
-    print("\\nConnected components:")
+    print("\nConnected components:")
     for index, component in enumerate(result["connected_components"], start=1):
         values = ", ".join(f"{item['type']}:{item['value']}" for item in component)
         print(f"  {index}. {values}")
-    print("\\nNative engine selection:")
+    print("\nNative engine selection:")
     for operation, details in result["engines"].items():
         note = f" ({details['reason']})" if details.get("reason") else ""
         print(f"  {operation}: {details['engine']}{note}")
 
     if "shortest_path" in result:
         path = result["shortest_path"]
-        print("\\nShortest topology path:")
+        print("\nShortest topology path:")
         if path["path"] is None:
             print("  no connected path")
         else:
@@ -277,13 +277,13 @@ def cmd_graph(args: Any) -> int:
         try:
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(
-                json.dumps(result, ensure_ascii=False, indent=2) + "\\n",
+                json.dumps(result, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
         except OSError as exc:
             print(f"[HELIOS] result export failed: {exc}")
             return 1
-        print(f"\\n[HELIOS] analysis exported: {destination}")
+        print(f"\n[HELIOS] analysis exported: {destination}")
     return 0
 
 
