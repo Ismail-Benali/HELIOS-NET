@@ -7,8 +7,8 @@ discarded from the source graph or returned report.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Any
 
 from engine.graph.model import Evidence, TypedAssetGraph
