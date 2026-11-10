@@ -406,3 +406,15 @@ GCC has no `libasan` or `libubsan`, so it fails at link time with
 `cannot find -lasan`. The stage therefore uses clang when it is present and
 falls back to GCC otherwise, and a Linux CI run remains the only way to prove
 it.
+
+
+## Typed asset graph
+
+The canonical typed identity and provenance contract is implemented in
+`engine/graph/model.py` and documented in [ASSET-GRAPH.md](ASSET-GRAPH.md).
+It is an additive, network-free normalization layer: the legacy
+`engine.graph.core.AssetGraph` remains the analytics adapter for existing Rust
+and Python graph algorithms. Discovery must continue to enforce scope before
+producing observations. The typed model preserves direction, relation types,
+source timestamps, and evidence references that the legacy undirected native
+projection cannot represent.
