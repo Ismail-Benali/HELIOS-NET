@@ -48,8 +48,7 @@ def _observation_attributes(finding: dict[str, Any]) -> dict[str, Any]:
         elif isinstance(value, dict):
             # TLS/header metadata is small and structured; cap its field count.
             attributes[key] = {
-                str(k)[:80]: str(v)[:500]
-                for k, v in list(value.items())[:30]
+                str(k)[:80]: str(v)[:500] for k, v in list(value.items())[:30]
             }
     return attributes
 
@@ -129,9 +128,7 @@ def ingest_discovery_summary(
                 metadata={"discovery_module": "asset"},
                 evidence=evidence,
             )
-            ip_id = finding_graph.add_asset(
-                AssetType.IP, address, evidence=evidence
-            )
+            ip_id = finding_graph.add_asset(AssetType.IP, address, evidence=evidence)
             service_id = finding_graph.add_asset(
                 AssetType.SERVICE,
                 f"tcp/{port}/{service_name.strip().lower()}",
@@ -142,8 +139,11 @@ def ingest_discovery_summary(
                 host_id, ip_id, RelationshipType.RESOLVES_TO, evidence=evidence
             )
             finding_graph.add_relationship(
-                host_id, service_id, RelationshipType.HOSTS_SERVICE,
-                metadata={"port": port}, evidence=evidence,
+                host_id,
+                service_id,
+                RelationshipType.HOSTS_SERVICE,
+                metadata={"port": port},
+                evidence=evidence,
             )
 
             scheme = (
@@ -168,7 +168,9 @@ def ingest_discovery_summary(
                         continue
                     source_url = redirect.get("from")
                     target_url = redirect.get("to")
-                    if not isinstance(source_url, str) or not isinstance(target_url, str):
+                    if not isinstance(source_url, str) or not isinstance(
+                        target_url, str
+                    ):
                         continue
                     source_parts = urlsplit(source_url)
                     target_parts = urlsplit(target_url)
@@ -189,7 +191,9 @@ def ingest_discovery_summary(
                         AssetType.URL, target_url, evidence=evidence
                     )
                     finding_graph.add_relationship(
-                        source_id, target_id, RelationshipType.REDIRECTS_TO,
+                        source_id,
+                        target_id,
+                        RelationshipType.REDIRECTS_TO,
                         metadata={"status": redirect.get("status")},
                         evidence=evidence,
                     )
