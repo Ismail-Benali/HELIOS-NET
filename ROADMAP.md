@@ -62,9 +62,13 @@ and evidence model as one-time campaigns.
   discovery and analysis.
 
 - The explainable risk-scoring increment is merged into `master` (PR #33).
-- The typed Asset Graph model and the first scope-bound HTTP discovery ingestion
-  adapter are merged in PR #34 and are being extended in the current branch.
-  Rust native projection and adapters for other discovery modules remain open.
-
-- The asset discovery summary now emits a typed graph alongside legacy findings;
-  the Rust ABI and legacy undirected analytics graph remain unchanged.
+- The typed Asset Graph model (PR #34) and scope-bound HTTP discovery ingestion
+  (PR #35) are merged. The discovery summary emits the typed graph alongside
+  legacy findings.
+- The CLI can export the graph with `assets --graph-output` and analyze it with
+  `graph analyze`. The versioned Rust topology projection maps native indices
+  back to typed asset IDs while retaining the directed relationship ledger and
+  evidence in Python.
+- The Rust ABI and its legacy undirected analytics contract remain unchanged.
+  This increment does not claim directed graph analytics or full polyglot
+  graph parity. Additional DNS/CT/service-discovery adapters remain open.
