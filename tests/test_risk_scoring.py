@@ -1,4 +1,5 @@
 """Regression tests for explainable risk scoring."""
+
 from __future__ import annotations
 
 import pytest
@@ -16,15 +17,20 @@ def test_empty_finding_has_zero_low_score_and_no_factors():
 
 def test_score_is_deterministic_and_explains_each_matched_rule():
     finding = {
-        "module": "discovery", "host": "192.0.2.10", "port": 23,
-        "service": "telnet", "open": True, "confidence": 1.0,
+        "module": "discovery",
+        "host": "192.0.2.10",
+        "port": 23,
+        "service": "telnet",
+        "open": True,
+        "confidence": 1.0,
     }
     first = RiskScorer().assess(finding).to_dict()
     assert first == RiskScorer().assess(finding).to_dict()
     assert first["score"] == 90
     assert first["severity"] == "critical"
     assert {factor["rule"] for factor in first["factors"]} == {
-        "open_service", "plaintext_telnet_risk",
+        "open_service",
+        "plaintext_telnet_risk",
     }
     assert first["evidence"]["host"] == "192.0.2.10"
     assert "port" in first["factors"][0]["evidence_refs"]
@@ -38,13 +44,22 @@ def test_missing_confidence_uses_documented_default():
 
 def test_custom_rules_are_supported():
     rule = Rule(
-        name="observed_tls_issue", weight=0.8,
+        name="observed_tls_issue",
+        weight=0.8,
         test=lambda finding: finding.get("tls_issue") is True,
         note="TLS evidence explicitly records an issue.",
     )
-    result = RiskScorer([rule]).assess({
-        "tls_issue": True, "host": "example.test", "confidence": 1.0,
-    }).to_dict()
+    result = (
+        RiskScorer([rule])
+        .assess(
+            {
+                "tls_issue": True,
+                "host": "example.test",
+                "confidence": 1.0,
+            }
+        )
+        .to_dict()
+    )
     assert result["score"] == 80
     assert result["severity"] == "high"
     assert result["factors"][0]["evidence_refs"] == ["host"]
