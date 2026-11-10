@@ -158,7 +158,6 @@ def test_cli_graph_rejects_malformed_input(tmp_path, capsys):
     assert "graph analysis failed" in capsys.readouterr().out
 
 
-
 def test_native_and_python_projection_analytics_have_parity(typed_graph):
     from core.rust_bridge import rust_available
 
