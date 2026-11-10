@@ -120,21 +120,22 @@ def ingest_discovery_summary(
             reference,
             attrs,
         )
+        finding_graph = TypedAssetGraph()
         try:
-            host_id = graph.add_asset(
+            host_id = finding_graph.add_asset(
                 AssetType.HOST, host, metadata={"discovery_module": "asset"},
                 evidence=evidence,
             )
-            ip_id = graph.add_asset(
+            ip_id = finding_graph.add_asset(
                 AssetType.IP, address, evidence=evidence
             )
-            service_id = graph.add_asset(
+            service_id = finding_graph.add_asset(
                 AssetType.SERVICE,
                 f"tcp/{port}/{service_name.strip().lower()}",
                 metadata={"protocol": "tcp", "port": port, "name": service_name},
                 evidence=evidence,
             )
-            graph.add_relationship(
+            finding_graph.add_relationship(
                 host_id, ip_id, RelationshipType.RESOLVES_TO, evidence=evidence
             )
             graph.add_relationship(
@@ -143,7 +144,7 @@ def ingest_discovery_summary(
             )
 
             scheme = "https" if service_name.lower() in {"https", "ssl", "tls"} or port in {443, 8443} else "http"
-            url_id = graph.add_asset(
+            url_id = finding_graph.add_asset(
                 AssetType.URL,
                 f"{scheme}://{host}:{port}/",
                 evidence=evidence,
@@ -167,10 +168,10 @@ def ingest_discovery_summary(
                         continue
                     if target_parts.scheme not in {"http", "https"} or not target_parts.hostname:
                         continue
-                    source_id = graph.add_asset(
+                    source_id = finding_graph.add_asset(
                         AssetType.URL, source_url, evidence=evidence
                     )
-                    target_id = graph.add_asset(
+                    target_id = finding_graph.add_asset(
                         AssetType.URL, target_url, evidence=evidence
                     )
                     graph.add_relationship(
@@ -180,5 +181,7 @@ def ingest_discovery_summary(
                     )
         except (TypeError, ValueError):
             skipped += 1
+            continue
+        graph.merge(finding_graph)
 
     return graph, skipped
