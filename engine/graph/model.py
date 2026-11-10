@@ -3,6 +3,7 @@
 This model is deliberately network-free. It normalizes observations already
 collected by scope-bound discovery; it never resolves names or opens sockets.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -169,9 +170,7 @@ class Relationship:
             "target": self.target,
             "type": self.type.value,
             "metadata": self.metadata,
-            "evidence": [
-                self.evidence[key].to_dict() for key in sorted(self.evidence)
-            ],
+            "evidence": [self.evidence[key].to_dict() for key in sorted(self.evidence)],
         }
 
 
