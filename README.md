@@ -17,7 +17,7 @@
 
 ---
 
-**HELIOS-NET** is a focused, high-performance **Attack Surface Management (ASM)** and **network scanning orchestrator**. Designed around a **Closed-Loop Intelligence Cycle** (Reconnaissance ➔ Planning ➔ Execution ➔ Analysis ➔ Reporting), HELIOS-NET relies entirely on Python stdlib for control orchestration and high-performance Go binaries (`goscan`) for concurrent networking and NDJSON streaming.
+**HELIOS-NET** is a polyglot **Attack Surface Management (ASM)** and network-discovery orchestrator. Its Python control plane manages the campaign lifecycle; Go performs concurrent TCP discovery, C provides signature/fingerprint primitives, and Rust provides native graph and matching operations through a C ABI. The system follows a closed-loop cycle: discovery ➔ planning ➔ execution ➔ analysis ➔ reporting. See the [architecture](docs/Architecture.md) for the actual component boundaries.
 
 > ⚠️ **Scope Notice:** HELIOS-NET is designed strictly for **authorized** penetration testing, network mapping, and educational research.
 
@@ -30,6 +30,7 @@
 - [Quick Start & CLI Usage](#-quick-start--cli-usage)
 - [Automated Testing](#-automated-testing)
 - [Honest Project Status](#-honest-project-status)
+- [Technical References](#technical-references)
 
 ---
 
@@ -65,11 +66,24 @@
        +---------------------+---------------------+
                              | (IPC / NDJSON Streams)
                              v
-         +-------------------------------------+
-         |          GO NETWORK ENGINE          |
-         | - goscan (Goroutines Port Scanner)  |
-         +-------------------------------------+
+         +------------------+------------------+------------------+
+         |    GO / NETWORK  |    C / MATCHING   |  RUST / GRAPH    |
+         |    goscan        | signatures + FP  | graph + matcher  |
+         +------------------+------------------+------------------+
+                              ^
+                              | UTF-8 IPC / C ABI
+                              +-----------------------------------+
 ```
+
+---
+
+## Technical References
+
+- [Polyglot architecture and native-core health](docs/Architecture.md)
+- [Internal API and module contracts](docs/API.md)
+- [Scope enforcement and authorization boundary](docs/SCOPE-ENFORCEMENT.md)
+- [Native IPC and NDJSON contract](docs/IPC-CONTRACT.md)
+- [Engineering roadmap](ROADMAP.md)
 
 ---
 
