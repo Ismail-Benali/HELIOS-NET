@@ -1,4 +1,5 @@
 """Tests for discovery-to-typed-graph ingestion."""
+
 from typing import Any
 
 
@@ -48,7 +49,12 @@ def test_ingestion_builds_assets_edges_and_provenance():
     assert skipped == 0
     assert len(graph.assets) == 6
     relation_types = {edge.type.value for edge in graph.relationships.values()}
-    assert relation_types == {"resolves_to", "hosts_service", "hosted_on", "redirects_to"}
+    assert relation_types == {
+        "resolves_to",
+        "hosts_service",
+        "hosted_on",
+        "redirects_to",
+    }
 
     host = next(asset for asset in graph.assets.values() if asset.type.value == "host")
     assert host.canonical_value == "app.example.test"
