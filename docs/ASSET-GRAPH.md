@@ -81,5 +81,29 @@ observations, not independent asset identities.
 - URL query strings are identity-bearing; fragment identifiers are not.
 - Evidence attributes are caller-supplied JSON-compatible data and should not
   contain secrets or unbounded response bodies.
-- This increment does not claim end-to-end ingestion from every discovery
-  module; it establishes and tests the canonical model first.
+- The scope-bound HTTP asset discovery module is now adapted through
+  `modules/discovery/graph_ingest.py`; other discovery modules still need
+  dedicated adapters with explicit source contracts.
+- Blocked candidates are intentionally excluded from the graph. The graph is
+  not an authorization mechanism and cannot make an out-of-scope target safe.
+
+
+## Discovery ingestion
+
+`modules.discovery.assets.discover_assets()` now includes a versioned
+`graph` export in its summary. The adapter in
+`modules/discovery/graph_ingest.py` maps completed findings into:
+
+- host → IP via `resolves_to`;
+- host → TCP service via `hosts_service`;
+- URL → host via `hosted_on`;
+- redirect URL → destination URL via `redirects_to`.
+
+Each node and edge carries source, observation timestamp, and a bounded set of
+finding attributes. Arbitrary body excerpts are excluded. Invalid findings are
+staged separately and skipped atomically, so a malformed record cannot leave
+partial nodes or edges. The `blocked` list is never ingested.
+
+The adapter does not perform DNS, HTTP, TLS, or socket operations. It consumes
+only the already scope-checked findings emitted by asset discovery. Its
+`graph_skipped` count makes incomplete input visible to callers.
