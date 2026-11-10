@@ -83,6 +83,7 @@
 - [Internal API and module contracts](docs/API.md)
 - [Scope enforcement and authorization boundary](docs/SCOPE-ENFORCEMENT.md)
 - [Native IPC and NDJSON contract](docs/IPC-CONTRACT.md)
+- [Typed asset graph contract](docs/ASSET-GRAPH.md)
 - [Engineering roadmap](ROADMAP.md)
 
 ---
