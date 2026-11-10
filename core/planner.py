@@ -112,6 +112,7 @@ class Planner:
                     it.get("action", "scan"),
                     target,
                     it.get("priority", self.MODULE_PRIORITY["discovery"]),
+                    params=dict(it.get("params") or {}),
                 )
             )
 
