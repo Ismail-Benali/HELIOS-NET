@@ -79,7 +79,8 @@ def test_python_projection_analysis_maps_indices_back_to_assets(typed_graph):
         if asset.canonical_value == "api.example.test"
     )
     ip_id = next(
-        asset.id for asset in typed_graph.assets.values()
+        asset.id
+        for asset in typed_graph.assets.values()
         if asset.canonical_value == "192.0.2.10"
     )
     result = analyze_typed_graph(
