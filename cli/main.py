@@ -189,12 +189,102 @@ def cmd_assets(args: Any) -> int:
         )
     for entry in summary.get("blocked", []):
         print(f"  blocked {entry['host']}: {entry['reason']}")
+    graph_output = getattr(args, "graph_output", None)
+    if graph_output:
+        import json
+
+        graph_payload = summary.get("graph")
+        if not isinstance(graph_payload, dict):
+            print("[HELIOS] graph export unavailable: discovery did not return a typed graph.")
+            return 2
+        output_path = Path(graph_output)
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(graph_payload, ensure_ascii=False, indent=2) + "\\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"[HELIOS] graph export failed: {exc}")
+            return 1
+        print(f"[HELIOS] typed graph exported: {output_path}")
+
+    graph = summary.get("graph", {})
+    graph_assets = len(graph.get("assets", [])) if isinstance(graph, dict) else 0
+    graph_relationships = (
+        len(graph.get("relationships", [])) if isinstance(graph, dict) else 0
+    )
     print(
         f"[HELIOS] hosts={len(summary.get('hosts', []))} "
         f"assets={summary.get('assets', 0)} requests={summary.get('requests', 0)} "
+        f"graph_assets={graph_assets} graph_relationships={graph_relationships} "
         f"ct={params['ct']}"
     )
     return 2 if summary.get("error") else 0
+
+
+def cmd_graph(args: Any) -> int:
+    """Analyze a previously exported typed graph without performing network I/O."""
+    import json
+
+    from engine.graph.native import analyze_typed_graph, load_typed_graph
+
+    input_path = Path(args.input)
+    try:
+        payload = json.loads(input_path.read_text(encoding="utf-8"))
+        graph = load_typed_graph(payload)
+        result = analyze_typed_graph(
+            graph,
+            source_asset=getattr(args, "source_asset", None),
+            target_asset=getattr(args, "target_asset", None),
+            backend=None if args.backend == "auto" else args.backend,
+        )
+    except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError, RuntimeError) as exc:
+        print(f"[HELIOS] graph analysis failed: {exc}")
+        return 2
+
+    summary = result["summary"]
+    print("HELIOS-NET :: TYPED ASSET GRAPH")
+    print(
+        f"assets={summary['assets']} relationships={summary['typed_relationships']} "
+        f"topology_edges={summary['topology_edges']} components={summary['components']}"
+    )
+    print("\\nDegree centrality (highest first):")
+    for row in result["degree_centrality"][: args.limit]:
+        print(f"  {row['score']:>7.4f}  {row['type']:<12} {row['value']} [{row['id']}]")
+    print("\\nConnected components:")
+    for index, component in enumerate(result["connected_components"], start=1):
+        values = ", ".join(f"{item['type']}:{item['value']}" for item in component)
+        print(f"  {index}. {values}")
+    print("\\nNative engine selection:")
+    for operation, details in result["engines"].items():
+        note = f" ({details['reason']})" if details.get("reason") else ""
+        print(f"  {operation}: {details['engine']}{note}")
+
+    if "shortest_path" in result:
+        path = result["shortest_path"]
+        print("\\nShortest topology path:")
+        if path["path"] is None:
+            print("  no connected path")
+        else:
+            print(f"  hops={path['hops']}")
+            for item in path["path"]:
+                print(f"  -> {item['type']}:{item['value']} [{item['id']}]")
+
+    output_path = getattr(args, "json_output", None)
+    if output_path:
+        destination = Path(output_path)
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2) + "\\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"[HELIOS] result export failed: {exc}")
+            return 1
+        print(f"\\n[HELIOS] analysis exported: {destination}")
+    return 0
 
 
 def cmd_recover(args: Any) -> int:
@@ -440,7 +530,22 @@ def build_parser() -> argparse.ArgumentParser:
         dest="web_ports",
         help="Comma-separated web ports to probe; defaults to the scope",
     )
+    a.add_argument(
+        "--graph-output",
+        default=None,
+        help="Write the versioned typed asset graph JSON to this path",
+    )
     a.set_defaults(fn=cmd_assets)
+
+    g = sub.add_parser("graph", help="Analyze an exported typed asset graph locally")
+    g.add_argument("action", choices=["analyze"], help="Graph operation")
+    g.add_argument("--input", required=True, help="Typed graph JSON exported by assets")
+    g.add_argument("--source-asset", default=None, help="Source typed asset ID for a shortest path")
+    g.add_argument("--target-asset", default=None, help="Target typed asset ID for a shortest path")
+    g.add_argument("--backend", choices=["auto", "rust", "python"], default="auto")
+    g.add_argument("--limit", type=int, default=20, help="Maximum centrality rows to print")
+    g.add_argument("--json-output", default=None, help="Write the full analysis result as JSON")
+    g.set_defaults(fn=cmd_graph)
 
     rc = sub.add_parser("recover", help="Recover campaign state from disk")
     rc.add_argument("campaign_id")
