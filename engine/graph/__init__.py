@@ -1,8 +1,14 @@
-"""HELIOS-NET :: engine/graph - asset architecture and centrality analysis.
-
-Converts findings into an asset graph and ranks them by importance.
-"""
+"""Asset graph APIs: legacy analytics and typed provenance model."""
 
 from .core import AssetGraph
+from .model import Asset, AssetType, Evidence, Relationship, RelationshipType, TypedAssetGraph
 
-__all__ = ["AssetGraph"]
+__all__ = [
+    "Asset",
+    "AssetGraph",
+    "AssetType",
+    "Evidence",
+    "Relationship",
+    "RelationshipType",
+    "TypedAssetGraph",
+]
