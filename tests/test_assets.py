@@ -236,9 +236,7 @@ def test_a_host_specific_response_is_recorded_as_a_vhost(make_server):
     assert summary["graph"]["schema_version"] == "1.0"
     asset_types = {asset["type"] for asset in summary["graph"]["assets"]}
     assert {"host", "ip", "service", "url"} <= asset_types
-    relation_types = {
-        edge["type"] for edge in summary["graph"]["relationships"]
-    }
+    relation_types = {edge["type"] for edge in summary["graph"]["relationships"]}
     assert {"resolves_to", "hosts_service", "hosted_on"} <= relation_types
 
 
