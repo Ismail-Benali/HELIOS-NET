@@ -128,3 +128,57 @@ def test_invalid_redirect_is_ignored_without_breaking_ingestion():
     assert not any(
         edge.type.value == "redirects_to" for edge in graph.relationships.values()
     )
+
+
+def test_ingestion_adds_certificate_identity_and_certificate_for_edge():
+    fingerprint = "a" * 64
+    graph, skipped = ingest_discovery_summary(
+        {
+            "findings": [
+                finding(
+                    service="https",
+                    tls={
+                        "sha256_fingerprint": fingerprint,
+                        "subject": "app.example.test",
+                        "issuer": "Example Test CA",
+                        "not_before": "Nov 10 00:00:00 2026 GMT",
+                        "not_after": "Nov 10 00:00:00 2027 GMT",
+                    },
+                )
+            ]
+        },
+        observed_at=OBSERVED_AT,
+        reference="campaign:tls-01",
+    )
+
+    assert skipped == 0
+    certificate = next(
+        asset for asset in graph.assets.values() if asset.type.value == "certificate"
+    )
+    host = next(asset for asset in graph.assets.values() if asset.type.value == "host")
+    assert certificate.canonical_value == f"sha256:{fingerprint}"
+    assert certificate.metadata["subject"] == "app.example.test"
+    edge = next(
+        edge
+        for edge in graph.relationships.values()
+        if edge.type.value == "certificate_for"
+    )
+    assert edge.source == certificate.id
+    assert edge.target == host.id
+    assert next(iter(edge.evidence.values())).reference == "campaign:tls-01"
+
+
+def test_ingestion_ignores_malformed_certificate_fingerprints():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "findings": [
+                finding(tls={"sha256_fingerprint": "not-a-fingerprint"})
+            ]
+        },
+        observed_at=OBSERVED_AT,
+    )
+
+    assert skipped == 0
+    assert not any(
+        asset.type.value == "certificate" for asset in graph.assets.values()
+    )
