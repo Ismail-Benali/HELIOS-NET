@@ -106,7 +106,11 @@ def ingest_discovery_summary(
         if not isinstance(host, str) or not isinstance(address, str):
             skipped += 1
             continue
-        if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+        if (
+            not isinstance(port, int)
+            or isinstance(port, bool)
+            or not 1 <= port <= 65535
+        ):
             skipped += 1
             continue
         if not isinstance(service_name, str) or not service_name.strip():
@@ -123,7 +127,9 @@ def ingest_discovery_summary(
         finding_graph = TypedAssetGraph()
         try:
             host_id = finding_graph.add_asset(
-                AssetType.HOST, host, metadata={"discovery_module": "asset"},
+                AssetType.HOST,
+                host,
+                metadata={"discovery_module": "asset"},
                 evidence=evidence,
             )
             ip_id = finding_graph.add_asset(
@@ -135,7 +141,7 @@ def ingest_discovery_summary(
                 metadata={"protocol": "tcp", "port": port, "name": service_name},
                 evidence=evidence,
             )
-            finding_finding_graph.add_relationship(
+            finding_graph.add_relationship(
                 host_id, ip_id, RelationshipType.RESOLVES_TO, evidence=evidence
             )
             finding_graph.add_relationship(
@@ -143,7 +149,12 @@ def ingest_discovery_summary(
                 metadata={"port": port}, evidence=evidence,
             )
 
-            scheme = "https" if service_name.lower() in {"https", "ssl", "tls"} or port in {443, 8443} else "http"
+            scheme = (
+                "https"
+                if service_name.lower() in {"https", "ssl", "tls"}
+                or port in {443, 8443}
+                else "http"
+            )
             url_id = finding_graph.add_asset(
                 AssetType.URL,
                 f"{scheme}://{host}:{port}/",
@@ -164,9 +175,15 @@ def ingest_discovery_summary(
                         continue
                     source_parts = urlsplit(source_url)
                     target_parts = urlsplit(target_url)
-                    if source_parts.scheme not in {"http", "https"} or not source_parts.hostname:
+                    if (
+                        source_parts.scheme not in {"http", "https"}
+                        or not source_parts.hostname
+                    ):
                         continue
-                    if target_parts.scheme not in {"http", "https"} or not target_parts.hostname:
+                    if (
+                        target_parts.scheme not in {"http", "https"}
+                        or not target_parts.hostname
+                    ):
                         continue
                     source_id = finding_graph.add_asset(
                         AssetType.URL, source_url, evidence=evidence
