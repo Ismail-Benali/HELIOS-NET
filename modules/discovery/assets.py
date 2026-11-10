@@ -41,6 +41,7 @@ from urllib.parse import urlsplit
 from core.input_guard import sanitize_banner
 from core.scope import ScopeEnforcer
 from modules.discovery.ct import fetch_ct_names
+from modules.discovery.graph_ingest import ingest_discovery_summary
 
 WEB_PORTS = (80, 443, 8080, 8443)
 DEFAULT_TIMEOUT = 2.0
@@ -644,7 +645,7 @@ def discover_assets(
                     continue
                 queue.append((child, level + 1))
 
-    return {
+    summary = {
         "module": "asset",
         "source": "asset-discovery",
         "hosts": [entry["host"] for entry in hosts],
@@ -653,3 +654,7 @@ def discover_assets(
         "blocked": blocked,
         "findings": findings,
     }
+    graph, graph_skipped = ingest_discovery_summary(summary)
+    summary["graph"] = graph.to_dict()
+    summary["graph_skipped"] = graph_skipped
+    return summary
