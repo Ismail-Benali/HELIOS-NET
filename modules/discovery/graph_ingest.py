@@ -59,7 +59,7 @@ def _evidence(
     observed_at: str,
     reference: str,
     attributes: dict[str, Any],
-) -> "Evidence":
+) -> Any:
     from engine.graph.model import Evidence
 
     return Evidence(
@@ -75,7 +75,7 @@ def ingest_discovery_summary(
     *,
     observed_at: str | None = None,
     reference: str = "",
-) -> tuple["TypedAssetGraph", int]:
+) -> tuple[Any, int]:
     """Build a typed graph from a discover_assets() summary.
 
     The summary's findings are treated as observations from already-authorized
