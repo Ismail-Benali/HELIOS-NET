@@ -14,7 +14,6 @@ from typing import Any
 
 from engine.graph.model import Evidence, TypedAssetGraph
 
-
 PROJECTION_SCHEMA = "helios.rust-graph-projection/1"
 
 
