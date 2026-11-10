@@ -71,4 +71,8 @@ and evidence model as one-time campaigns.
   evidence in Python.
 - The Rust ABI and its legacy undirected analytics contract remain unchanged.
   This increment does not claim directed graph analytics or full polyglot
-  graph parity. Additional DNS/CT/service-discovery adapters remain open.
+  graph parity. Dedicated DNS record and service-discovery graph adapters remain
+  open.
+- TLS observations now include a SHA-256 certificate fingerprint. The typed
+  graph records certificate identity and a directed certificate_for edge to
+  the observed host, with bounded certificate metadata and evidence provenance.
