@@ -10,7 +10,6 @@ def ingest_discovery_summary(
     return ingest(summary, observed_at=observed_at, reference=reference)
 
 
-
 OBSERVED_AT = "2026-11-10T20:30:00Z"
 
 
