@@ -239,9 +239,7 @@ def analyze_typed_graph(
             isinstance(value, list)
             and len(value) == count
             and all(
-                isinstance(score, (int, float))
-                and math.isfinite(score)
-                and score >= 0
+                isinstance(score, (int, float)) and math.isfinite(score) and score >= 0
                 for score in value
             )
         ),
@@ -328,8 +326,7 @@ def analyze_typed_graph(
         result["shortest_path"] = {
             "source": asset_record(source_asset),
             "target": asset_record(target_asset),
-            "hops": path.value[0] if path.value is not None
-            else None,
+            "hops": path.value[0] if path.value is not None else None,
             "path": [asset_record(node_ids[index]) for index in path.value[1]]
             if path.value is not None else None,
             "engine": path.engine,
@@ -337,6 +334,6 @@ def analyze_typed_graph(
         }
         result["engines"]["shortest_path"] = {
             "engine": path.engine,
-            "reason": path.reason
+            "reason": path.reason,
         }
     return result
