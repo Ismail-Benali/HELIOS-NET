@@ -212,8 +212,8 @@ def analyze_typed_graph(
         lambda prefer: accel.graph_components(count, edges, prefer=prefer),
         lambda value: (
             isinstance(value, list)
-            and sorted(index for group in value for index in group) == list(range(count))
             and all(isinstance(group, list) for group in value)
+            and sorted(index for group in value for index in group) == list(range(count))
         ),
         backend,
     )
