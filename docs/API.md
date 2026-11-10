@@ -1,90 +1,76 @@
-# HELIOS-NET :: Internal API & Module Developer Guide
+# HELIOS-NET :: Internal API and Module Contracts
 
-Welcome to the **HELIOS-NET Developer Guide**. This document details the internal API contracts, module specifications, and architectural guidelines for developers and contributors looking to extend the framework.
+This guide describes the contracts implemented by the current source tree. The
+polyglot component map and native-core health model are documented in
+[Architecture](Architecture.md). The scope boundary is specified in
+[Scope Enforcement](SCOPE-ENFORCEMENT.md), and the byte-level process protocol
+is specified in [IPC Contract](IPC-CONTRACT.md).
 
----
+## Architectural boundaries
 
-## 🏛️ Architectural Principles
+| Component | Responsibility | Boundary |
+|---|---|---|
+| `core/` | Campaign lifecycle, policy checks, planning, state, WAL, bridges | Owns orchestration and policy decisions |
+| `engine/` | Asset graph, algorithms, verdicts, scanning utilities | Consumes findings; graph analysis itself is network-free |
+| `modules/` | Discovery, asset metadata, recon, collection and extension runners | Must receive the campaign scope context before network work |
+| `transport/goscan/` | Go TCP discovery worker | Process boundary; UTF-8 NDJSON |
+| `transport/c_core/` | C signature/fingerprint core | Process boundary; line-oriented JSON |
+| `rust-core/` | Native graph and signature operations | In-process C ABI via `ctypes`, not an NDJSON process |
 
-1. **Zero External Pip Dependencies:** The Python core control plane must rely *exclusively* on the Python Standard Library (`stdlib`).
-2. **Polyglot Isolation:** Heavy networking/recon is delegated to Go (`transport/`), memory-safe graph pathfinding to Rust (`rust-core/`), and low-level stealth primitives to C (`transport/`).
-3. **Machine-Readable Contracts:** All inter-process communication (IPC) and error reporting use structured JSON / NDJSON or Standardized Error Envelopes (SEE).
+Python core logic uses the standard library. Native components are optional at
+runtime: bridges report backend availability and use documented Python
+fallbacks where available. A fallback must not disguise a failed native
+execution as a valid empty result.
 
----
+## Campaign and module interface
 
-## 🔌 Writing a New Module
+The in-process module interface is:
 
-Modules are isolated operational units placed under `modules/` (e.g., `modules/discovery/`, `modules/recon/`, `modules/exfil/`).
-
-### Module Input / Output Contract
-To maintain absolute decoupling and fault isolation, every extensible module must follow the **JSON Stdin/Stdout I/O Protocol**:
-- **`stdin`**: Receives target parameters and scope configuration as a single-line JSON string.
-- **`stdout`**: Outputs structured findings or discovery records as a JSON array or NDJSON stream.
-- **`stderr`**: Reserved exclusively for diagnostics or **Standardized Error Envelopes (SEE)**.
-- **Exit Code**: `0` on successful execution, non-zero on failure.
-
-### Example Module Template (`modules/discovery/custom_scanner.py`)
 ```python
-"""
-HELIOS-NET :: modules/discovery/custom_scanner.py
-Custom discovery module template following the JSON stdin/stdout contract.
-"""
-
-from __future__ import annotations
-
-import sys
-import json
-
-
-def main() -> int:
-    try:
-        # Read input parameters from stdin
-        raw_input = sys.stdin.read()
-        payload = json.loads(raw_input) if raw_input.strip() else {}
-        target = payload.get("target", "127.0.0.1")
-
-        # Perform discovery logic (using stdlib only)
-        findings = [{"host": target, "port": 80, "service": "http", "open": True}]
-
-        # Output results as JSON on stdout
-        print(json.dumps(findings, ensure_ascii=True))
-        return 0
-    except Exception as exc:
-        # Emit standardized error envelope on stderr
-        err_env = {
-            "status": "error",
-            "code": "MODULE_ERROR",
-            "message": str(exc),
-            "component": "modules/discovery/custom_scanner",
-        }
-        print(json.dumps(err_env), file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+runner(step: PlanStep, context: dict[str, Any]) -> dict[str, Any]
 ```
 
----
+A `PlanStep` carries `step_id`, `module`, `action`, `target`,
+`priority`, `depends_on`, and a `params` mapping. The orchestrator passes a
+shared campaign context containing findings, reports, the active
+`ScopeEnforcer`, and the configured scope ports.
 
-## 🛠️ Registering Your Module
+Rules for module authors:
 
-1. Place your module file inside the appropriate directory under `modules/`.
-2. Register it with the module registry (`modules/registry.py`) so the orchestrator and CLI (`python run.py info`) discover it automatically.
-3. Add verification test coverage in `tests/smoke.py`.
+1. Network-facing runners must use the supplied scope context and must not
+   create a permissive scope when it is missing.
+2. Target authorization is checked before the campaign executes its plan.
+3. Requested `ports`, `web_ports`, and singular `port` parameters are checked
+   against the campaign port allowlist before any planned step is run.
+4. Asset expansion must independently verify each resolved address and each
+   redirect destination; authorization of a DNS name does not authorize every
+   address to which it resolves.
+5. Keep findings and machine-readable results separate from diagnostics.
+6. Add deterministic tests for both allowed and denied cases.
 
----
+This in-process runner contract is not a claim that every Python module is an
+independent stdin/stdout executable. Native process protocols are defined
+separately below.
 
-## 🛡️ Standardized Error Envelopes (SEE)
+## Standardized Error Envelope (SEE)
 
-When a native or Python component encounters a security trap (WAF, EDR interception, timeout), it must emit an error envelope:
+A native component reports a machine-readable failure on stderr as one JSON
+object per line:
+
 ```json
-{
-    "status": "error",
-    "code": "EDR_BLOCKED",
-    "message": "Interception detected.",
-    "component": "transport/evasion",
-    "module": "direct_syscalls"
-}
+{"status":"error","code":"EDR_BLOCKED","message":"execution was blocked","component":"transport/goscan"}
 ```
-The `MutationEngine` (`core/mutation_engine.py`) consumes these envelopes to automatically pivot tactics (e.g., `direct_syscalls` -> `memory_loader`) without human intervention.
+
+The parser requires `status`, `code`, and `message`, and accepts only
+objects whose status is `error`. The `component` field is recommended for
+attribution. Human-readable diagnostics that are not SEE objects may coexist
+on stderr and are ignored by the SEE parser.
+
+Do not put findings, successful results, or protocol replies on stderr. Do not
+emit diagnostics on stdout, because stdout is the machine protocol channel.
+
+## Change control
+
+A change to a shared contract must update its canonical document, bridge tests,
+and every affected producer/consumer. Avoid introducing a second representation
+of an existing field or silently changing fallback semantics.
