@@ -3,6 +3,7 @@
 This adapter performs no network operations. It only translates completed
 asset-discovery observations and deliberately ignores blocked candidates.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
