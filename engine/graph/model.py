@@ -52,7 +52,9 @@ _RELATION_ENDPOINTS: dict[RelationshipType, tuple[tuple[AssetType, AssetType], .
 
 
 def _canonical_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
+    )
 
 
 def _normalize_value(kind: AssetType, value: str) -> str:
@@ -147,9 +149,7 @@ class Asset:
             "type": self.type.value,
             "value": self.canonical_value,
             "metadata": self.metadata,
-            "evidence": [
-                self.evidence[key].to_dict() for key in sorted(self.evidence)
-            ],
+            "evidence": [self.evidence[key].to_dict() for key in sorted(self.evidence)],
         }
 
 
@@ -291,12 +291,9 @@ class TypedAssetGraph:
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
-            "assets": [
-                self.assets[key].to_dict() for key in sorted(self.assets)
-            ],
+            "assets": [self.assets[key].to_dict() for key in sorted(self.assets)],
             "relationships": [
-                self.relationships[key].to_dict()
-                for key in sorted(self.relationships)
+                self.relationships[key].to_dict() for key in sorted(self.relationships)
             ],
         }
 
