@@ -161,6 +161,30 @@ def ingest_discovery_summary(
                 url_id, host_id, RelationshipType.HOSTED_ON, evidence=evidence
             )
 
+            tls = finding.get("tls", {})
+            fingerprint = (
+                tls.get("sha256_fingerprint") if isinstance(tls, dict) else None
+            )
+            if isinstance(fingerprint, str) and len(fingerprint) == 64:
+                if all(char in "0123456789abcdef" for char in fingerprint.lower()):
+                    certificate_id = finding_graph.add_asset(
+                        AssetType.CERTIFICATE,
+                        f"sha256:{fingerprint.lower()}",
+                        metadata={
+                            "subject": str(tls.get("subject", ""))[:500],
+                            "issuer": str(tls.get("issuer", ""))[:500],
+                            "not_before": str(tls.get("not_before", ""))[:100],
+                            "not_after": str(tls.get("not_after", ""))[:100],
+                        },
+                        evidence=evidence,
+                    )
+                    finding_graph.add_relationship(
+                        certificate_id,
+                        host_id,
+                        RelationshipType.CERTIFICATE_FOR,
+                        evidence=evidence,
+                    )
+
             redirects = finding.get("redirects", [])
             if isinstance(redirects, list):
                 for redirect in redirects:
