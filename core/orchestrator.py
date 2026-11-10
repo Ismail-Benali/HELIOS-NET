@@ -97,9 +97,15 @@ class Orchestrator:
         """Fails before any step runs when a step leaves the authorized scope."""
         for step in steps:
             self.scope.check(step.target)
-            requested = step.params.get("ports")
-            if requested:
-                self.scope.check_ports([int(port) for port in requested])
+            # Every network-facing port list must pass the same policy gate,
+            # regardless of which runner consumes it.
+            for key in ("ports", "web_ports"):
+                requested = step.params.get(key)
+                if requested:
+                    self.scope.check_ports([int(port) for port in requested])
+            single_port = step.params.get("port")
+            if single_port is not None:
+                self.scope.check_ports([int(single_port)])
 
     def _finalize_graph(self, state: CampaignState) -> None:
         """Builds asset graph from findings and records high-centrality targets."""
