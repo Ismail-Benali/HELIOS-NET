@@ -195,7 +195,9 @@ def cmd_assets(args: Any) -> int:
 
         graph_payload = summary.get("graph")
         if not isinstance(graph_payload, dict):
-            print("[HELIOS] graph export unavailable: discovery did not return a typed graph.")
+            print(
+                "[HELIOS] graph export unavailable: discovery did not return a typed graph."
+            )
             return 2
         output_path = Path(graph_output)
         try:
@@ -239,7 +241,14 @@ def cmd_graph(args: Any) -> int:
             target_asset=getattr(args, "target_asset", None),
             backend=None if args.backend == "auto" else args.backend,
         )
-    except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError, RuntimeError) as exc:
+    except (
+        OSError,
+        json.JSONDecodeError,
+        TypeError,
+        ValueError,
+        KeyError,
+        RuntimeError,
+    ) as exc:
         print(f"[HELIOS] graph analysis failed: {exc}")
         return 2
 
@@ -540,11 +549,19 @@ def build_parser() -> argparse.ArgumentParser:
     g = sub.add_parser("graph", help="Analyze an exported typed asset graph locally")
     g.add_argument("action", choices=["analyze"], help="Graph operation")
     g.add_argument("--input", required=True, help="Typed graph JSON exported by assets")
-    g.add_argument("--source-asset", default=None, help="Source typed asset ID for a shortest path")
-    g.add_argument("--target-asset", default=None, help="Target typed asset ID for a shortest path")
+    g.add_argument(
+        "--source-asset", default=None, help="Source typed asset ID for a shortest path"
+    )
+    g.add_argument(
+        "--target-asset", default=None, help="Target typed asset ID for a shortest path"
+    )
     g.add_argument("--backend", choices=["auto", "rust", "python"], default="auto")
-    g.add_argument("--limit", type=int, default=20, help="Maximum centrality rows to print")
-    g.add_argument("--json-output", default=None, help="Write the full analysis result as JSON")
+    g.add_argument(
+        "--limit", type=int, default=20, help="Maximum centrality rows to print"
+    )
+    g.add_argument(
+        "--json-output", default=None, help="Write the full analysis result as JSON"
+    )
     g.set_defaults(fn=cmd_graph)
 
     rc = sub.add_parser("recover", help="Recover campaign state from disk")
