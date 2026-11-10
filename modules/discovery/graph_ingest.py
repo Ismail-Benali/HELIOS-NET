@@ -10,14 +10,6 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
-from engine.graph.model import (
-    AssetType,
-    Evidence,
-    RelationshipType,
-    TypedAssetGraph,
-)
-
-
 _EVIDENCE_FIELDS = (
     "module",
     "host",
@@ -67,7 +59,9 @@ def _evidence(
     observed_at: str,
     reference: str,
     attributes: dict[str, Any],
-) -> Evidence:
+) -> "Evidence":
+    from engine.graph.model import Evidence
+
     return Evidence(
         source=source,
         observed_at=observed_at,
@@ -81,13 +75,15 @@ def ingest_discovery_summary(
     *,
     observed_at: str | None = None,
     reference: str = "",
-) -> tuple[TypedAssetGraph, int]:
+) -> tuple["TypedAssetGraph", int]:
     """Build a typed graph from a discover_assets() summary.
 
     The summary's findings are treated as observations from already-authorized
     probes. The blocked list is never ingested. Invalid or incomplete findings
     are skipped and counted; no target is resolved or contacted here.
     """
+    from engine.graph.model import AssetType, RelationshipType, TypedAssetGraph
+
     timestamp = observed_at or datetime.now(timezone.utc).isoformat()
     graph = TypedAssetGraph()
     skipped = 0
