@@ -5,6 +5,7 @@ metadata, and evidence. Rust receives only a deterministic, undirected topology
 projection for connectivity metrics; no typed semantics or provenance are
 discarded from the source graph or returned report.
 """
+
 from __future__ import annotations
 
 import math
