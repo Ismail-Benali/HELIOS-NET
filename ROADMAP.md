@@ -50,8 +50,7 @@ and evidence model as one-time campaigns.
 
 ## Current implementation notes
 
-- The P0 implementation is being developed on
-  `hardening/p0-architecture-scope-ipc`; merge only after CI and review.
+- P0 scope and contract hardening is merged into `master` (PR #31).
 - The Go scanner is a process/NDJSON component, the C core is a process
   component, and Rust is currently exposed through a C ABI. They do not share
   one transport protocol.
@@ -61,3 +60,9 @@ and evidence model as one-time campaigns.
 - Evasion, endpoint bypass, and stealth expansion are not roadmap priorities.
   The project should first demonstrate reliable, auditable, authorized
   discovery and analysis.
+
+- The explainable risk-scoring increment is merged into `master` (PR #33).
+- The first typed Asset Graph increment is under review: canonical asset IDs,
+  typed directed relationships, evidence provenance, deduplication, and stable
+  JSON exports. It remains additive beside the legacy Rust/Python analytics
+  graph until a versioned native projection is specified.
