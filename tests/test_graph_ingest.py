@@ -1,4 +1,5 @@
 """Tests for discovery-to-typed-graph ingestion."""
+
 from __future__ import annotations
 
 from modules.discovery.graph_ingest import ingest_discovery_summary
