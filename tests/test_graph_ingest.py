@@ -4,7 +4,7 @@ from typing import Any
 
 def ingest_discovery_summary(
     summary: dict[str, Any], *, observed_at: str, reference: str = ""
-):
+) -> tuple[Any, int]:
     from modules.discovery.graph_ingest import ingest_discovery_summary as ingest
 
     return ingest(summary, observed_at=observed_at, reference=reference)
