@@ -391,3 +391,73 @@ def test_a_command_returning_a_nonzero_code_reaches_the_caller(monkeypatch):
 
     monkeypatch.setattr(cli, "build_parser", patched_build)
     assert cli.main(["status"]) == 3
+
+
+def test_assets_command_exports_the_typed_graph(tmp_path, capsys, monkeypatch):
+    import json
+
+    import modules.registry as registry
+    from engine.graph.model import AssetType, Evidence, TypedAssetGraph
+
+    graph = TypedAssetGraph()
+    graph.add_asset(
+        AssetType.HOST,
+        "app.test",
+        evidence=Evidence(
+            source="test",
+            observed_at="2026-11-10T20:00:00+00:00",
+        ),
+    )
+    graph_payload = graph.to_dict()
+
+    def fake_runner(step, ctx):
+        return {
+            "module": "asset",
+            "host": step.target,
+            "hosts": ["app.test"],
+            "assets": 1,
+            "requests": 1,
+            "blocked": [],
+            "graph": graph_payload,
+        }
+
+    monkeypatch.setattr(registry, "asset_runner", fake_runner)
+    destination = tmp_path / "graphs" / "app.json"
+    code = cli.cmd_assets(
+        _args(
+            target="app.test",
+            ct=False,
+            depth=1,
+            max_hosts=5,
+            max_requests=10,
+            web_ports=None,
+            graph_output=str(destination),
+        )
+    )
+
+    assert code == 0
+    assert json.loads(destination.read_text(encoding="utf-8")) == graph_payload
+    assert "typed graph exported" in capsys.readouterr().out
+
+
+def test_graph_parser_accepts_terminal_analysis_arguments():
+    args = cli.build_parser().parse_args(
+        [
+            "graph",
+            "analyze",
+            "--input",
+            "graph.json",
+            "--backend",
+            "python",
+            "--source-asset",
+            "host:abc",
+            "--target-asset",
+            "ip:def",
+        ]
+    )
+
+    assert args.cmd == "graph"
+    assert args.action == "analyze"
+    assert args.backend == "python"
+    assert args.source_asset == "host:abc"
+    assert args.target_asset == "ip:def"
