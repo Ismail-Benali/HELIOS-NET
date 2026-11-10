@@ -232,6 +232,14 @@ def test_a_host_specific_response_is_recorded_as_a_vhost(make_server):
     assert finding["status"] == 200
     assert finding["title"] == "Vhost App"
     assert finding["service"] == "http"
+    assert summary["graph_skipped"] == 0
+    assert summary["graph"]["schema_version"] == "1.0"
+    asset_types = {asset["type"] for asset in summary["graph"]["assets"]}
+    assert {"host", "ip", "service", "url"} <= asset_types
+    relation_types = {
+        edge["type"] for edge in summary["graph"]["relationships"]
+    }
+    assert {"resolves_to", "hosts_service", "hosted_on"} <= relation_types
 
 
 def test_an_identical_response_is_not_labelled_a_vhost(make_server):
