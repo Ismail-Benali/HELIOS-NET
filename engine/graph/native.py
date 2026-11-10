@@ -43,7 +43,9 @@ class GraphProjection:
 def load_typed_graph(payload: Any) -> TypedAssetGraph:
     """Validate and load a schema-versioned TypedAssetGraph export."""
     if not isinstance(payload, dict) or payload.get("schema_version") != "1.0":
-        raise ValueError("unsupported or missing typed graph schema_version (expected 1.0)")
+        raise ValueError(
+            "unsupported or missing typed graph schema_version (expected 1.0)"
+        )
     raw_assets = payload.get("assets")
     raw_relationships = payload.get("relationships")
     if not isinstance(raw_assets, list) or not isinstance(raw_relationships, list):
@@ -76,11 +78,16 @@ def load_typed_graph(payload: Any) -> TypedAssetGraph:
             evidence_items.append(evidence)
         if evidence_items:
             for evidence in evidence_items:
-                new_id = graph.add_asset(row.get("type", ""), row.get("value", ""),
-                                         metadata=metadata, evidence=evidence)
+                new_id = graph.add_asset(
+                    row.get("type", ""),
+                    row.get("value", ""),
+                    metadata=metadata,
+                    evidence=evidence,
+                )
         else:
-            new_id = graph.add_asset(row.get("type", ""), row.get("value", ""),
-                                     metadata=metadata)
+            new_id = graph.add_asset(
+                row.get("type", ""), row.get("value", ""), metadata=metadata
+            )
         if new_id != old_id:
             raise ValueError(f"asset identity mismatch for {old_id!r}")
         id_map[old_id] = new_id
@@ -115,7 +122,10 @@ def load_typed_graph(payload: Any) -> TypedAssetGraph:
         if evidence_items:
             for evidence in evidence_items:
                 new_id = graph.add_relationship(
-                    source, target, row.get("type", ""), metadata=metadata,
+                    source,
+                    target,
+                    row.get("type", ""),
+                    metadata=metadata,
                     evidence=evidence,
                 )
         else:
@@ -136,13 +146,15 @@ def build_projection(graph: TypedAssetGraph) -> GraphProjection:
     for relationship in sorted(graph.relationships.values(), key=lambda item: item.id):
         source = indices[relationship.source]
         target = indices[relationship.target]
-        relationship_rows.append({
-            "relationship_id": relationship.id,
-            "type": relationship.type.value,
-            "source_index": source,
-            "target_index": target,
-            "directed": True,
-        })
+        relationship_rows.append(
+            {
+                "relationship_id": relationship.id,
+                "type": relationship.type.value,
+                "source_index": source,
+                "target_index": target,
+                "directed": True,
+            }
+        )
         if source != target:
             edge_set.add((min(source, target), max(source, target)))
     return GraphProjection(
@@ -168,9 +180,7 @@ def _valid_ranking(value: Any, count: int, *, bounded: bool) -> bool:
     )
 
 
-def _validated(
-    operation: str, call: Any, valid: Any, backend: str | None
-) -> Any:
+def _validated(operation: str, call: Any, valid: Any, backend: str | None) -> Any:
     """Reject malformed native results instead of presenting them as success."""
     from core.accel import GraphOutcome
 
@@ -217,7 +227,8 @@ def analyze_typed_graph(
         lambda value: (
             isinstance(value, list)
             and all(isinstance(group, list) for group in value)
-            and sorted(index for group in value for index in group) == list(range(count))
+            and sorted(index for group in value for index in group)
+            == list(range(count))
         ),
         backend,
     )
@@ -225,16 +236,25 @@ def analyze_typed_graph(
         "betweenness",
         lambda prefer: accel.graph_betweenness(count, edges, prefer=prefer),
         lambda value: (
-            isinstance(value, list) and len(value) == count
-            and all(isinstance(score, (int, float)) and math.isfinite(score) and score >= 0
-                    for score in value)
+            isinstance(value, list)
+            and len(value) == count
+            and all(
+                isinstance(score, (int, float))
+                and math.isfinite(score)
+                and score >= 0
+                for score in value
+            )
         ),
         backend,
     )
 
     def asset_record(asset_id: str) -> dict[str, str]:
         asset = graph.assets[asset_id]
-        return {"id": asset.id, "type": asset.type.value, "value": asset.canonical_value}
+        return {
+            "id": asset.id,
+            "type": asset.type.value,
+            "value": asset.canonical_value,
+        }
 
     result: dict[str, Any] = {
         "schema_version": "1.0",
@@ -259,8 +279,14 @@ def analyze_typed_graph(
         ],
         "engines": {
             "degree_centrality": {"engine": degree.engine, "reason": degree.reason},
-            "betweenness_centrality": {"engine": betweenness.engine, "reason": betweenness.reason},
-            "connected_components": {"engine": components.engine, "reason": components.reason},
+            "betweenness_centrality": {
+                "engine": betweenness.engine,
+                "reason": betweenness.reason,
+            },
+            "connected_components": {
+                "engine": components.engine,
+                "reason": components.reason,
+            },
         },
         "semantics": (
             "Connectivity metrics are computed on an undirected topology projection. "
@@ -281,14 +307,20 @@ def analyze_typed_graph(
                 count, edges, source_index, target_index, prefer=prefer
             ),
             lambda value: (
-                value is None or (
-                    isinstance(value, tuple) and len(value) == 2
-                    and isinstance(value[0], int) and isinstance(value[1], list)
+                value is None
+                or (
+                    isinstance(value, tuple)
+                    and len(value) == 2
+                    and isinstance(value[0], int)
+                    and isinstance(value[1], list)
                     and value[0] == len(value[1]) - 1
                     and len(value[1]) > 0
-                    and value[1][0] == source_index and value[1][-1] == target_index
-                    and all((min(a, b), max(a, b)) in set(edges)
-                            for a, b in zip(value[1], value[1][1:]))
+                    and value[1][0] == source_index
+                    and value[1][-1] == target_index
+                    and all(
+                        (min(a, b), max(a, b)) in set(edges)
+                        for a, b in zip(value[1], value[1][1:])
+                    )
                 )
             ),
             backend,
@@ -296,13 +328,15 @@ def analyze_typed_graph(
         result["shortest_path"] = {
             "source": asset_record(source_asset),
             "target": asset_record(target_asset),
-            "hops": path.value[0] if path.value is not None else None,
+            "hops": path.value[0] if path.value is not None
+            else None,
             "path": [asset_record(node_ids[index]) for index in path.value[1]]
             if path.value is not None else None,
             "engine": path.engine,
             "reason": path.reason,
         }
         result["engines"]["shortest_path"] = {
-            "engine": path.engine, "reason": path.reason
+            "engine": path.engine,
+            "reason": path.reason
         }
     return result
