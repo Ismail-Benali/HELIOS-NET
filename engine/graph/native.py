@@ -299,13 +299,18 @@ def analyze_typed_graph(
             raise ValueError("path endpoints must be existing typed asset IDs")
         source_index = node_ids.index(source_asset)
         target_index = node_ids.index(target_asset)
+        connected = any(
+            source_index in group and target_index in group
+            for group in components.value
+        )
+        edge_lookup = set(edges)
         path = _validated(
             "shortest path",
             lambda prefer: accel.graph_shortest_path(
                 count, edges, source_index, target_index, prefer=prefer
             ),
             lambda value: (
-                value is None
+                (value is None and not connected)
                 or (
                     isinstance(value, tuple)
                     and len(value) == 2
@@ -316,7 +321,7 @@ def analyze_typed_graph(
                     and value[1][0] == source_index
                     and value[1][-1] == target_index
                     and all(
-                        (min(a, b), max(a, b)) in set(edges)
+                        (min(a, b), max(a, b)) in edge_lookup
                         for a, b in zip(value[1], value[1][1:])
                     )
                 )
@@ -328,7 +333,8 @@ def analyze_typed_graph(
             "target": asset_record(target_asset),
             "hops": path.value[0] if path.value is not None else None,
             "path": [asset_record(node_ids[index]) for index in path.value[1]]
-            if path.value is not None else None,
+            if path.value is not None
+            else None,
             "engine": path.engine,
             "reason": path.reason,
         }
