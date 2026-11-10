@@ -393,7 +393,6 @@ def test_a_command_returning_a_nonzero_code_reaches_the_caller(monkeypatch):
     assert cli.main(["status"]) == 3
 
 
-
 def test_assets_command_exports_the_typed_graph(tmp_path, capsys, monkeypatch):
     import json
 
