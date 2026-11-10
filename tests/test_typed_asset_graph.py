@@ -13,7 +13,9 @@ from engine.graph.model import (
 )
 
 
-def evidence(source: str = "dns", observed_at: str = "2026-11-10T12:00:00Z") -> Evidence:
+def evidence(
+    source: str = "dns", observed_at: str = "2026-11-10T12:00:00Z"
+) -> Evidence:
     return Evidence(
         source=source,
         observed_at=observed_at,
@@ -93,9 +95,7 @@ def test_merge_preserves_provenance_and_deduplicates_identity() -> None:
     right = TypedAssetGraph()
     left_domain = left.add_asset("domain", "example.com", evidence=evidence())
     left_ip = left.add_asset("ip", "192.0.2.10")
-    left.add_relationship(
-        left_domain, left_ip, "resolves_to", evidence=evidence()
-    )
+    left.add_relationship(left_domain, left_ip, "resolves_to", evidence=evidence())
     right_domain = right.add_asset(
         "domain",
         "EXAMPLE.COM.",
