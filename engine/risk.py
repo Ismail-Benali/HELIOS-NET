@@ -4,6 +4,7 @@ This scorer is a deterministic prioritisation heuristic, not a CVSS calculator
 or a claim that a vulnerability has been exploited. It consumes existing
 VerdictEngine rules and preserves the rule-level explanation in every result.
 """
+
 from __future__ import annotations
 
 import math
@@ -16,13 +17,21 @@ from engine.verdict import Rule, default_rules
 SCORING_VERSION = "1.0"
 DEFAULT_CONFIDENCE = 0.75
 DEFAULT_EVIDENCE_FIELDS = (
-    "host", "ip", "target", "port", "service", "version", "status", "finding_note",
+    "host",
+    "ip",
+    "target",
+    "port",
+    "service",
+    "version",
+    "status",
+    "finding_note",
 )
 
 
 @dataclass(frozen=True)
 class RiskFactor:
     """One matched rule and the evidence that supports it."""
+
     rule: str
     weight: float
     confidence: float
@@ -44,6 +53,7 @@ class RiskFactor:
 @dataclass(frozen=True)
 class RiskAssessment:
     """Stable risk result with traceable factors."""
+
     score: int
     severity: str
     confidence: float
@@ -125,10 +135,16 @@ class RiskScorer:
             if contribution <= 0:
                 continue
             refs = tuple(key for key in self._evidence_fields if key in evidence)
-            factors.append(RiskFactor(
-                rule=rule.name, weight=weight, confidence=confidence,
-                contribution=contribution, note=rule.note, evidence_refs=refs,
-            ))
+            factors.append(
+                RiskFactor(
+                    rule=rule.name,
+                    weight=weight,
+                    confidence=confidence,
+                    contribution=contribution,
+                    note=rule.note,
+                    evidence_refs=refs,
+                )
+            )
 
         # A bounded heuristic, not a calibrated probability.
         remaining = 1.0
@@ -136,8 +152,11 @@ class RiskScorer:
             remaining *= 1.0 - factor.contribution
         score = round((1.0 - remaining) * 100)
         return RiskAssessment(
-            score=score, severity=self._severity(score), confidence=confidence,
-            factors=tuple(factors), evidence=evidence,
+            score=score,
+            severity=self._severity(score),
+            confidence=confidence,
+            factors=tuple(factors),
+            evidence=evidence,
         )
 
     def assess_all(self, findings: Iterable[dict[str, Any]]) -> list[RiskAssessment]:
