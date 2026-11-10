@@ -135,10 +135,10 @@ def ingest_discovery_summary(
                 metadata={"protocol": "tcp", "port": port, "name": service_name},
                 evidence=evidence,
             )
-            finding_graph.add_relationship(
+            finding_finding_graph.add_relationship(
                 host_id, ip_id, RelationshipType.RESOLVES_TO, evidence=evidence
             )
-            graph.add_relationship(
+            finding_graph.add_relationship(
                 host_id, service_id, RelationshipType.HOSTS_SERVICE,
                 metadata={"port": port}, evidence=evidence,
             )
@@ -149,7 +149,7 @@ def ingest_discovery_summary(
                 f"{scheme}://{host}:{port}/",
                 evidence=evidence,
             )
-            graph.add_relationship(
+            finding_graph.add_relationship(
                 url_id, host_id, RelationshipType.HOSTED_ON, evidence=evidence
             )
 
@@ -174,7 +174,7 @@ def ingest_discovery_summary(
                     target_id = finding_graph.add_asset(
                         AssetType.URL, target_url, evidence=evidence
                     )
-                    graph.add_relationship(
+                    finding_graph.add_relationship(
                         source_id, target_id, RelationshipType.REDIRECTS_TO,
                         metadata={"status": redirect.get("status")},
                         evidence=evidence,
