@@ -1,5 +1,7 @@
 # Polyglot Architecture & IPC
 
+This is the canonical component map. See [API contracts](API.md), [scope enforcement](SCOPE-ENFORCEMENT.md), and [native IPC contracts](IPC-CONTRACT.md) for the detailed policy and wire-level specifications.
+
 HELIOS-NET is engineered as a polyglot architecture across four languages, each
 selected for a specific strength:
 
@@ -24,12 +26,13 @@ selected for a specific strength:
 | `transport/c_core` | `helios_core match\|fp\|selftest` | C signature & fingerprint core |
 | `rust-core` | `helios_match_signatures` (C-ABI) | Rust signature matching, loaded by ctypes |
 
-## IPC contracts
+## Process IPC contracts
 
-All native components communicate over `stdin`/`stdout` using structured JSON
-(NDJSON for streaming components). Go components stream one result object per
-line; the C core returns one JSON object per input line. Failures are reported
-as a standardized **Error Envelope (SEE)** on stderr:
+Process-based native components communicate over `stdin`/`stdout` using structured JSON
+(NDJSON for streaming components). Go's long-lived worker uses correlated JSON
+request/reply records; the C core returns one JSON object per input line. Failures are reported
+as a standardized **Error Envelope (SEE)** on stderr. Rust is loaded in-process
+through a C ABI and is not part of this stdin/stdout protocol:
 
 ```json
 {"status": "error", "code": "EDR_BLOCKED", "message": "...", "component": "transport/goscan"}

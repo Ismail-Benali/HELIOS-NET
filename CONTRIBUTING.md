@@ -37,7 +37,7 @@ Understanding the layering helps you place your contribution correctly:
 Python Orchestration Layer        core/  · engine/ · modules/ · cli/ · run.py
 Native Transport Layer (Go & C)   transport/  (goscan, rawsync, evasion, ...)
 High-Performance Rust Core        rust-core/  (graph pathfinding, TTL analysis)
-Documentation                      docs/ · README.md · ARCHITECTURE.md · ROADMAP.md
+Documentation                      docs/ · README.md · ROADMAP.md
 Automation                         build.py · .github/workflows/build.yml
 ```
 
@@ -45,10 +45,23 @@ Automation                         build.py · .github/workflows/build.yml
 |-------|---------|
 | `core/` | State, WAL, orchestration, planning, reporting, mutation, daemon |
 | `engine/` | Graph, pathfinding, algorithms, verdicts, scanners, plugins |
-| `modules/` | Discovery, recon, stealth, registry, plugins |
+| `modules/` | Discovery, asset metadata, recon, collection, registry, plugins |
 | `transport/` | Go & C binaries that run natively via IPC/FFI |
 | `rust-core/` | Pure-stdlib Rust primitives exposed via a `ctypes` FFI bridge |
 | `cli/` + `run.py` | Command-line entry points and daemon control |
+
+---
+
+## Canonical technical references
+
+- [Architecture and native-core map](docs/Architecture.md)
+- [Internal API and module contracts](docs/API.md)
+- [Scope enforcement and authorization boundary](docs/SCOPE-ENFORCEMENT.md)
+- [Native IPC and NDJSON contract](docs/IPC-CONTRACT.md)
+- [Engineering roadmap](ROADMAP.md)
+
+These documents describe the current implementation. Do not copy an obsolete
+module or transport description into a new feature.
 
 ---
 
@@ -99,10 +112,12 @@ Modules are the primary extension point. They live under `modules/` (e.g. `modul
 5. Document the module in `docs/`.
 
 ### Module contract
-- **stdin**: JSON input (target, scope, parameters).
-- **stdout**: JSON output (findings, structured records).
-- **stderr**: diagnostics only — never parse business data from stderr.
-- **Exit codes**: `0` on success, non-zero on failure.
+In-process runners use `runner(step: PlanStep, context: dict) -> dict`.
+They receive the active campaign scope in the context and must enforce it
+before network access. Native subprocesses follow their component-specific
+UTF-8 JSON/NDJSON contract; Rust uses a C ABI rather than stdin/stdout. See
+[API](docs/API.md), [scope policy](docs/SCOPE-ENFORCEMENT.md), and
+[IPC contract](docs/IPC-CONTRACT.md).
 
 > 💡 New modules must follow the same standards below: English-only, zero external pip dependencies, and unit tests.
 
