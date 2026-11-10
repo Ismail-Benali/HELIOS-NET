@@ -1,4 +1,5 @@
 """Tests for typed asset identity, edge validation, and provenance."""
+
 from __future__ import annotations
 
 import json
