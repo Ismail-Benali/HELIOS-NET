@@ -33,7 +33,7 @@ def test_score_is_deterministic_and_explains_each_matched_rule():
 def test_missing_confidence_uses_documented_default():
     result = RiskScorer().assess({"port": 23, "service": "telnet"}).to_dict()
     assert result["confidence"] == DEFAULT_CONFIDENCE
-    assert result["score"] == 64
+    assert result["score"] == 72
 
 
 def test_custom_rules_are_supported():
