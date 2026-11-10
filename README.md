@@ -134,6 +134,34 @@ Discovery routes every port through `core.accel.scan_ports` (Go when built,
 socket probe otherwise), and recon matches the collected banners through the
 C/Rust/Python signature core. Each finding records the engine that answered.
 
+### 5. Export and Analyze the Typed Asset Graph (Terminal)
+
+Export the graph produced by scope-bound asset discovery:
+
+```bash
+python run.py assets --target example.test --ct --depth 1 --graph-output data/graphs/example-test.json
+```
+
+Run the native-backed topology analysis (Python is selected automatically if
+the Rust library is unavailable):
+
+```bash
+python run.py graph analyze --input data/graphs/example-test.json
+```
+
+Request a shortest topology path between two asset IDs and save the complete
+analysis as JSON:
+
+```bash
+python run.py graph analyze --input data/graphs/example-test.json --source-asset "host:ASSET_ID" --target-asset "ip:ASSET_ID" --json-output data/reports/graph-analysis.json
+```
+
+The IDs above are placeholders; use the exact IDs printed in the graph export.
+The command performs no network activity. Rust analytics use an undirected
+connectivity projection; typed direction, relationship kinds, and evidence
+remain in the original graph and report. Use `--backend python` to force the
+reference implementation or `--backend rust` to prefer the native library.
+
 ### 5. Run the End-to-End Simulation
 ```bash
 python run_simulation.py
