@@ -7,8 +7,8 @@ discarded from the source graph or returned report.
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
+import math
 from typing import Any
 
 from engine.graph.model import Evidence, TypedAssetGraph
@@ -89,8 +89,10 @@ def load_typed_graph(payload: Any) -> TypedAssetGraph:
         if not isinstance(row, dict):
             raise ValueError("each relationship must be an object")
         old_id = row.get("id")
-        source = id_map.get(row.get("source"))
-        target = id_map.get(row.get("target"))
+        source_ref = row.get("source")
+        target_ref = row.get("target")
+        source = id_map.get(source_ref) if isinstance(source_ref, str) else None
+        target = id_map.get(target_ref) if isinstance(target_ref, str) else None
         evidence_rows = row.get("evidence", [])
         metadata = row.get("metadata", {})
         if not isinstance(old_id, str) or source is None or target is None:
@@ -166,7 +168,9 @@ def _valid_ranking(value: Any, count: int, *, bounded: bool) -> bool:
     )
 
 
-def _validated(operation: str, call: Any, valid: Any, backend: str | None):
+def _validated(
+    operation: str, call: Any, valid: Any, backend: str | None
+) -> Any:
     """Reject malformed native results instead of presenting them as success."""
     from core.accel import GraphOutcome
 
