@@ -64,14 +64,25 @@ exports. The export carries `schema_version: 1.0`.
 
 ## Native engine interoperability
 
-This first increment intentionally keeps the typed domain model in Python.
-The existing Rust graph API consumes integer-indexed undirected edges for
-centrality and pathfinding; that API cannot represent relationship direction,
-types, metadata, or provenance. Passing typed edges into it without a versioned
-native contract would discard semantics. A later parity increment should define
-a versioned flat projection and explicit Rust result mapping before changing
-the ABI. C and Go currently do not own graph semantics and should emit
-observations, not independent asset identities.
+The typed Python model remains authoritative for asset identity, directed
+relationship types, metadata, and evidence. `engine.graph.native` introduces
+the versioned `helios.rust-graph-projection/1` adapter. It assigns stable
+indices by sorted asset ID and maps every Rust result index back to the original
+typed asset ID.
+
+The current Rust ABI consumes an undirected integer topology. The adapter
+therefore deduplicates endpoint pairs for connectivity metrics while retaining
+the complete directed relationship ledger (relationship ID, type, source and
+target indices) in the projection and final report. This is deliberately a
+topology projection: centrality, connected components, and shortest paths are
+not directed reachability, exploitability, or authorization decisions. No
+relationship type or evidence is deleted from the typed graph.
+
+Every native result is shape-checked before it is accepted. If an automatic
+Rust result is malformed, the adapter reruns that operation through the Python
+reference and records the degradation. Explicit `--backend rust` does not
+silently relabel a Python result as native. C and Go remain observation
+producers, not independent owners of graph identity.
 
 ## Limitations
 
