@@ -1,4 +1,5 @@
 """Tests for the versioned typed-graph projection and terminal analysis."""
+
 from __future__ import annotations
 
 import json
@@ -35,7 +36,9 @@ def typed_graph() -> TypedAssetGraph:
     return graph
 
 
-def test_projection_is_stable_and_keeps_directed_typed_relationship_records(typed_graph):
+def test_projection_is_stable_and_keeps_directed_typed_relationship_records(
+    typed_graph,
+):
     first = build_projection(typed_graph)
     second = build_projection(typed_graph)
 
@@ -71,7 +74,8 @@ def test_loader_rejects_unknown_schema_and_tampered_identity(typed_graph):
 
 def test_python_projection_analysis_maps_indices_back_to_assets(typed_graph):
     host_id = next(
-        asset.id for asset in typed_graph.assets.values()
+        asset.id
+        for asset in typed_graph.assets.values()
         if asset.canonical_value == "api.example.test"
     )
     ip_id = next(
@@ -99,8 +103,7 @@ def test_python_projection_analysis_maps_indices_back_to_assets(typed_graph):
         ip_id,
     ]
     assert all(
-        item["engine"] == "python-fallback"
-        for item in result["engines"].values()
+        item["engine"] == "python-fallback" for item in result["engines"].values()
     )
 
 
