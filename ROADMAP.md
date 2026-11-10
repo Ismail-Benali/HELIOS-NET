@@ -1,40 +1,63 @@
-# HELIOS-NET :: Official Project Roadmap
+# HELIOS-NET :: Engineering Roadmap
 
-This roadmap outlines the future evolution phases for **HELIOS-NET**, detailing upcoming elite capabilities and architectural milestones.
+This roadmap prioritizes correctness, authorization, and interoperability
+before operator-facing features. Work is ordered by dependency, not by
+visibility.
 
----
+## P0 — Engineering foundation
 
-## 🚀 Phase 1: Decentralized Mesh Coordination (Target: Q3 2026)
-* **Objective:** Transition from single-node orchestration to a decentralized coordination mesh.
-* **Milestones:**
-  - [ ] Implement secure P2P node discovery in Go.
-  - [ ] Add end-to-end encrypted channel encryption for inter-node communication.
-  - [ ] Enable automatic failover and load balancing across active mesh nodes.
+| Priority | Work | Completion evidence |
+|---|---|---|
+| P0 | Unify architecture and documentation | One current component map; obsolete module descriptions removed; README, Architecture, API, and contributor guidance agree |
+| P0 | Review scope enforcement | Target and port checks happen before execution; DNS/redirect boundaries are tested; denied targets produce no connection |
+| P0 | Stabilize IPC and NDJSON contracts | UTF-8, framing, request correlation, SEE errors, timeout and fallback semantics are documented and tested |
 
----
+**Exit gate:** all P0 changes pass Python tests, native contract tests where
+available, and CI on supported platforms. No claim of complete authorization
+is made for arbitrary plugins or direct socket code outside the enforced
+runners.
 
-## 🛡️ Phase 2: Advanced User-Mode Evasion & OPSEC (Target: Q4 2026)
-* **Objective:** Harden user-mode evasion primitives to operate under modern EDR/AV instrumentation.
-* **Milestones:**
-  - [ ] Implement indirect syscalls with dynamically resolved NTDLL SSNs (no hardcoded offsets).
-  - [ ] Add advanced API unhooking (NTDLL / kernel32 restorative stubs).
-  - [ ] Introduce in-memory encryption of sensitive regions with runtime lazy decryption.
-  - [ ] Add randomized module-load ordering and timing jitter to reduce behavioral fingerprinting.
+## P1 — Intelligence and engine consistency
 
----
+| Priority | Work | Completion evidence |
+|---|---|---|
+| P1 | Unify C/Rust/Go engine interfaces | Capability registry is authoritative; common result/provenance shapes; backend parity and failure-state tests |
+| P1 | Develop Asset Graph | Stable asset identities, typed relationships, provenance, deduplication, isolated nodes, and reproducible graph exports |
+| P1 | Develop Risk Scoring | Explainable factors, evidence references, confidence, severity, and deterministic scoring with regression fixtures |
 
-## 🧠 Phase 3: Heuristic Finding & Adaptive Verification (Target: Q1 2027)
-* **Objective:** Integrate local reasoning loops for automated weakness detection in authorized scopes.
-* **Milestones:**
-  - [ ] Integrate lightweight local heuristic reasoning modules.
-  - [ ] Implement automated logic and misconfiguration inference from raw web/service responses.
-  - [ ] Expand verdict rule engine with dynamic contextual learning.
+**Exit gate:** equivalent inputs produce consistent normalized findings;
+engine selection and fallback are visible in reports; every risk score can be
+explained from evidence.
 
----
+## P2 — Operator experience
 
-## 📡 Phase 4: Non-IP Asset Discovery (Target: Q2 2027)
-* **Objective:** Expand asset discovery scope beyond traditional IP/TCP networks.
-* **Milestones:**
-  - [ ] Add Software Defined Radio (SDR) integration modules in C/Python.
-  - [ ] Implement Wi-Fi probe and Bluetooth proximity asset detection sensors.
-  - [ ] Map wireless and RF nodes directly into the Asset Graph topology.
+| Priority | Work | Completion evidence |
+|---|---|---|
+| P2 | Dashboard | Campaign list/detail, live state, backend health, errors, and scope visibility |
+| P2 | Interactive reports | Filterable findings, asset relationships, risk explanations, export, and evidence provenance |
+
+**Exit gate:** the UI consumes versioned internal APIs and does not duplicate
+business logic or bypass scope enforcement.
+
+## P3 — Continuous asset monitoring
+
+| Priority | Work | Completion evidence |
+|---|---|---|
+| P3 | Continuous asset monitoring | Scheduled, scope-bound rechecks; baseline snapshots; change detection; deduplicated alerts and audit history |
+
+**Exit gate:** monitoring reuses the same authorization policy, rate limits,
+and evidence model as one-time campaigns.
+
+## Current implementation notes
+
+- The P0 implementation is being developed on
+  `hardening/p0-architecture-scope-ipc`; merge only after CI and review.
+- The Go scanner is a process/NDJSON component, the C core is a process
+  component, and Rust is currently exposed through a C ABI. They do not share
+  one transport protocol.
+- Empty port allowlists currently retain backward-compatible any-port
+  semantics for an otherwise authorized target. Explicit port lists are
+  recommended for least-privilege engagements.
+- Evasion, endpoint bypass, and stealth expansion are not roadmap priorities.
+  The project should first demonstrate reliable, auditable, authorized
+  discovery and analysis.
