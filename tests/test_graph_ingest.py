@@ -1,8 +1,14 @@
 """Tests for discovery-to-typed-graph ingestion."""
+from typing import Any
 
-from __future__ import annotations
 
-from modules.discovery.graph_ingest import ingest_discovery_summary
+def ingest_discovery_summary(
+    summary: dict[str, Any], *, observed_at: str, reference: str = ""
+):
+    from modules.discovery.graph_ingest import ingest_discovery_summary as ingest
+
+    return ingest(summary, observed_at=observed_at, reference=reference)
+
 
 
 OBSERVED_AT = "2026-11-10T20:30:00Z"
