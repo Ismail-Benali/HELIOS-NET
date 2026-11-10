@@ -162,6 +162,17 @@ connectivity projection; typed direction, relationship kinds, and evidence
 remain in the original graph and report. Use `--backend python` to force the
 reference implementation or `--backend rust` to prefer the native library.
 
+On Windows CMD, the included launcher avoids typing `python run.py`:
+
+```bat
+helios.cmd info
+helios.cmd assets --target example.test --graph-output data\\graphs\\example-test.json
+helios.cmd graph analyze --input data\\graphs\\example-test.json
+```
+
+From PowerShell or Windows Terminal, invoke it as `.\hellios.cmd`. The
+same `python run.py ...` commands also work in both shells.
+
 ### 5. Run the End-to-End Simulation
 ```bash
 python run_simulation.py
