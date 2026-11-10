@@ -155,3 +155,23 @@ def test_cli_graph_rejects_malformed_input(tmp_path, capsys):
 
     assert cmd_graph(args) == 2
     assert "graph analysis failed" in capsys.readouterr().out
+
+
+
+def test_native_and_python_projection_analytics_have_parity(typed_graph):
+    from core.rust_bridge import rust_available
+
+    if not rust_available():
+        pytest.skip("native Rust core is not available in this test environment")
+
+    native = analyze_typed_graph(typed_graph, backend="rust")
+    reference = analyze_typed_graph(typed_graph, backend="python")
+
+    for operation in (
+        "degree_centrality",
+        "betweenness_centrality",
+        "connected_components",
+    ):
+        assert native[operation] == reference[operation]
+        assert native["engines"][operation]["engine"] == "rust-native"
+        assert reference["engines"][operation]["engine"] == "python-fallback"
