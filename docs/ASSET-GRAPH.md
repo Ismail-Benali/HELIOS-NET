@@ -108,7 +108,9 @@ producers, not independent owners of graph identity.
 - host → IP via `resolves_to`;
 - host → TCP service via `hosts_service`;
 - URL → host via `hosted_on`;
-- redirect URL → destination URL via `redirects_to`.
+- redirect URL → destination URL via `redirects_to`;
+- TLS certificate fingerprint → observed host via `certificate_for`, when a
+  certificate was actually presented and a SHA-256 fingerprint is available.
 
 Each node and edge carries source, observation timestamp, and a bounded set of
 finding attributes. Arbitrary body excerpts are excluded. Invalid findings are
@@ -118,3 +120,11 @@ partial nodes or edges. The `blocked` list is never ingested.
 The adapter does not perform DNS, HTTP, TLS, or socket operations. It consumes
 only the already scope-checked findings emitted by asset discovery. Its
 `graph_skipped` count makes incomplete input visible to callers.
+
+For HTTPS observations, the probe records the SHA-256 fingerprint of the
+presented DER certificate. The graph uses `sha256:<hex>` as the certificate
+identity and attaches subject, issuer, and validity dates as metadata. A
+`certificate_for` edge links that certificate to the host observed during the
+authorized connection. Certificate verification remains disabled for metadata
+collection, so this edge is an observation, not a trust or hostname-validation
+verdict. Missing or malformed fingerprints are ignored rather than guessed.
