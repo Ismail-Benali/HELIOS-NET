@@ -170,15 +170,9 @@ def test_ingestion_adds_certificate_identity_and_certificate_for_edge():
 
 def test_ingestion_ignores_malformed_certificate_fingerprints():
     graph, skipped = ingest_discovery_summary(
-        {
-            "findings": [
-                finding(tls={"sha256_fingerprint": "not-a-fingerprint"})
-            ]
-        },
+        {"findings": [finding(tls={"sha256_fingerprint": "not-a-fingerprint"})]},
         observed_at=OBSERVED_AT,
     )
 
     assert skipped == 0
-    assert not any(
-        asset.type.value == "certificate" for asset in graph.assets.values()
-    )
+    assert not any(asset.type.value == "certificate" for asset in graph.assets.values())
