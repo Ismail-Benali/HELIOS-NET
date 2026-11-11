@@ -6,7 +6,7 @@ asset-discovery observations and deliberately ignores blocked candidates.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -83,7 +83,7 @@ def ingest_discovery_summary(
     """
     from engine.graph.model import AssetType, RelationshipType, TypedAssetGraph
 
-    timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+    timestamp = observed_at or datetime.now(UTC).isoformat()
     graph = TypedAssetGraph()
     skipped = 0
 
