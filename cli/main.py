@@ -137,6 +137,9 @@ def cmd_init(args: Any) -> int:
         data_path.mkdir(parents=True, exist_ok=True)
         print(f"[OK] Data directory: {data_path}")
         if scope_path.exists():
+            if not scope_path.is_file():
+                print(f"[HELIOS] scope path is not a file: {scope_path}")
+                return 1
             print(f"[KEEP] Scope file already exists; left unchanged: {scope_path}")
         else:
             scope_path.parent.mkdir(parents=True, exist_ok=True)
@@ -767,7 +770,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_runtime_options(init)
     init.set_defaults(fn=cmd_init)
-
 
     return p
 
