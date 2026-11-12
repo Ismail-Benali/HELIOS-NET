@@ -748,15 +748,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Export format",
     )
     _add_runtime_options(exp)
-    exp.set_defaults(fn=cmd_export)\n\n    version = sub.add_parser(
+    exp.set_defaults(fn=cmd_export)
+
+    version = sub.add_parser(
         "version", help="Show HELIOS-NET revision and runtime"
     )
     _add_runtime_options(version)
-    version.set_defaults(fn=cmd_version)\n\n    doctor = sub.add_parser(
+    version.set_defaults(fn=cmd_version)
+
+    doctor = sub.add_parser(
         "doctor", help="Run read-only environment diagnostics"
     )
     _add_runtime_options(doctor)
-    doctor.set_defaults(fn=cmd_doctor)\n\n    init = sub.add_parser(
+    doctor.set_defaults(fn=cmd_doctor)
+
+    init = sub.add_parser(
         "init", help="Initialize data directory and scope template"
     )
     _add_runtime_options(init)
