@@ -87,6 +87,9 @@ def test_every_documented_subcommand_is_registered():
         "status",
         "daemon",
         "sim",
+        "version",
+        "doctor",
+        "init",
     } <= names
 
 
@@ -369,7 +372,9 @@ def test_main_dispatches_and_returns_an_int(monkeypatch, data_dir):
 
 def test_shared_path_options_work_before_and_after_subcommands():
     parser = cli.build_parser()
-    before = parser.parse_args(["--data", "before", "--scope", "before.yml", "info"])
+    before = parser.parse_args(
+        ["--data", "before", "--scope", "before.yml", "info"]
+    )
     after = parser.parse_args(["info", "--data", "after", "--scope", "after.yml"])
     assert before.data == "before" and before.scope == "before.yml"
     assert after.data == "after" and after.scope == "after.yml"
@@ -415,6 +420,7 @@ def test_version_command_reports_runtime(capsys):
     output = capsys.readouterr().out
     assert "HELIOS-NET revision:" in output
     assert "Python runtime:" in output
+
 
 def test_a_command_returning_a_nonzero_code_reaches_the_caller(monkeypatch):
     def failing(args: argparse.Namespace) -> int:
