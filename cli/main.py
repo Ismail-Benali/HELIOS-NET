@@ -36,8 +36,12 @@ DEFAULT_DATA = ROOT / "data"
 
 def _add_runtime_options(parser: argparse.ArgumentParser) -> None:
     """Allow shared path options both before and after a command."""
-    parser.add_argument("--data", default=argparse.SUPPRESS, help="Campaign data directory")
-    parser.add_argument("--scope", default=argparse.SUPPRESS, help="Authorized scope file")
+    parser.add_argument(
+        "--data", default=argparse.SUPPRESS, help="Campaign data directory"
+    )
+    parser.add_argument(
+        "--scope", default=argparse.SUPPRESS, help="Authorized scope file"
+    )
 
 
 _SCOPE_TEMPLATE = '''# HELIOS-NET :: authorized scope
@@ -67,7 +71,14 @@ def cmd_version(args: Any) -> int:
     """Show the checked-out revision and Python runtime."""
     revision = "unknown (Git metadata unavailable)"
     try:
-        result = subprocess.run(["git", "describe", "--tags", "--always"], cwd=ROOT, capture_output=True, text=True, timeout=2, check=False)
+        result = subprocess.run(
+            ["git", "describe", "--tags", "--always"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
         if result.returncode == 0 and result.stdout.strip():
             revision = result.stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
@@ -80,8 +91,15 @@ def cmd_version(args: Any) -> int:
 def cmd_doctor(args: Any) -> int:
     """Read-only environment and configuration diagnostics; never probes targets."""
     python_ok = sys.version_info >= (3, 12)
-    print(f"[{'OK' if python_ok else 'FAIL'}] Python {sys.version.split()[0]} (3.12 or newer required)")
-    scope_path = Path(args.scope) if getattr(args, "scope", None) else ROOT / "config" / "scope.yaml"
+    print(
+        f"[{'OK' if python_ok else 'FAIL'}] Python {sys.version.split()[0]} "
+        "(3.12 or newer required)"
+    )
+    scope_path = (
+        Path(args.scope)
+        if getattr(args, "scope", None)
+        else ROOT / "config" / "scope.yaml"
+    )
     try:
         _load_scope(str(scope_path))
     except (ScopeError, OSError, ValueError) as exc:
@@ -96,17 +114,25 @@ def cmd_doctor(args: Any) -> int:
     elif data_path.exists():
         print(f"[FAIL] Data path is not a directory: {data_path}")
     else:
-        print(f"[INFO] Data directory not initialized: {data_path} (run helios init)")
+        print(
+            f"[INFO] Data directory not initialized: {data_path} (run helios init)"
+        )
     for tool in ("go", "rustc", "cargo", "gcc", "clang"):
         location = shutil.which(tool)
-        print(f"[{'OK' if location else 'OPTIONAL'}] {tool}: {location or 'not found'}")
-    return 0 if python_ok and scope_ok and (not data_path.exists() or data_path.is_dir()) else 1
+        status = "OK" if location else "OPTIONAL"
+        print(f"[{status}] {tool}: {location or 'not found'}")
+    data_ok = not data_path.exists() or data_path.is_dir()
+    return 0 if python_ok and scope_ok and data_ok else 1
 
 
 def cmd_init(args: Any) -> int:
     """Create local data and a conservative scope template without overwriting."""
     data_path = Path(args.data)
-    scope_path = Path(args.scope) if getattr(args, "scope", None) else ROOT / "config" / "scope.yaml"
+    scope_path = (
+        Path(args.scope)
+        if getattr(args, "scope", None)
+        else ROOT / "config" / "scope.yaml"
+    )
     try:
         data_path.mkdir(parents=True, exist_ok=True)
         print(f"[OK] Data directory: {data_path}")
@@ -119,8 +145,12 @@ def cmd_init(args: Any) -> int:
     except OSError as exc:
         print(f"[HELIOS] initialization failed: {exc}")
         return 1
-    print("[HELIOS] Initialization complete. Review the scope allowlist before any network command.")
+    print(
+        "[HELIOS] Initialization complete. Review the scope allowlist "
+        "before any network command."
+    )
     return 0
+
 
 def _load_scope(scope_path: str | None) -> ScopeEnforcer:
     """Loads the authorized scope, refusing to run when it cannot be trusted."""
