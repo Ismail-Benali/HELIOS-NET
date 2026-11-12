@@ -170,8 +170,29 @@ helios.cmd assets --target example.test --graph-output data\\graphs\\example-tes
 helios.cmd graph analyze --input data\\graphs\\example-test.json
 ```
 
-From PowerShell or Windows Terminal, invoke it as `.\hellios.cmd`. The
+From PowerShell or Windows Terminal, invoke it as `.\helios.cmd`. The
 same `python run.py ...` commands also work in both shells.
+
+Initialize the local data directory and a scope template (existing scope files
+are never overwritten), then run the read-only environment check:
+
+```bat
+helios.cmd init
+helios.cmd doctor
+helios.cmd version
+```
+
+The shared `--data` and `--scope` options work on either side of a command:
+
+```bat
+helios.cmd status --data data
+helios.cmd doctor --scope config\scope.yaml
+```
+
+`doctor` does not contact targets or modify files. Optional Go, Rust, and C
+toolchains are reported separately; the Python control plane and a valid scope
+configuration are the required checks. Review `config/scope.yaml` and add only
+assets and ports you are authorized to test.
 
 ### 5. Run the End-to-End Simulation
 ```bash

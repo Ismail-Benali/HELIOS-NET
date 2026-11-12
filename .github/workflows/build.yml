@@ -327,5 +327,15 @@ jobs:
       - name: Smoke Test
         run: python tests/smoke.py
 
+      - name: Windows CMD launcher smoke test
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          call helios.cmd version
+          if errorlevel 1 exit /b 1
+          call helios.cmd init --data "%RUNNER_TEMP%\helios-cli-data" --scope "%RUNNER_TEMP%\helios-cli-scope.yaml"
+          if errorlevel 1 exit /b 1
+          call helios.cmd doctor --data "%RUNNER_TEMP%\helios-cli-data" --scope "%RUNNER_TEMP%\helios-cli-scope.yaml"
+
       - name: Report Native Core Health
         run: python -c "from core.cores import health_report, format_report; print(format_report(health_report()))"

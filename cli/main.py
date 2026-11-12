@@ -13,6 +13,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess  # nosec B404 -- only used for a fixed, read-only Git metadata lookup
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,13 +25,127 @@ if str(ROOT) not in sys.path:
 
 from core.orchestrator import Orchestrator  # noqa: E402
 from core.planner import PlanStep  # noqa: E402
-from core.scope import ScopeEnforcer, ScopeError  # noqa: E402
+from core.scope import ScopeEnforcer, ScopeError, resolve_scope_path  # noqa: E402
 from core.state import StateStore  # noqa: E402
 from engine.plugins import plugin_registry  # noqa: E402
 from engine.verdict import VerdictEngine, default_rules  # noqa: E402
 from modules.registry import default_registry, discovery_runner  # noqa: E402
 
 DEFAULT_DATA = ROOT / "data"
+
+
+def _add_runtime_options(parser: argparse.ArgumentParser) -> None:
+    """Allow shared path options both before and after a command."""
+    parser.add_argument(
+        "--data", default=argparse.SUPPRESS, help="Campaign data directory"
+    )
+    parser.add_argument(
+        "--scope", default=argparse.SUPPRESS, help="Authorized scope file"
+    )
+
+
+_SCOPE_TEMPLATE = """# HELIOS-NET :: authorized scope
+# Replace these examples with assets you own or are explicitly authorized to test.
+# Keep the allowlist narrow. HELIOS-NET refuses targets outside this file.
+scope:
+  domains:
+    - "example.test"
+    - "lab.test"
+  cidrs:
+    - "127.0.0.0/24"
+  ports:
+    - 21
+    - 22
+    - 80
+    - 443
+    - 3306
+    - 5432
+  rate_limit:
+    initial_concurrency: 20
+    max_concurrency: 100
+    timeout_seconds: 2.0
+"""
+
+
+def cmd_version(args: Any) -> int:
+    """Show the checked-out revision and Python runtime."""
+    revision = "unknown (Git metadata unavailable)"
+    git_executable = shutil.which("git")
+    if git_executable:
+        try:
+            result = subprocess.run(  # nosec B603 -- fixed argv, shell=False, no user input
+                [str(Path(git_executable).resolve()), "describe", "--tags", "--always"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=2,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                revision = result.stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    print(f"HELIOS-NET revision: {revision}")
+    print(f"Python runtime: {sys.version.split()[0]}")
+    return 0
+
+
+def cmd_doctor(args: Any) -> int:
+    """Read-only environment and configuration diagnostics; never probes targets."""
+    python_ok = sys.version_info >= (3, 12)
+    print(
+        f"[{'OK' if python_ok else 'FAIL'}] Python {sys.version.split()[0]} "
+        "(3.12 or newer required)"
+    )
+    scope_path = resolve_scope_path(getattr(args, "scope", None))
+    try:
+        _load_scope(str(scope_path))
+    except (ScopeError, OSError, ValueError) as exc:
+        print(f"[FAIL] Scope configuration: {scope_path} ({exc})")
+        scope_ok = False
+    else:
+        print(f"[OK] Scope configuration: {scope_path}")
+        scope_ok = True
+    data_path = Path(args.data)
+    if data_path.is_dir():
+        print(f"[OK] Data directory exists: {data_path}")
+    elif data_path.exists():
+        print(f"[FAIL] Data path is not a directory: {data_path}")
+    else:
+        print(f"[INFO] Data directory not initialized: {data_path} (run helios init)")
+    for tool in ("go", "rustc", "cargo", "gcc", "clang"):
+        location = shutil.which(tool)
+        status = "OK" if location else "OPTIONAL"
+        print(f"[{status}] {tool}: {location or 'not found'}")
+    data_ok = not data_path.exists() or data_path.is_dir()
+    return 0 if python_ok and scope_ok and data_ok else 1
+
+
+def cmd_init(args: Any) -> int:
+    """Create local data and a conservative scope template without overwriting."""
+    data_path = Path(args.data)
+    scope_path = resolve_scope_path(getattr(args, "scope", None))
+    try:
+        data_path.mkdir(parents=True, exist_ok=True)
+        print(f"[OK] Data directory: {data_path}")
+        if scope_path.exists():
+            if not scope_path.is_file():
+                print(f"[HELIOS] scope path is not a file: {scope_path}")
+                return 1
+            print(f"[KEEP] Scope file already exists; left unchanged: {scope_path}")
+        else:
+            scope_path.parent.mkdir(parents=True, exist_ok=True)
+            scope_path.write_text(_SCOPE_TEMPLATE, encoding="utf-8")
+            print(f"[CREATED] Conservative scope template: {scope_path}")
+    except OSError as exc:
+        print(f"[HELIOS] initialization failed: {exc}")
+        return 1
+    print(
+        "[HELIOS] Initialization complete. Review the scope allowlist "
+        "before any network command."
+    )
+    return 0
 
 
 def _load_scope(scope_path: str | None) -> ScopeEnforcer:
@@ -114,9 +230,12 @@ def cmd_probe(args: Any) -> int:
         return 2
 
     raw_ports: str | None = getattr(args, "ports", None)
-    if raw_ports:
-        ports = [int(port) for port in raw_ports.split(",") if port.strip()]
-    else:
+    try:
+        ports = _parse_port_list(raw_ports) if raw_ports is not None else None
+    except ValueError as exc:
+        print(f"[HELIOS] invalid ports: {exc}")
+        return 2
+    if ports is None:
         ports = list(scope.ports) or [22, 80, 443]
     try:
         scope.check_ports(ports)
@@ -135,9 +254,19 @@ def cmd_probe(args: Any) -> int:
 
 
 def _parse_port_list(raw: str | None) -> list[int] | None:
-    if not raw:
+    if raw is None:
         return None
-    return [int(part) for part in raw.split(",") if part.strip()]
+    parts = [part.strip() for part in raw.split(",")]
+    if any(not part for part in parts):
+        raise ValueError("ports must be non-empty comma-separated integers")
+    try:
+        ports = [int(part) for part in parts]
+    except ValueError as exc:
+        raise ValueError("ports must be comma-separated integers") from exc
+    invalid = [port for port in ports if not 1 <= port <= 65535]
+    if invalid:
+        raise ValueError(f"port numbers must be between 1 and 65535: {invalid}")
+    return list(dict.fromkeys(ports))
 
 
 def cmd_assets(args: Any) -> int:
@@ -151,7 +280,11 @@ def cmd_assets(args: Any) -> int:
         print(f"[HELIOS] refused: {exc}")
         return 2
 
-    web_ports = _parse_port_list(getattr(args, "web_ports", None))
+    try:
+        web_ports = _parse_port_list(getattr(args, "web_ports", None))
+    except ValueError as exc:
+        print(f"[HELIOS] invalid web ports: {exc}")
+        return 2
     if web_ports:
         try:
             scope.check_ports(web_ports)
@@ -498,10 +631,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Expand discovered names through Certificate Transparency",
     )
+    _add_runtime_options(r)
     r.set_defaults(fn=cmd_recon)
 
     j = sub.add_parser("judge", help="Classify open ports via verdict engine")
     j.add_argument("--target", required=True, help="Target host (authorized/owned)")
+    _add_runtime_options(j)
     j.set_defaults(fn=cmd_judge)
 
     pr = sub.add_parser("probe", help="Grab banners through the adaptive engine")
@@ -509,6 +644,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument(
         "--ports", default=None, help="Comma-separated ports; defaults to the scope"
     )
+    _add_runtime_options(pr)
     pr.set_defaults(fn=cmd_probe)
 
     a = sub.add_parser(
@@ -544,6 +680,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Write the versioned typed asset graph JSON to this path",
     )
+    _add_runtime_options(a)
     a.set_defaults(fn=cmd_assets)
 
     g = sub.add_parser("graph", help="Analyze an exported typed asset graph locally")
@@ -562,16 +699,20 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument(
         "--json-output", default=None, help="Write the full analysis result as JSON"
     )
+    _add_runtime_options(g)
     g.set_defaults(fn=cmd_graph)
 
     rc = sub.add_parser("recover", help="Recover campaign state from disk")
     rc.add_argument("campaign_id")
+    _add_runtime_options(rc)
     rc.set_defaults(fn=cmd_recover)
 
     info = sub.add_parser("info", help="Display extensible system components")
+    _add_runtime_options(info)
     info.set_defaults(fn=cmd_info)
 
     st = sub.add_parser("status", help="List registered campaigns")
+    _add_runtime_options(st)
     st.set_defaults(fn=cmd_status)
 
     dm = sub.add_parser("daemon", help="Run continuous autonomous mission daemon")
@@ -579,14 +720,17 @@ def build_parser() -> argparse.ArgumentParser:
     dm.add_argument(
         "--interval", type=float, default=15.0, help="Loop interval in seconds"
     )
+    _add_runtime_options(dm)
     dm.set_defaults(fn=cmd_daemon)
 
     sim = sub.add_parser("sim", help="Run end-to-end simulation demonstration")
+    _add_runtime_options(sim)
     sim.set_defaults(fn=cmd_sim)
 
     dash = sub.add_parser(
         "dashboard", help="Display professional ASCII executive dashboard"
     )
+    _add_runtime_options(dash)
     dash.set_defaults(fn=cmd_dashboard)
 
     exp = sub.add_parser(
@@ -599,7 +743,20 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["json", "csv", "sarif"],
         help="Export format",
     )
+    _add_runtime_options(exp)
     exp.set_defaults(fn=cmd_export)
+
+    version = sub.add_parser("version", help="Show HELIOS-NET revision and runtime")
+    _add_runtime_options(version)
+    version.set_defaults(fn=cmd_version)
+
+    doctor = sub.add_parser("doctor", help="Run read-only environment diagnostics")
+    _add_runtime_options(doctor)
+    doctor.set_defaults(fn=cmd_doctor)
+
+    init = sub.add_parser("init", help="Initialize data directory and scope template")
+    _add_runtime_options(init)
+    init.set_defaults(fn=cmd_init)
 
     return p
 
