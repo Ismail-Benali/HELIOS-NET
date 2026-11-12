@@ -57,7 +57,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v5
         with:
           go-version-file: ${{ matrix.moddir }}/go.mod
           cache: true
