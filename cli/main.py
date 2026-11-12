@@ -44,7 +44,7 @@ def _add_runtime_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
-_SCOPE_TEMPLATE = '''# HELIOS-NET :: authorized scope
+_SCOPE_TEMPLATE = """# HELIOS-NET :: authorized scope
 # Replace these examples with assets you own or are explicitly authorized to test.
 # Keep the allowlist narrow. HELIOS-NET refuses targets outside this file.
 scope:
@@ -64,7 +64,7 @@ scope:
     initial_concurrency: 20
     max_concurrency: 100
     timeout_seconds: 2.0
-'''
+"""
 
 
 def cmd_version(args: Any) -> int:
@@ -110,9 +110,7 @@ def cmd_doctor(args: Any) -> int:
     elif data_path.exists():
         print(f"[FAIL] Data path is not a directory: {data_path}")
     else:
-        print(
-            f"[INFO] Data directory not initialized: {data_path} (run helios init)"
-        )
+        print(f"[INFO] Data directory not initialized: {data_path} (run helios init)")
     for tool in ("go", "rustc", "cargo", "gcc", "clang"):
         location = shutil.which(tool)
         status = "OK" if location else "OPTIONAL"
@@ -745,21 +743,15 @@ def build_parser() -> argparse.ArgumentParser:
     _add_runtime_options(exp)
     exp.set_defaults(fn=cmd_export)
 
-    version = sub.add_parser(
-        "version", help="Show HELIOS-NET revision and runtime"
-    )
+    version = sub.add_parser("version", help="Show HELIOS-NET revision and runtime")
     _add_runtime_options(version)
     version.set_defaults(fn=cmd_version)
 
-    doctor = sub.add_parser(
-        "doctor", help="Run read-only environment diagnostics"
-    )
+    doctor = sub.add_parser("doctor", help="Run read-only environment diagnostics")
     _add_runtime_options(doctor)
     doctor.set_defaults(fn=cmd_doctor)
 
-    init = sub.add_parser(
-        "init", help="Initialize data directory and scope template"
-    )
+    init = sub.add_parser("init", help="Initialize data directory and scope template")
     _add_runtime_options(init)
     init.set_defaults(fn=cmd_init)
 
