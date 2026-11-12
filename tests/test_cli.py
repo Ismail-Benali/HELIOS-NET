@@ -375,7 +375,9 @@ def test_shared_path_options_work_before_and_after_subcommands():
     before = parser.parse_args(
         ["--data", "before", "--scope", "before.yml", "info"]
     )
-    after = parser.parse_args(["info", "--data", "after", "--scope", "after.yml"])
+    after = parser.parse_args(
+        ["info", "--data", "after", "--scope", "after.yml"]
+    )
     assert before.data == "before" and before.scope == "before.yml"
     assert after.data == "after" and after.scope == "after.yml"
 
