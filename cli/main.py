@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
+import subprocess  # nosec B404 -- only used for a fixed, read-only Git metadata lookup
 import sys
 from pathlib import Path
 from typing import Any
@@ -70,19 +70,21 @@ scope:
 def cmd_version(args: Any) -> int:
     """Show the checked-out revision and Python runtime."""
     revision = "unknown (Git metadata unavailable)"
-    try:
-        result = subprocess.run(
-            ["git", "describe", "--tags", "--always"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            revision = result.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired):
-        pass
+    git_executable = shutil.which("git")
+    if git_executable:
+        try:
+            result = subprocess.run(  # nosec B603 -- fixed argv, shell=False, no user input
+                [str(Path(git_executable).resolve()), "describe", "--tags", "--always"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                revision = result.stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            pass
     print(f"HELIOS-NET revision: {revision}")
     print(f"Python runtime: {sys.version.split()[0]}")
     return 0
