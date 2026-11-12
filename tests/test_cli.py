@@ -87,6 +87,9 @@ def test_every_documented_subcommand_is_registered():
         "status",
         "daemon",
         "sim",
+        "version",
+        "doctor",
+        "init",
     } <= names
 
 
@@ -367,12 +370,54 @@ def test_main_dispatches_and_returns_an_int(monkeypatch, data_dir):
     assert seen[0].data == data_dir
 
 
-def test_data_after_the_subcommand_is_rejected(capsys):
-    """Pinned because it is a real ergonomic trap: --data is global, so putting
-    it after the subcommand is a usage error rather than a silent default."""
-    with pytest.raises(SystemExit) as excinfo:
-        cli.build_parser().parse_args(["info", "--data", "/tmp/x"])
-    assert excinfo.value.code == 2
+def test_shared_path_options_work_before_and_after_subcommands():
+    parser = cli.build_parser()
+    before = parser.parse_args(["--data", "before", "--scope", "before.yml", "info"])
+    after = parser.parse_args(["info", "--data", "after", "--scope", "after.yml"])
+    assert before.data == "before" and before.scope == "before.yml"
+    assert after.data == "after" and after.scope == "after.yml"
+
+
+def test_port_parser_rejects_malformed_and_out_of_range_values():
+    assert cli._parse_port_list("80,443,80") == [80, 443]
+    for value in ("abc", "0", "65536", ",,", "", "80,,443"):
+        with pytest.raises(ValueError):
+            cli._parse_port_list(value)
+
+
+def test_probe_invalid_ports_returns_usage_error(capsys):
+    assert cli.cmd_probe(_args(target="10.0.0.1", ports="80,nope")) == 2
+    assert cli.cmd_probe(_args(target="10.0.0.1", ports="")) == 2
+    assert "invalid ports" in capsys.readouterr().out
+
+
+def test_init_creates_data_and_scope_without_overwriting(tmp_path):
+    data = tmp_path / "campaigns"
+    scope = tmp_path / "custom" / "scope.yaml"
+    args = _args(data=str(data), scope=str(scope))
+    assert cli.cmd_init(args) == 0
+    original = scope.read_text(encoding="utf-8")
+    assert data.is_dir() and "127.0.0.0/24" in original
+    assert cli.cmd_init(args) == 0
+    assert scope.read_text(encoding="utf-8") == original
+
+
+def test_doctor_is_read_only_and_reports_scope(capsys, tmp_path):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text(cli._SCOPE_TEMPLATE, encoding="utf-8")
+    data = tmp_path / "not-created"
+    code = cli.cmd_doctor(_args(data=str(data), scope=str(scope)))
+    output = capsys.readouterr().out
+    assert code in (0, 1)
+    assert "[OK] Scope configuration" in output
+    assert not data.exists()
+
+
+def test_version_command_reports_runtime(capsys):
+    assert cli.cmd_version(_args()) == 0
+    output = capsys.readouterr().out
+    assert "HELIOS-NET revision:" in output
+    assert "Python runtime:" in output
 
 
 def test_a_command_returning_a_nonzero_code_reaches_the_caller(monkeypatch):
