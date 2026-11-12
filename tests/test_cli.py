@@ -380,7 +380,7 @@ def test_shared_path_options_work_before_and_after_subcommands():
 
 def test_port_parser_rejects_malformed_and_out_of_range_values():
     assert cli._parse_port_list("80,443,80") == [80, 443]
-    for value in ("abc", "0", "65536", ",,"):
+    for value in ("abc", "0", "65536", ",,", "", "80,,443"):
         with pytest.raises(ValueError):
             cli._parse_port_list(value)
 
