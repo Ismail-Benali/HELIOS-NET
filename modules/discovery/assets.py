@@ -25,6 +25,7 @@ reported as False and must not be read as a trust decision.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import http.client
 import os
 import re
@@ -205,6 +206,8 @@ def _tls_info(conn: http.client.HTTPSConnection) -> dict[str, Any]:
         der = sock.getpeercert(binary_form=True)
     except (ValueError, OSError):
         der = None
+    if der:
+        info["sha256_fingerprint"] = hashlib.sha256(der).hexdigest()
     info.update(decode_certificate(der or b""))
     not_after = info.get("not_after", "")
     if not_after:
