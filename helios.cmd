@@ -10,12 +10,12 @@ if not errorlevel 1 (
     if not errorlevel 1 set "HELIOS_PYTHON=python"
 )
 
-rem Fall back to the Windows Python Launcher and request Python 3.12 explicitly.
+rem Fall back to the Windows Python Launcher and request the latest installed Python 3 version.
 if not defined HELIOS_PYTHON (
     where py >nul 2>&1
     if not errorlevel 1 (
-        py -3.12 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
-        if not errorlevel 1 set "HELIOS_PYTHON=py -3.12"
+        py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)" >nul 2>&1
+        if not errorlevel 1 set "HELIOS_PYTHON=py -3"
     )
 )
 
