@@ -25,7 +25,7 @@ if str(ROOT) not in sys.path:
 
 from core.orchestrator import Orchestrator  # noqa: E402
 from core.planner import PlanStep  # noqa: E402
-from core.scope import ScopeEnforcer, ScopeError  # noqa: E402
+from core.scope import ScopeEnforcer, ScopeError, resolve_scope_path  # noqa: E402
 from core.state import StateStore  # noqa: E402
 from engine.plugins import plugin_registry  # noqa: E402
 from engine.verdict import VerdictEngine, default_rules  # noqa: E402
@@ -95,11 +95,7 @@ def cmd_doctor(args: Any) -> int:
         f"[{'OK' if python_ok else 'FAIL'}] Python {sys.version.split()[0]} "
         "(3.12 or newer required)"
     )
-    scope_path = (
-        Path(args.scope)
-        if getattr(args, "scope", None)
-        else ROOT / "config" / "scope.yaml"
-    )
+    scope_path = resolve_scope_path(getattr(args, "scope", None))
     try:
         _load_scope(str(scope_path))
     except (ScopeError, OSError, ValueError) as exc:
@@ -128,11 +124,7 @@ def cmd_doctor(args: Any) -> int:
 def cmd_init(args: Any) -> int:
     """Create local data and a conservative scope template without overwriting."""
     data_path = Path(args.data)
-    scope_path = (
-        Path(args.scope)
-        if getattr(args, "scope", None)
-        else ROOT / "config" / "scope.yaml"
-    )
+    scope_path = resolve_scope_path(getattr(args, "scope", None))
     try:
         data_path.mkdir(parents=True, exist_ok=True)
         print(f"[OK] Data directory: {data_path}")
