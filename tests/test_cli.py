@@ -386,8 +386,8 @@ def test_port_parser_rejects_malformed_and_out_of_range_values():
 
 
 def test_probe_invalid_ports_returns_usage_error(capsys):
-    code = cli.cmd_probe(_args(target="10.0.0.1", ports="80,nope"))
-    assert code == 2
+    assert cli.cmd_probe(_args(target="10.0.0.1", ports="80,nope")) == 2
+    assert cli.cmd_probe(_args(target="10.0.0.1", ports="")) == 2
     assert "invalid ports" in capsys.readouterr().out
 
 
