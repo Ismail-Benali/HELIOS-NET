@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -175,7 +176,11 @@ def _validate_document(document: Any, path: Path) -> ScopeConfig:
     if not isinstance(rate_limit, dict):
         raise ScopeError(f"scope file {path}: rate_limit must be a mapping")
     for key, value in rate_limit.items():
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
             raise ScopeError(
                 f"scope file {path}: rate_limit.{key} must be a number, got {value!r}"
             )
@@ -319,4 +324,9 @@ def _scalar(token: str, lineno: int, path: Path) -> Any:
         token = token.split(" #", 1)[0].rstrip()
     if token.lstrip("-").isdigit():
         return int(token)
+    if any(marker in token.lower() for marker in (".", "e")):
+        try:
+            return float(token)
+        except ValueError:
+            pass
     return token
