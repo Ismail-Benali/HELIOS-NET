@@ -32,7 +32,6 @@ def test_scope_enforcement_domain():
     assert enforcer.is_target_allowed("malicious.com") is False
 
 
-
 def test_default_scope_file_loads_with_decimal_rate_limit():
     enforcer = ScopeEnforcer.from_config()
     assert enforcer.is_target_allowed("127.0.0.1")
@@ -43,7 +42,7 @@ def test_default_scope_file_loads_with_decimal_rate_limit():
 def test_scope_rejects_non_finite_rate_limit_values(tmp_path):
     scope_file = tmp_path / "scope.yaml"
     scope_file.write_text(
-        "scope:\n  rate_limit:\n    timeout_seconds: .inf\n",
+        "scope:\n  rate_limit:\n    timeout_seconds: 1e309\n",
         encoding="utf-8",
     )
     with pytest.raises(ScopeError, match="must be a number"):
