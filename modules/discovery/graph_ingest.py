@@ -6,7 +6,7 @@ asset-discovery observations and deliberately ignores blocked candidates.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -83,7 +83,7 @@ def ingest_discovery_summary(
     """
     from engine.graph.model import AssetType, RelationshipType, TypedAssetGraph
 
-    timestamp = observed_at or datetime.now(timezone.utc).isoformat()
+    timestamp = observed_at or datetime.now(UTC).isoformat()
     graph = TypedAssetGraph()
     skipped = 0
 
@@ -160,6 +160,30 @@ def ingest_discovery_summary(
             finding_graph.add_relationship(
                 url_id, host_id, RelationshipType.HOSTED_ON, evidence=evidence
             )
+
+            tls = finding.get("tls", {})
+            fingerprint = (
+                tls.get("sha256_fingerprint") if isinstance(tls, dict) else None
+            )
+            if isinstance(fingerprint, str) and len(fingerprint) == 64:
+                if all(char in "0123456789abcdef" for char in fingerprint.lower()):
+                    certificate_id = finding_graph.add_asset(
+                        AssetType.CERTIFICATE,
+                        f"sha256:{fingerprint.lower()}",
+                        metadata={
+                            "subject": str(tls.get("subject", ""))[:500],
+                            "issuer": str(tls.get("issuer", ""))[:500],
+                            "not_before": str(tls.get("not_before", ""))[:100],
+                            "not_after": str(tls.get("not_after", ""))[:100],
+                        },
+                        evidence=evidence,
+                    )
+                    finding_graph.add_relationship(
+                        certificate_id,
+                        host_id,
+                        RelationshipType.CERTIFICATE_FOR,
+                        evidence=evidence,
+                    )
 
             redirects = finding.get("redirects", [])
             if isinstance(redirects, list):

@@ -495,3 +495,31 @@ def test_asset_runner_merges_findings_into_the_context(make_server):
     assert result["assets"] >= 1
     assert ctx["discovered_hosts"] == ["127.0.0.1"]
     assert any(f.get("title") == "Service" for f in ctx["findings"])
+
+
+def test_tls_info_records_sha256_of_presented_certificate():
+    import hashlib
+
+    from modules.discovery.assets import _tls_info
+
+    class FakeSocket:
+        def cipher(self):
+            return ("TLS_AES_128_GCM_SHA256", "TLSv1.3", 128)
+
+        def version(self):
+            return "TLSv1.3"
+
+        def getpeercert(self, *, binary_form=False):
+            assert binary_form is True
+            return b"test-certificate-der"
+
+    class FakeConnection:
+        sock = FakeSocket()
+
+    info = _tls_info(FakeConnection())
+
+    assert (
+        info["sha256_fingerprint"]
+        == hashlib.sha256(b"test-certificate-der").hexdigest()
+    )
+    assert info["verified"] is False
