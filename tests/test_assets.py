@@ -518,7 +518,8 @@ def test_tls_info_records_sha256_of_presented_certificate():
 
     info = _tls_info(FakeConnection())
 
-    assert info["sha256_fingerprint"] == hashlib.sha256(
-        b"test-certificate-der"
-    ).hexdigest()
+    assert (
+        info["sha256_fingerprint"]
+        == hashlib.sha256(b"test-certificate-der").hexdigest()
+    )
     assert info["verified"] is False
