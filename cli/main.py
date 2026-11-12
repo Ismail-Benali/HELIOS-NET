@@ -230,7 +230,7 @@ def cmd_probe(args: Any) -> int:
 
     raw_ports: str | None = getattr(args, "ports", None)
     try:
-        ports = _parse_port_list(raw_ports) if raw_ports else None
+        ports = _parse_port_list(raw_ports) if raw_ports is not None else None
     except ValueError as exc:
         print(f"[HELIOS] invalid ports: {exc}")
         return 2
@@ -255,9 +255,9 @@ def cmd_probe(args: Any) -> int:
 def _parse_port_list(raw: str | None) -> list[int] | None:
     if raw is None:
         return None
-    parts = [part.strip() for part in raw.split(",") if part.strip()]
-    if not parts:
-        raise ValueError("provide at least one port")
+    parts = [part.strip() for part in raw.split(",")]
+    if any(not part for part in parts):
+        raise ValueError("ports must be non-empty comma-separated integers")
     try:
         ports = [int(part) for part in parts]
     except ValueError as exc:
