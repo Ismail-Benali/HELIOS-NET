@@ -1,4 +1,5 @@
 """Tests for the versioned native capability/result contract."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
