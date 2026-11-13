@@ -64,6 +64,32 @@ accepts only `status: error`. It does not require `component`. Consumers
 must preserve the distinction between a genuine empty result and a failed or
 unavailable backend.
 
+## Versioned capability and result registry
+
+`core/native_contract.py` publishes the additive capability registry
+(`contract_version: 1.0.0`). It describes supported operations separately
+from host availability and preserves each backend's actual boundary:
+
+| Backend | Boundary | Capabilities |
+| --- | --- | --- |
+| Go | NDJSON process | `scan_ports` |
+| C | NDJSON process or FFI | `match`, `fingerprint` |
+| Rust | C ABI | `match`, `fnv1a32`, graph operations |
+| Python | in-process | Reference/fallback implementations |
+
+Registry states are `ready`, `fallback`, `blocked`, `failed`,
+`unavailable`, and `unsupported`. An unsupported operation is not the same
+as an unavailable backend; a host policy refusal is not the same as a missing
+binary. Python is identified as a fallback rather than being presented as a
+native backend.
+
+`normalize_outcome(capability, outcome)` provides a stable reporting envelope
+with `contract_version`, `capability`, `status`, `backend`, `reason`,
+and `result`. Its statuses distinguish native success, degraded Python
+fallback, failed execution, and unavailable execution. Existing typed outcome
+classes and the Go/C/Rust transports remain unchanged; this is an additive
+serialization contract.
+
 ## Compatibility and change policy
 
 Any change to field names, framing, encoding, exit codes, or failure semantics
