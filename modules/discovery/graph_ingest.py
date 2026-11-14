@@ -261,6 +261,9 @@ def ingest_discovery_summary(
             owner_id = record_graph.add_asset(AssetType.DOMAIN, owner, evidence=evidence)
             if kind in {"A", "AAAA"}:
                 import ipaddress
+
+                if not isinstance(value, str):
+                    raise ValueError("DNS address value must be a string")
                 address = ipaddress.ip_address(value)
                 if (kind == "A" and address.version != 4) or (kind == "AAAA" and address.version != 6):
                     raise ValueError("DNS address family does not match record type")
