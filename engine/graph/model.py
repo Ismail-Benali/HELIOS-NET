@@ -27,6 +27,8 @@ class AssetType(StrEnum):
 class RelationshipType(StrEnum):
     SUBDOMAIN_OF = "subdomain_of"
     RESOLVES_TO = "resolves_to"
+    CNAME_TO = "cname_to"
+    DISCOVERS_SERVICE = "discovers_service"
     HOSTS_SERVICE = "hosts_service"
     HOSTED_ON = "hosted_on"
     CERTIFICATE_FOR = "certificate_for"
@@ -39,6 +41,8 @@ _RELATION_ENDPOINTS: dict[RelationshipType, tuple[tuple[AssetType, AssetType], .
         (AssetType.DOMAIN, AssetType.IP),
         (AssetType.HOST, AssetType.IP),
     ),
+    RelationshipType.CNAME_TO: ((AssetType.DOMAIN, AssetType.DOMAIN),),
+    RelationshipType.DISCOVERS_SERVICE: ((AssetType.DOMAIN, AssetType.SERVICE),),
     RelationshipType.HOSTS_SERVICE: ((AssetType.HOST, AssetType.SERVICE),),
     RelationshipType.HOSTED_ON: (
         (AssetType.URL, AssetType.HOST),
