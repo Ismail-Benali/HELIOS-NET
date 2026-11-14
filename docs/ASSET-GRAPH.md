@@ -136,7 +136,7 @@ The typed graph accepts already-collected `dns_records` and
 This path is deliberately network-free: callers must provide an explicit
 `ScopeEnforcer`; without it, DNS and service observations are skipped.
 
-Supported DNS records are A, AAAA, CNAME, and SRV. A/AAAA answers are checked
+The wire parser in `EliteDNSResolver.parse_records()` decodes A, AAAA, CNAME, and SRV answer records, including compressed names and TTLs; the legacy `resolve()` API remains A-only for compatibility. Supported DNS records are A, AAAA, CNAME, and SRV. A/AAAA answers are checked
 against the authorized CIDR list; CNAME owners and targets and SRV targets are
 checked against the authorized domain/IP scope. SRV ports are checked against
 the configured port allowlist. A/AAAA become `resolves_to`, CNAME becomes
