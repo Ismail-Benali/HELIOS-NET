@@ -129,7 +129,7 @@ authorized connection. Certificate verification remains disabled for metadata
 collection, so this edge is an observation, not a trust or hostname-validation
 verdict. Missing or malformed fingerprints are ignored rather than guessed.
 
-## DNS and service-discovery ingestion (schema 1.1)
+## DNS and service-discovery ingestion (schema 1.0 additive extension)
 
 The typed graph accepts already-collected `dns_records` and
 `service_observations` through `ingest_discovery_summary(..., scope=...)`.
