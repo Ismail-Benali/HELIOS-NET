@@ -110,11 +110,9 @@ class EliteDNSResolver:
                     return []
                 if rclass == 1:
                     value: object | None = None
-                    if rtype == 1 and rdlength == 4:
+                    if (rtype == 1 and rdlength == 4) or (rtype == 28 and rdlength == 16):
                         import ipaddress
-                        value = str(ipaddress.ip_address(data[pos:end]))
-                    elif rtype == 28 and rdlength == 16:
-                        import ipaddress
+
                         value = str(ipaddress.ip_address(data[pos:end]))
                     elif rtype == 5:
                         target, consumed = self._decode_name(data, pos)
