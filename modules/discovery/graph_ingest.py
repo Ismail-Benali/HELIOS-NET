@@ -29,6 +29,9 @@ _EVIDENCE_FIELDS = (
     "cookies",
     "engine",
     "source",
+    "dns_record_type",
+    "dns_ttl",
+    "dns_protocol",
 )
 
 
@@ -74,6 +77,7 @@ def ingest_discovery_summary(
     *,
     observed_at: str | None = None,
     reference: str = "",
+    scope: Any | None = None,
 ) -> tuple[Any, int]:
     """Build a typed graph from a discover_assets() summary.
 
@@ -225,5 +229,135 @@ def ingest_discovery_summary(
             skipped += 1
             continue
         graph.merge(finding_graph)
+
+
+    # DNS and service records are ingested only with an explicit scope object.
+    # This adapter never resolves names or performs follow-up connections.
+    dns_records = summary.get("dns_records", [])
+    if not isinstance(dns_records, list):
+        raise TypeError("summary.dns_records must be a list")
+    for record in dns_records:
+        if not isinstance(record, dict) or scope is None:
+            skipped += 1
+            continue
+        owner = record.get("name") or record.get("owner")
+        kind = str(record.get("type", "")).upper()
+        value = record.get("value")
+        ttl = record.get("ttl")
+        if not isinstance(owner, str) or not scope.is_target_allowed(owner):
+            skipped += 1
+            continue
+        if isinstance(ttl, bool) or not isinstance(ttl, int) or ttl < 0:
+            skipped += 1
+            continue
+        try:
+            evidence = _evidence(
+                str(record.get("source") or "dns"),
+                str(record.get("observed_at") or timestamp),
+                str(record.get("reference") or reference),
+                {"dns_record_type": kind, "dns_ttl": ttl},
+            )
+            record_graph = TypedAssetGraph()
+            owner_id = record_graph.add_asset(AssetType.DOMAIN, owner, evidence=evidence)
+            if kind in {"A", "AAAA"}:
+                import ipaddress
+                address = ipaddress.ip_address(value)
+                if (kind == "A" and address.version != 4) or (kind == "AAAA" and address.version != 6):
+                    raise ValueError("DNS address family does not match record type")
+                if not scope.is_target_allowed(str(address)):
+                    raise ValueError("DNS address is outside authorized scope")
+                address_id = record_graph.add_asset(AssetType.IP, str(address), evidence=evidence)
+                record_graph.add_relationship(
+                    owner_id, address_id, RelationshipType.RESOLVES_TO,
+                    metadata={"record_type": kind, "ttl": ttl}, evidence=evidence,
+                )
+            elif kind == "CNAME":
+                if not isinstance(value, str) or not scope.is_target_allowed(value):
+                    raise ValueError("CNAME target is outside authorized scope")
+                target_id = record_graph.add_asset(AssetType.DOMAIN, value, evidence=evidence)
+                record_graph.add_relationship(
+                    owner_id, target_id, RelationshipType.CNAME_TO,
+                    metadata={"record_type": kind, "ttl": ttl}, evidence=evidence,
+                )
+            elif kind == "SRV":
+                if not isinstance(value, dict):
+                    raise ValueError("SRV value must be an object")
+                target = value.get("target")
+                port = value.get("port")
+                protocol = str(value.get("protocol", "tcp")).lower()
+                service_name = str(value.get("service", "unknown")).lower()
+                if protocol not in {"tcp", "udp"}:
+                    raise ValueError("unsupported SRV protocol")
+                if not isinstance(target, str) or not scope.is_target_allowed(target):
+                    raise ValueError("SRV target is outside authorized scope")
+                if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+                    raise ValueError("invalid SRV port")
+                scope.check_ports([port])
+                service_id = record_graph.add_asset(
+                    AssetType.SERVICE, f"{protocol}/{port}/{service_name}",
+                    metadata={"protocol": protocol, "port": port, "name": service_name, "target": target},
+                    evidence=evidence,
+                )
+                record_graph.add_relationship(
+                    owner_id, service_id, RelationshipType.DISCOVERS_SERVICE,
+                    metadata={"record_type": kind, "ttl": ttl, "target": target},
+                    evidence=evidence,
+                )
+                target_id = record_graph.add_asset(AssetType.HOST, target, evidence=evidence)
+                record_graph.add_relationship(
+                    target_id, service_id, RelationshipType.HOSTS_SERVICE,
+                    metadata={"port": port, "protocol": protocol}, evidence=evidence,
+                )
+            else:
+                skipped += 1
+                continue
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+        graph.merge(record_graph)
+
+    service_observations = summary.get("service_observations", [])
+    if not isinstance(service_observations, list):
+        raise TypeError("summary.service_observations must be a list")
+    for observation in service_observations:
+        if not isinstance(observation, dict) or scope is None:
+            skipped += 1
+            continue
+        host = observation.get("host")
+        port = observation.get("port")
+        protocol = str(observation.get("protocol", "tcp")).lower()
+        service_name = observation.get("service")
+        if (
+            not isinstance(host, str) or not scope.is_target_allowed(host)
+            or isinstance(port, bool) or not isinstance(port, int)
+            or not 1 <= port <= 65535
+            or protocol not in {"tcp", "udp"}
+            or not isinstance(service_name, str) or not service_name.strip()
+        ):
+            skipped += 1
+            continue
+        try:
+            scope.check_ports([port])
+            evidence = _evidence(
+                str(observation.get("source") or "service-discovery"),
+                str(observation.get("observed_at") or timestamp),
+                str(observation.get("reference") or reference),
+                _observation_attributes(observation),
+            )
+            service_graph = TypedAssetGraph()
+            host_id = service_graph.add_asset(AssetType.HOST, host, evidence=evidence)
+            service_id = service_graph.add_asset(
+                AssetType.SERVICE, f"{protocol}/{port}/{service_name.strip().lower()}",
+                metadata={"protocol": protocol, "port": port, "name": service_name.strip()},
+                evidence=evidence,
+            )
+            service_graph.add_relationship(
+                host_id, service_id, RelationshipType.HOSTS_SERVICE,
+                metadata={"port": port, "protocol": protocol}, evidence=evidence,
+            )
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+        graph.merge(service_graph)
 
     return graph, skipped
