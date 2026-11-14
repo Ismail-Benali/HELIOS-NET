@@ -128,3 +128,24 @@ identity and attaches subject, issuer, and validity dates as metadata. A
 authorized connection. Certificate verification remains disabled for metadata
 collection, so this edge is an observation, not a trust or hostname-validation
 verdict. Missing or malformed fingerprints are ignored rather than guessed.
+
+## DNS and service-discovery ingestion (schema 1.1)
+
+The typed graph accepts already-collected `dns_records` and
+`service_observations` through `ingest_discovery_summary(..., scope=...)`.
+This path is deliberately network-free: callers must provide an explicit
+`ScopeEnforcer`; without it, DNS and service observations are skipped.
+
+Supported DNS records are A, AAAA, CNAME, and SRV. A/AAAA answers are checked
+against the authorized CIDR list; CNAME owners and targets and SRV targets are
+checked against the authorized domain/IP scope. SRV ports are checked against
+the configured port allowlist. A/AAAA become `resolves_to`, CNAME becomes
+`cname_to`, and SRV creates `discovers_service` plus `hosts_service`
+relationships. TTL and source evidence are retained. Unsupported or malformed
+records are counted as skipped, not partially ingested.
+
+Service observations require an in-scope host, supported TCP/UDP protocol,
+valid port, non-empty service name, and an authorized port. Repeated canonical
+assets and relationships merge; distinct evidence remains attached. The adapter
+does not make follow-up connections from DNS answers. Any later probe must pass
+through the normal scope authorization path independently.
