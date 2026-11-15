@@ -292,7 +292,7 @@ def test_default_nameservers_are_public_resolvers():
 
 def build_typed_response(domain: str, rtype: int, rdata: bytes, ttl: int = 300) -> bytes:
     question = encode_name(domain) + struct.pack("!HH", rtype, 1)
-    answer = b"\\xc0\\x0c" + struct.pack("!HHIH", rtype, 1, ttl, len(rdata)) + rdata
+    answer = b"\xc0\x0c" + struct.pack("!HHIH", rtype, 1, ttl, len(rdata)) + rdata
     return struct.pack("!HHHHHH", 0x1234, 0x8180, 1, 1, 0, 0) + question + answer
 
 
@@ -312,7 +312,7 @@ def test_parse_records_preserves_aaaa_owner_and_ttl():
 def test_parse_records_decodes_compressed_cname_target():
     resolver = EliteDNSResolver()
     # CNAME RDATA points at the question's encoded qname.
-    packet = build_typed_response("alias.example.test", 5, b"\\xc0\\x0c", ttl=45)
+    packet = build_typed_response("alias.example.test", 5, b"\xc0\x0c", ttl=45)
     assert resolver.parse_records(packet) == [{
         "name": "alias.example.test", "type": "CNAME",
         "value": "alias.example.test", "ttl": 45,
@@ -337,8 +337,8 @@ def test_parse_records_decodes_srv_fields_and_target():
 
 def test_parse_records_rejects_compression_pointer_loops():
     resolver = EliteDNSResolver()
-    packet = build_typed_response("example.test", 5, b"\\xc0\\x0c")
+    packet = build_typed_response("example.test", 5, b"\xc0\x0c")
     # Point the CNAME answer's RDATA back to its own compression pointer.
     mutable = bytearray(packet)
-    mutable[-2:] = b"\\xc0\\xff"
+    mutable[-2:] = b"\xc0\xff"
     assert resolver.parse_records(bytes(mutable)) == []
