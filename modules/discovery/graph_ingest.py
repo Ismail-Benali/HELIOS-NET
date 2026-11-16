@@ -283,7 +283,9 @@ def ingest_discovery_summary(
                     evidence=evidence,
                 )
             elif kind == "CNAME":
-                if not isinstance(value, str) or not scope.is_target_allowed(value):
+                if not isinstance(value, str) or not scope.is_target_allowed(
+                    value
+                ):
                     raise ValueError("CNAME target is outside authorized scope")
                 target_id = record_graph.add_asset(
                     AssetType.DOMAIN, value, evidence=evidence
@@ -383,8 +385,13 @@ def ingest_discovery_summary(
             service_graph = TypedAssetGraph()
             host_id = service_graph.add_asset(AssetType.HOST, host, evidence=evidence)
             service_id = service_graph.add_asset(
-                AssetType.SERVICE, f"{protocol}/{port}/{service_name.strip().lower()}",
-                metadata={"protocol": protocol, "port": port, "name": service_name.strip()},
+                AssetType.SERVICE,
+                f"{protocol}/{port}/{service_name.strip().lower()}",
+                metadata={
+                    "protocol": protocol,
+                    "port": port,
+                    "name": service_name.strip(),
+                },
                 evidence=evidence,
             )
             service_graph.add_relationship(
