@@ -125,14 +125,27 @@ class EliteDNSResolver:
                         if consumed > end:
                             return []
                         value = {
-                            "priority": priority, "weight": weight, "port": port,
-                            "target": target, "protocol": "udp" if "._udp." in owner else "tcp",
+                            "priority": priority,
+                            "weight": weight,
+                            "port": port,
+                            "target": target,
+                            "protocol": "udp" if "._udp." in owner else "tcp",
                         }
                     if value is not None:
-                        record_type = {1: "A", 28: "AAAA", 5: "CNAME", 33: "SRV"}[rtype]
-                        records.append({
-                            "name": owner, "type": record_type, "value": value, "ttl": ttl,
-                        })
+                        record_type = {
+                            1: "A",
+                            28: "AAAA",
+                            5: "CNAME",
+                            33: "SRV",
+                        }[rtype]
+                        records.append(
+                            {
+                                "name": owner,
+                                "type": record_type,
+                                "value": value,
+                                "ttl": ttl,
+                            }
+                        )
                 pos = end
             return records
         except (ValueError, struct.error, IndexError):
