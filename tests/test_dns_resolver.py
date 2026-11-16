@@ -298,14 +298,19 @@ def build_typed_response(domain: str, rtype: int, rdata: bytes, ttl: int = 300) 
 
 def test_parse_records_preserves_aaaa_owner_and_ttl():
     import ipaddress
+
     resolver = EliteDNSResolver()
     packet = build_typed_response(
         "v6.example.test", 28, ipaddress.ip_address("2001:db8::10").packed, ttl=120
     )
-    assert resolver.parse_records(packet) == [{
-        "name": "v6.example.test", "type": "AAAA",
-        "value": "2001:db8::10", "ttl": 120,
-    }]
+    assert resolver.parse_records(packet) == [
+        {
+            "name": "v6.example.test",
+            "type": "AAAA",
+            "value": "2001:db8::10",
+            "ttl": 120,
+        }
+    ]
     assert resolver._parse_response(packet) == []  # legacy API remains A-only
 
 
@@ -313,10 +318,14 @@ def test_parse_records_decodes_compressed_cname_target():
     resolver = EliteDNSResolver()
     # CNAME RDATA points at the question's encoded qname.
     packet = build_typed_response("alias.example.test", 5, b"\xc0\x0c", ttl=45)
-    assert resolver.parse_records(packet) == [{
-        "name": "alias.example.test", "type": "CNAME",
-        "value": "alias.example.test", "ttl": 45,
-    }]
+    assert resolver.parse_records(packet) == [
+        {
+            "name": "alias.example.test",
+            "type": "CNAME",
+            "value": "alias.example.test",
+            "ttl": 45,
+        }
+    ]
 
 
 def test_parse_records_decodes_srv_fields_and_target():
@@ -325,14 +334,20 @@ def test_parse_records_decodes_srv_fields_and_target():
     rdata = struct.pack("!HHH", 10, 5, 8443) + target
     packet = build_typed_response("_https._tcp.example.test", 33, rdata, ttl=90)
     records = resolver.parse_records(packet)
-    assert records == [{
-        "name": "_https._tcp.example.test", "type": "SRV",
-        "value": {
-            "priority": 10, "weight": 5, "port": 8443,
-            "target": "app.example.test", "protocol": "tcp",
-        },
-        "ttl": 90,
-    }]
+    assert records == [
+        {
+            "name": "_https._tcp.example.test",
+            "type": "SRV",
+            "value": {
+                "priority": 10,
+                "weight": 5,
+                "port": 8443,
+                "target": "app.example.test",
+                "protocol": "tcp",
+            },
+            "ttl": 90,
+        }
+    ]
 
 
 def test_parse_records_rejects_compression_pointer_loops():
