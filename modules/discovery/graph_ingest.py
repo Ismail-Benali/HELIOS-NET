@@ -230,7 +230,6 @@ def ingest_discovery_summary(
             continue
         graph.merge(finding_graph)
 
-
     # DNS and service records are ingested only with an explicit scope object.
     # This adapter never resolves names or performs follow-up connections.
     dns_records = summary.get("dns_records", [])
@@ -258,29 +257,43 @@ def ingest_discovery_summary(
                 {"dns_record_type": kind, "dns_ttl": ttl},
             )
             record_graph = TypedAssetGraph()
-            owner_id = record_graph.add_asset(AssetType.DOMAIN, owner, evidence=evidence)
+            owner_id = record_graph.add_asset(
+                AssetType.DOMAIN, owner, evidence=evidence
+            )
             if kind in {"A", "AAAA"}:
                 import ipaddress
 
                 if not isinstance(value, str):
                     raise ValueError("DNS address value must be a string")
                 address = ipaddress.ip_address(value)
-                if (kind == "A" and address.version != 4) or (kind == "AAAA" and address.version != 6):
+                if (kind == "A" and address.version != 4) or (
+                    kind == "AAAA" and address.version != 6
+                ):
                     raise ValueError("DNS address family does not match record type")
                 if not scope.is_target_allowed(str(address)):
                     raise ValueError("DNS address is outside authorized scope")
-                address_id = record_graph.add_asset(AssetType.IP, str(address), evidence=evidence)
+                address_id = record_graph.add_asset(
+                    AssetType.IP, str(address), evidence=evidence
+                )
                 record_graph.add_relationship(
-                    owner_id, address_id, RelationshipType.RESOLVES_TO,
-                    metadata={"record_type": kind, "ttl": ttl}, evidence=evidence,
+                    owner_id,
+                    address_id,
+                    RelationshipType.RESOLVES_TO,
+                    metadata={"record_type": kind, "ttl": ttl},
+                    evidence=evidence,
                 )
             elif kind == "CNAME":
                 if not isinstance(value, str) or not scope.is_target_allowed(value):
                     raise ValueError("CNAME target is outside authorized scope")
-                target_id = record_graph.add_asset(AssetType.DOMAIN, value, evidence=evidence)
+                target_id = record_graph.add_asset(
+                    AssetType.DOMAIN, value, evidence=evidence
+                )
                 record_graph.add_relationship(
-                    owner_id, target_id, RelationshipType.CNAME_TO,
-                    metadata={"record_type": kind, "ttl": ttl}, evidence=evidence,
+                    owner_id,
+                    target_id,
+                    RelationshipType.CNAME_TO,
+                    metadata={"record_type": kind, "ttl": ttl},
+                    evidence=evidence,
                 )
             elif kind == "SRV":
                 if not isinstance(value, dict):
@@ -291,25 +304,42 @@ def ingest_discovery_summary(
                 service_name = str(value.get("service", "unknown")).lower()
                 if protocol not in {"tcp", "udp"}:
                     raise ValueError("unsupported SRV protocol")
-                if not isinstance(target, str) or not scope.is_target_allowed(target):
+                if not isinstance(target, str) or not scope.is_target_allowed(
+                    target
+                ):
                     raise ValueError("SRV target is outside authorized scope")
-                if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+                if (
+                    isinstance(port, bool)
+                    or not isinstance(port, int)
+                    or not 1 <= port <= 65535
+                ):
                     raise ValueError("invalid SRV port")
                 scope.check_ports([port])
                 service_id = record_graph.add_asset(
-                    AssetType.SERVICE, f"{protocol}/{port}/{service_name}",
-                    metadata={"protocol": protocol, "port": port, "name": service_name, "target": target},
+                    AssetType.SERVICE,
+                    f"{protocol}/{port}/{service_name}",
+                    metadata={
+                        "protocol": protocol,
+                        "port": port,
+                        "name": service_name,
+                        "target": target,
+                    },
                     evidence=evidence,
                 )
                 record_graph.add_relationship(
-                    owner_id, service_id, RelationshipType.DISCOVERS_SERVICE,
+                    owner_id,
+                    service_id,
+                    RelationshipType.DISCOVERS_SERVICE,
                     metadata={"record_type": kind, "ttl": ttl, "target": target},
                     evidence=evidence,
                 )
                 target_id = record_graph.add_asset(AssetType.HOST, target, evidence=evidence)
                 record_graph.add_relationship(
-                    target_id, service_id, RelationshipType.HOSTS_SERVICE,
-                    metadata={"port": port, "protocol": protocol}, evidence=evidence,
+                    target_id,
+                    service_id,
+                    RelationshipType.HOSTS_SERVICE,
+                    metadata={"port": port, "protocol": protocol},
+                    evidence=evidence,
                 )
             else:
                 skipped += 1
@@ -331,11 +361,14 @@ def ingest_discovery_summary(
         protocol = str(observation.get("protocol", "tcp")).lower()
         service_name = observation.get("service")
         if (
-            not isinstance(host, str) or not scope.is_target_allowed(host)
-            or isinstance(port, bool) or not isinstance(port, int)
+            not isinstance(host, str)
+            or not scope.is_target_allowed(host)
+            or isinstance(port, bool)
+            or not isinstance(port, int)
             or not 1 <= port <= 65535
             or protocol not in {"tcp", "udp"}
-            or not isinstance(service_name, str) or not service_name.strip()
+            or not isinstance(service_name, str)
+            or not service_name.strip()
         ):
             skipped += 1
             continue
