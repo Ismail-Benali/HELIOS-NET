@@ -284,5 +284,5 @@ def test_duplicate_dns_observations_merge_identity_but_preserve_distinct_evidenc
     assert skipped == 0
     assert len([a for a in graph.assets.values() if a.type.value == "ip"]) == 1
     edge = next(iter(graph.relationships.values()))
-    assert len(edge.evidence) == 1  # identical observation evidence is deduplicated
+    assert len(edge.evidence) == 2  # distinct TTL observations retain distinct evidence
     assert edge.metadata["ttl"] == [300, 120]
