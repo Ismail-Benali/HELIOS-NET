@@ -46,6 +46,8 @@ DOCUMENTED_PATHS = (
     "core/scope.py",
     "core/wal.py",
     "core/accel.py",
+    "core/native_contract.py",
+    "core/cores.py",
     "core/reporter_html.py",
     "engine/graph",
     "engine/killchain/pathfinder.py",

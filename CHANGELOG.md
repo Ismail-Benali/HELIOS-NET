@@ -11,6 +11,19 @@ actually contains; `helios version` reports the revision with
 - Docker workflow (`docker.yml`): builds the image on pull requests and `master`
   pushes, smoke-tests `helios version` inside the container, and publishes
   `ghcr.io/<owner>/<repository>` on `v*` tags.
+- The native capability contract is now authoritative: `core/accel.py` derives
+  each backend's advertised capabilities from `core/native_contract.py`, every
+  capability names a tested entrypoint, `helios doctor` prints the matrix, and
+  `tests/test_capability_contract.py` covers matrix agreement, the closed
+  outcome-state set, and degraded/failed dispatch for scanning, matching and
+  graph operations.
+
+### Changed
+
+- A skipped test now fails the run unless `--allow-skips` is passed. Every skip
+  in this suite meant a native core had not been built, so a green run could
+  claim C, Rust and Go parity, FFI and golden coverage it never executed; CI
+  already builds every core, and `python build.py` does the same locally.
 
 ### Fixed
 

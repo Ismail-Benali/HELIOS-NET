@@ -4,6 +4,12 @@ The registry describes what each backend implements independently from whether
 its binary is usable on this host. Transport boundaries remain backend-specific:
 Go/C use their existing process protocols, Rust uses its C ABI, and Python is
 the reference/fallback implementation.
+
+The matrix is authoritative rather than descriptive: `core/accel.py` derives
+each backend's advertised capability set from it, and every capability names
+the public callable that serves it (`CAPABILITY_ENTRYPOINTS`). `helios doctor`
+prints the matrix, and `tests/test_capability_contract.py` fails when a backend,
+a capability, or an entrypoint is missing.
 """
 
 from __future__ import annotations
@@ -58,6 +64,25 @@ STATES = frozenset(
         "unsupported",
     }
 )
+
+#: The closed set of states `normalize_outcome()` may report. A new state cannot
+#: appear in one result without being added here and covered by the tests.
+OUTCOME_STATES = frozenset({"success", "degraded", "failed", "unavailable"})
+
+#: The public callable that serves each capability. This mapping is what makes
+#: the registry authoritative rather than descriptive: a capability that is
+#: advertised here without a callable entrypoint fails
+#: `tests/test_capability_contract.py`.
+CAPABILITY_ENTRYPOINTS: dict[str, str] = {
+    "fingerprint": "core.accel.fingerprint",
+    "fnv1a32": "core.accel.fingerprint",
+    "graph_betweenness": "core.accel.graph_betweenness",
+    "graph_components": "core.accel.graph_components",
+    "graph_degree": "core.accel.graph_degree_centrality",
+    "graph_shortest_path": "core.accel.graph_shortest_path",
+    "match": "core.accel.match_signatures",
+    "scan_ports": "core.accel.scan_ports",
+}
 
 
 @dataclass(frozen=True)
@@ -122,6 +147,7 @@ def capability_registry() -> dict[str, Any]:
     return {
         "contract_version": CONTRACT_VERSION,
         "capabilities": sorted(set().union(*SUPPORTED_CAPABILITIES.values())),
+        "entrypoints": dict(CAPABILITY_ENTRYPOINTS),
         "backends": [
             {
                 "name": name,

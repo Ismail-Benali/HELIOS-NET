@@ -44,6 +44,7 @@
 6. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
 7. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
 8. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
+9. **Native Capability Contract:** `core/native_contract.py` is the single backend/capability matrix. `core/accel.py` derives what each backend advertises from it, every capability names its callable, `python run.py doctor` prints the matrix, and degraded or failed dispatches report their reason instead of an empty success.
 
 ---
 
@@ -224,8 +225,15 @@ Install the pinned development toolchain, then run the suite:
 
 ```bash
 python -m pip install -r requirements-dev.txt
+python build.py
 python -m pytest -q
 ```
+
+`python build.py` is not optional if you want the real numbers. Every skip in
+this suite means a native core was not built on the host, and a skipped test
+now **fails** the run unless you pass `--allow-skips`: `799 passed, 108
+skipped` and `907 passed` are not the same claim, and only the second one
+exercised the C, Rust and Go parity, FFI and golden tests.
 
 `tests/test_end_to_end.py` is the integration gate: it starts a real local TCP
 server, runs a campaign through the CLI and the real cores, asserts the banner

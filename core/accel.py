@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from core.native_contract import SUPPORTED_CAPABILITIES
+
 __all__ = [
     "BackendInfo",
     "GraphOutcome",
@@ -60,18 +62,20 @@ __all__ = [
 
 # --------------------------------------------------------------- result types
 
-#: The graph operations both the Rust core and the Python fallback implement. The
-#: C core ships no graph code, so it is registered without them.
-GRAPH_CAPABILITIES = (
-    "graph_degree",
-    "graph_betweenness",
-    "graph_components",
-    "graph_shortest_path",
+#: Derived from the capability contract in `core.native_contract`, which is the
+#: single source of the backend matrix. Hard-coding these sets here again is how
+#: the registry and the dispatcher drift apart.
+GRAPH_CAPABILITIES = tuple(
+    sorted(
+        capability
+        for capability in SUPPORTED_CAPABILITIES["rust"]
+        if capability.startswith("graph_")
+    )
 )
 
 #: Port scanning, served by the Go core and by a plain socket probe. The C and
 #: Rust cores ship no network code, so they are registered without it.
-SCAN_CAPABILITIES = ("scan_ports",)
+SCAN_CAPABILITIES = tuple(sorted(SUPPORTED_CAPABILITIES["go"]))
 
 
 @dataclass(frozen=True)
@@ -163,7 +167,7 @@ def _c_info() -> BackendInfo:
     return BackendInfo(
         name="c",
         available=True,
-        capabilities=frozenset({"match", "fingerprint"}),
+        capabilities=frozenset(SUPPORTED_CAPABILITIES["c"]),
     )
 
 
@@ -183,7 +187,7 @@ def _rust_info() -> BackendInfo:
     return BackendInfo(
         name="rust",
         available=True,
-        capabilities=frozenset({"match", "fnv1a32"}) | frozenset(GRAPH_CAPABILITIES),
+        capabilities=frozenset(SUPPORTED_CAPABILITIES["rust"]),
     )
 
 
@@ -192,9 +196,7 @@ def _python_info() -> BackendInfo:
         name="python",
         available=True,
         reason="always available; this is the fallback of last resort",
-        capabilities=frozenset({"match", "fingerprint"})
-        | frozenset(GRAPH_CAPABILITIES)
-        | frozenset(SCAN_CAPABILITIES),
+        capabilities=frozenset(SUPPORTED_CAPABILITIES["python"]),
     )
 
 
@@ -214,7 +216,7 @@ def _go_info() -> BackendInfo:
     return BackendInfo(
         name="go",
         available=True,
-        capabilities=frozenset(SCAN_CAPABILITIES),
+        capabilities=frozenset(SUPPORTED_CAPABILITIES["go"]),
     )
 
 
