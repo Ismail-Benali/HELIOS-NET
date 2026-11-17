@@ -36,11 +36,13 @@ WORKDIR /app
 
 # Copy compiled binaries and control plane scripts from builder stage
 COPY --from=builder /build/*.py /app/
+COPY --from=builder /build/cli /app/cli/
 COPY --from=builder /build/core /app/core/
 COPY --from=builder /build/engine /app/engine/
 COPY --from=builder /build/modules /app/modules/
 COPY --from=builder /build/transport /app/transport/
 COPY --from=builder /build/rust-core /app/rust-core/
+COPY --from=builder /build/config /app/config/
 
 # Set ownership and execution permissions for non-root user
 RUN chown -R helios:helios /app && \

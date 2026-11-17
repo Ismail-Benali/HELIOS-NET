@@ -245,6 +245,10 @@ python tools/gen_c_reference.py --check
 | `build.yml` | The project builds and its core suites pass on Ubuntu 24.04 and Windows: Python, Go, Rust, C, the C golden contract, and the ASan/UBSan plus differential-fuzz stages. | That no memory-safety bug exists. Sanitizers and fuzzing only cover the paths they execute. |
 | `lint.yml` | Ruff, Clippy/rustfmt, cppcheck/clang-tidy and gofmt/golangci-lint agree with the tree. | Correctness. A clean lint is not a passing test. |
 
+`docker.yml` builds the container image on every pull request and `master` push,
+runs `helios version` inside it, and publishes `ghcr.io/<owner>/<repository>` on
+`v*` tags. It is a build check and release publisher, not a merge gate yet.
+
 Coverage, Security (CodeQL, Trivy, Scorecards), Fuzz (nightly) and Release stay
 in the repository but run manually (`workflow_dispatch`) while the pipeline is
 being stabilized. They are not merge gates yet.
