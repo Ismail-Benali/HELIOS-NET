@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a capability or an improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        HELIOS-NET is a dual-use tool. Proposals that weaken scope enforcement
+        or add undisclosed offensive capability will be declined.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: A concrete use case in authorized ASM, red teaming, or defense.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: dropdown
+    id: scope_impact
+    attributes:
+      label: Does this change the authorization boundary?
+      options:
+        - "No"
+        - "Yes — needs security review"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I will keep examples scoped to loopback or example.test
+          required: true
+        - label: I understand this project is non-commercial licensed
+          required: true

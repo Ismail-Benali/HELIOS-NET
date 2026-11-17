@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible problem in HELIOS-NET
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Never attach real scope files, credentials,
+        or campaign output.** For security vulnerabilities, use private
+        reporting as described in [SECURITY.md](../../SECURITY.md), not a
+        public issue.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: master@8d630cc or v0.x
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS, Python version, and native toolchains
+      placeholder: Ubuntu 24.04, Python 3.12, Go 1.22
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Expected behavior versus actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction on a local lab
+      description: Exact commands and scope entries. Use loopback or example.test only.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Redact hosts, tokens, and absolute paths you do not want public.
+      render: shell
