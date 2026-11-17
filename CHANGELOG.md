@@ -4,6 +4,19 @@ Notable changes to HELIOS-NET. Entries describe what a checked-out revision
 actually contains; `helios version` reports the revision with
 `git describe --tags --always`, so a tagged checkout prints its tag.
 
+## [Unreleased]
+
+### Added
+
+- Docker workflow (`docker.yml`): builds the image on pull requests and `master`
+  pushes, smoke-tests `helios version` inside the container, and publishes
+  `ghcr.io/<owner>/<repository>` on `v*` tags.
+
+### Fixed
+
+- The runtime image now includes `cli/` and `config/`, which the entrypoint
+  needs (`run.py` imports `cli.main`) and which the previous Dockerfile omitted.
+
 ## [2.0.0] - 2026-11-17
 
 This release supersedes `v1.3.0`. HELIOS-NET is now an authorized attack
