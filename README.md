@@ -44,6 +44,7 @@
 6. **Asset Graph & Risk Ranking:** Converts discoveries into an **Asset Graph**, computes Degree Centrality, and runs **Dijkstra's Algorithm** to calculate optimal inspection routes.
 7. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
 8. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
+9. **Native Capability Contract:** `core/native_contract.py` is the single backend/capability matrix. `core/accel.py` derives what each backend advertises from it, every capability names its callable, `python run.py doctor` prints the matrix, and degraded or failed dispatches report their reason instead of an empty success.
 
 ---
 

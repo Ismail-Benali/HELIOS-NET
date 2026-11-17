@@ -118,6 +118,29 @@ def cmd_doctor(args: Any) -> int:
         location = shutil.which(tool)
         status = "OK" if location else "OPTIONAL"
         print(f"[{status}] {tool}: {location or 'not found'}")
+    from core.native_contract import capability_registry
+
+    try:
+        registry = capability_registry()
+    except Exception as exc:  # noqa: BLE001 - diagnostics must still print
+        print(f"[WARN] Capability contract unavailable: {type(exc).__name__}: {exc}")
+    else:
+        print(f"[INFO] Capability contract: {registry['contract_version']}")
+        for backend in registry["backends"]:
+            supported = set(backend["supported_capabilities"])
+            states = sorted(
+                {
+                    entry["state"]
+                    for entry in registry["entries"]
+                    if entry["backend"] == backend["name"]
+                    and entry["capability"] in supported
+                }
+            )
+            capabilities = ", ".join(backend["supported_capabilities"]) or "none"
+            print(
+                f"[INFO] {backend['name']}: {'/'.join(states)} "
+                f"via {backend['transport']} ({capabilities})"
+            )
     data_ok = not data_path.exists() or data_path.is_dir()
     return 0 if python_ok and scope_ok and data_ok else 1
 

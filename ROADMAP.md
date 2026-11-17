@@ -83,3 +83,8 @@ and evidence model as one-time campaigns.
 - Repository hygiene was tightened (PR #49): private security reporting, a
   documented threat model, issue templates, a 60-second local quickstart, and
   a ruff pre-commit hook aligned with the CI version.
+- The capability contract is authoritative: `core/accel.py` derives each
+  backend's advertised capabilities from `core/native_contract.py`, every
+  capability names a tested entrypoint, `helios doctor` prints the matrix, and
+  normalized outcomes use one closed state set. This closes the P1 engine
+  interface item.
