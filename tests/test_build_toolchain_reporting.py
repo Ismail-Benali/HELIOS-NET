@@ -384,17 +384,19 @@ class TestPrebuiltCBinaryIsAcceptedOnlyWhenCurrent:
         """
         core = ROOT / "transport" / "c_core"
         checked = 0
-        for name in ("helios_core.exe", "test_core.exe", "fuzz_harness.exe"):
-            binary = core / "build" / name
-            if not binary.exists():
-                continue
-            checked += 1
-            usable, why = build._usable_prebuilt(binary, core)
-            if usable:
-                continue
-            assert "predates" in why and binary.name in why, (
-                f"{name} was rejected without naming the source it predates: {why}"
-            )
+        for name in ("helios_core", "test_core", "fuzz_harness"):
+            for suffix in (".exe", ""):
+                binary = core / "build" / f"{name}{suffix}"
+                if not binary.exists():
+                    continue
+                checked += 1
+                usable, why = build._usable_prebuilt(binary, core)
+                if usable:
+                    continue
+                assert "predates" in why and binary.name in why, (
+                    f"{binary.name} was rejected without naming the source it "
+                    f"predates: {why}"
+                )
         if not checked:
             pytest.skip("no prebuilt C binaries are present in this checkout")
 
