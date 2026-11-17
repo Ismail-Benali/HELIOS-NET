@@ -283,9 +283,7 @@ def ingest_discovery_summary(
                     evidence=evidence,
                 )
             elif kind == "CNAME":
-                if not isinstance(value, str) or not scope.is_target_allowed(
-                    value
-                ):
+                if not isinstance(value, str) or not scope.is_target_allowed(value):
                     raise ValueError("CNAME target is outside authorized scope")
                 target_id = record_graph.add_asset(
                     AssetType.DOMAIN, value, evidence=evidence
@@ -306,9 +304,7 @@ def ingest_discovery_summary(
                 service_name = str(value.get("service", "unknown")).lower()
                 if protocol not in {"tcp", "udp"}:
                     raise ValueError("unsupported SRV protocol")
-                if not isinstance(target, str) or not scope.is_target_allowed(
-                    target
-                ):
+                if not isinstance(target, str) or not scope.is_target_allowed(target):
                     raise ValueError("SRV target is outside authorized scope")
                 if (
                     isinstance(port, bool)
@@ -335,7 +331,9 @@ def ingest_discovery_summary(
                     metadata={"record_type": kind, "ttl": ttl, "target": target},
                     evidence=evidence,
                 )
-                target_id = record_graph.add_asset(AssetType.HOST, target, evidence=evidence)
+                target_id = record_graph.add_asset(
+                    AssetType.HOST, target, evidence=evidence
+                )
                 record_graph.add_relationship(
                     target_id,
                     service_id,
@@ -395,8 +393,11 @@ def ingest_discovery_summary(
                 evidence=evidence,
             )
             service_graph.add_relationship(
-                host_id, service_id, RelationshipType.HOSTS_SERVICE,
-                metadata={"port": port, "protocol": protocol}, evidence=evidence,
+                host_id,
+                service_id,
+                RelationshipType.HOSTS_SERVICE,
+                metadata={"port": port, "protocol": protocol},
+                evidence=evidence,
             )
         except (TypeError, ValueError):
             skipped += 1
