@@ -4,11 +4,15 @@ from typing import Any
 
 
 def ingest_discovery_summary(
-    summary: dict[str, Any], *, observed_at: str, reference: str = ""
+    summary: dict[str, Any],
+    *,
+    observed_at: str,
+    reference: str = "",
+    scope: Any | None = None,
 ) -> tuple[Any, int]:
     from modules.discovery.graph_ingest import ingest_discovery_summary as ingest
 
-    return ingest(summary, observed_at=observed_at, reference=reference)
+    return ingest(summary, observed_at=observed_at, reference=reference, scope=scope)
 
 
 OBSERVED_AT = "2026-11-10T20:30:00Z"
@@ -176,3 +180,188 @@ def test_ingestion_ignores_malformed_certificate_fingerprints():
 
     assert skipped == 0
     assert not any(asset.type.value == "certificate" for asset in graph.assets.values())
+
+
+def scoped(domains=None, cidrs=None, ports=None):
+    from core.scope import ScopeEnforcer
+
+    return ScopeEnforcer(
+        allowed_domains=domains or ["example.test"],
+        allowed_cidrs=cidrs or ["192.0.2.0/24", "2001:db8::/32"],
+        ports=ports or [443, 8443],
+    )
+
+
+def test_dns_a_and_aaaa_records_are_typed_and_scope_checked():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "dns_records": [
+                {
+                    "name": "app.example.test",
+                    "type": "A",
+                    "value": "192.0.2.10",
+                    "ttl": 300,
+                },
+                {
+                    "name": "v6.example.test",
+                    "type": "AAAA",
+                    "value": "2001:db8::10",
+                    "ttl": 120,
+                },
+            ]
+        },
+        observed_at=OBSERVED_AT,
+        scope=scoped(),
+    )
+    assert skipped == 0
+    assert {
+        a.canonical_value for a in graph.assets.values() if a.type.value == "ip"
+    } == {"192.0.2.10", "2001:db8::10"}
+    edges = [e for e in graph.relationships.values() if e.type.value == "resolves_to"]
+    assert len(edges) == 2
+    assert all(
+        next(iter(edge.evidence.values())).attributes["dns_ttl"] in {120, 300}
+        for edge in edges
+    )
+
+
+def test_dns_cname_is_a_typed_edge_and_keeps_ttl():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "dns_records": [
+                {
+                    "name": "www.example.test",
+                    "type": "CNAME",
+                    "value": "app.example.test",
+                    "ttl": 600,
+                }
+            ]
+        },
+        observed_at=OBSERVED_AT,
+        scope=scoped(),
+    )
+    assert skipped == 0
+    edge = next(iter(graph.relationships.values()))
+    assert edge.type.value == "cname_to"
+    assert edge.metadata["ttl"] == 600
+
+
+def test_dns_out_of_scope_answers_are_rejected_before_graph_ingestion():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "dns_records": [
+                {
+                    "name": "app.example.test",
+                    "type": "A",
+                    "value": "203.0.113.8",
+                    "ttl": 60,
+                },
+                {
+                    "name": "app.example.test",
+                    "type": "CNAME",
+                    "value": "outside.invalid",
+                    "ttl": 60,
+                },
+            ]
+        },
+        observed_at=OBSERVED_AT,
+        scope=scoped(),
+    )
+    assert skipped == 2
+    assert graph.assets == {}
+    assert graph.relationships == {}
+
+
+def test_dns_and_service_records_fail_closed_without_scope():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "dns_records": [
+                {
+                    "name": "app.example.test",
+                    "type": "A",
+                    "value": "192.0.2.10",
+                    "ttl": 60,
+                }
+            ]
+        },
+        observed_at=OBSERVED_AT,
+    )
+    assert skipped == 1
+    assert graph.assets == {}
+
+
+def test_srv_records_create_discovery_and_host_service_edges():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "dns_records": [
+                {
+                    "name": "_https._tcp.example.test",
+                    "type": "SRV",
+                    "value": {
+                        "target": "app.example.test",
+                        "port": 443,
+                        "protocol": "tcp",
+                        "service": "https",
+                    },
+                    "ttl": 180,
+                }
+            ]
+        },
+        observed_at=OBSERVED_AT,
+        scope=scoped(),
+    )
+    assert skipped == 0
+    assert {edge.type.value for edge in graph.relationships.values()} == {
+        "discovers_service",
+        "hosts_service",
+    }
+
+
+def test_service_observations_are_scope_and_port_checked():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "service_observations": [
+                {
+                    "host": "app.example.test",
+                    "port": 443,
+                    "protocol": "tcp",
+                    "service": "https",
+                },
+                {"host": "outside.invalid", "port": 443, "service": "https"},
+                {"host": "app.example.test", "port": 22, "service": "ssh"},
+            ]
+        },
+        observed_at=OBSERVED_AT,
+        scope=scoped(),
+    )
+    assert skipped == 2
+    assert sum(a.type.value == "service" for a in graph.assets.values()) == 1
+
+
+def test_duplicate_dns_observations_merge_identity_but_preserve_distinct_evidence():
+    graph, skipped = ingest_discovery_summary(
+        {
+            "dns_records": [
+                {
+                    "name": "app.example.test",
+                    "type": "A",
+                    "value": "192.0.2.10",
+                    "ttl": 300,
+                },
+                {
+                    "name": "APP.EXAMPLE.TEST.",
+                    "type": "A",
+                    "value": "192.0.2.10",
+                    "ttl": 120,
+                },
+            ]
+        },
+        observed_at=OBSERVED_AT,
+        reference="campaign:dns",
+        scope=scoped(),
+    )
+    assert skipped == 0
+    assert len([a for a in graph.assets.values() if a.type.value == "ip"]) == 1
+    edge = next(iter(graph.relationships.values()))
+    assert len(edge.evidence) == 2  # distinct TTL observations retain distinct evidence
+    assert edge.metadata["ttl"] == [300, 120]
