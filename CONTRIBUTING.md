@@ -35,7 +35,7 @@ Understanding the layering helps you place your contribution correctly:
 
 ```
 Python Orchestration Layer        core/  · engine/ · modules/ · cli/ · run.py
-Native Transport Layer (Go & C)   transport/  (goscan, rawsync, evasion, ...)
+Native Transport Layer (Go & C)   transport/  (goscan, c_core)
 High-Performance Rust Core        rust-core/  (graph pathfinding, TTL analysis)
 Documentation                      docs/ · README.md · ROADMAP.md
 Automation                         build.py · .github/workflows/build.yml
@@ -43,7 +43,7 @@ Automation                         build.py · .github/workflows/build.yml
 
 | Layer | Purpose |
 |-------|---------|
-| `core/` | State, WAL, orchestration, planning, reporting, mutation, daemon |
+| `core/` | State, WAL, orchestration, planning, reporting, daemon |
 | `engine/` | Graph, pathfinding, algorithms, verdicts, scanners, plugins |
 | `modules/` | Discovery, asset metadata, recon, collection, registry, plugins |
 | `transport/` | Go & C binaries that run natively via IPC/FFI |
