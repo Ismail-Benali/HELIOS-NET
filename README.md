@@ -225,8 +225,15 @@ Install the pinned development toolchain, then run the suite:
 
 ```bash
 python -m pip install -r requirements-dev.txt
+python build.py
 python -m pytest -q
 ```
+
+`python build.py` is not optional if you want the real numbers. Every skip in
+this suite means a native core was not built on the host, and a skipped test
+now **fails** the run unless you pass `--allow-skips`: `799 passed, 108
+skipped` and `907 passed` are not the same claim, and only the second one
+exercised the C, Rust and Go parity, FFI and golden tests.
 
 `tests/test_end_to_end.py` is the integration gate: it starts a real local TCP
 server, runs a campaign through the CLI and the real cores, asserts the banner
