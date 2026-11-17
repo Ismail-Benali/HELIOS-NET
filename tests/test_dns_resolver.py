@@ -290,7 +290,9 @@ def test_default_nameservers_are_public_resolvers():
     assert EliteDNSResolver().nameservers == ["8.8.8.8", "1.1.1.1", "8.8.4.4"]
 
 
-def build_typed_response(domain: str, rtype: int, rdata: bytes, ttl: int = 300) -> bytes:
+def build_typed_response(
+    domain: str, rtype: int, rdata: bytes, ttl: int = 300
+) -> bytes:
     question = encode_name(domain) + struct.pack("!HH", rtype, 1)
     answer = b"\xc0\x0c" + struct.pack("!HHIH", rtype, 1, ttl, len(rdata)) + rdata
     return struct.pack("!HHHHHH", 0x1234, 0x8180, 1, 1, 0, 0) + question + answer

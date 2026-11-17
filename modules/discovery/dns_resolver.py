@@ -72,11 +72,13 @@ class EliteDNSResolver:
                 raise ValueError("unsupported DNS label encoding")
             cursor += 1
             if length == 0:
-                return ".".join(labels).lower(), consumed if consumed is not None else cursor
+                return ".".join(
+                    labels
+                ).lower(), consumed if consumed is not None else cursor
             if length > 63 or cursor + length > len(data):
                 raise ValueError("invalid or truncated DNS label")
             try:
-                label = data[cursor:cursor + length].decode("ascii")
+                label = data[cursor : cursor + length].decode("ascii")
             except UnicodeDecodeError as exc:
                 raise ValueError("non-ASCII DNS label") from exc
             labels.append(label)
@@ -103,14 +105,18 @@ class EliteDNSResolver:
                 owner, pos = self._decode_name(data, pos)
                 if pos + 10 > len(data):
                     return []
-                rtype, rclass, ttl, rdlength = struct.unpack("!HHIH", data[pos:pos + 10])
+                rtype, rclass, ttl, rdlength = struct.unpack(
+                    "!HHIH", data[pos : pos + 10]
+                )
                 pos += 10
                 end = pos + rdlength
                 if end > len(data):
                     return []
                 if rclass == 1:
                     value: object | None = None
-                    if (rtype == 1 and rdlength == 4) or (rtype == 28 and rdlength == 16):
+                    if (rtype == 1 and rdlength == 4) or (
+                        rtype == 28 and rdlength == 16
+                    ):
                         import ipaddress
 
                         value = str(ipaddress.ip_address(data[pos:end]))
@@ -120,7 +126,9 @@ class EliteDNSResolver:
                             return []
                         value = target
                     elif rtype == 33 and rdlength >= 7:
-                        priority, weight, port = struct.unpack("!HHH", data[pos:pos + 6])
+                        priority, weight, port = struct.unpack(
+                            "!HHH", data[pos : pos + 6]
+                        )
                         target, consumed = self._decode_name(data, pos + 6)
                         if consumed > end:
                             return []
