@@ -142,7 +142,14 @@ Before submitting a pull request, confirm:
    git checkout -b feat/my-feature
    ```
 2. Implement your change following the checklist above.
-3. Run the full test suite and `python build.py` (if native code changed).
+3. Build the native cores and run the full suite:
+   ```bash
+   python build.py
+   python -m pytest -q
+   ```
+   A skipped test fails the run unless you pass `--allow-skips`. Every skip
+   means a core was not built, so do not use that flag to make the numbers look
+   green; use it only for a deliberately platform-gated test.
 4. Commit with a clear, conventional message:
    ```
    feat(modules): add MyDiscovery module
