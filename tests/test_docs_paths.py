@@ -72,6 +72,7 @@ DOCUMENTED_PATHS = (
     "CHANGELOG.md",
     ".github/workflows/build.yml",
     ".github/workflows/lint.yml",
+    ".github/workflows/docker.yml",
 )
 
 REMOVED_COMPONENT_TOKENS = (
