@@ -71,8 +71,15 @@ and evidence model as one-time campaigns.
   evidence in Python.
 - The Rust ABI and its legacy undirected analytics contract remain unchanged.
   This increment does not claim directed graph analytics or full polyglot
-  graph parity. Dedicated DNS record and service-discovery graph adapters remain
-  open.
+  graph parity.
+- Dedicated DNS record and service-discovery graph adapters are merged (PR #45).
+  They expand names only through Certificate Transparency and scoped
+  resolution, drop every answer outside the authorized scope before a socket
+  is opened, and record typed evidence (TTL, records, service endpoints).
+  This closes the dedicated DNS/service adapter gap for the P1 asset graph.
 - TLS observations now include a SHA-256 certificate fingerprint. The typed
   graph records certificate identity and a directed certificate_for edge to
   the observed host, with bounded certificate metadata and evidence provenance.
+- Repository hygiene was tightened (PR #49): private security reporting, a
+  documented threat model, issue templates, a 60-second local quickstart, and
+  a ruff pre-commit hook aligned with the CI version.
