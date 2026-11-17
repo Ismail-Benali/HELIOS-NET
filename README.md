@@ -195,7 +195,7 @@ toolchains are reported separately; the Python control plane and a valid scope
 configuration are the required checks. Review `config/scope.yaml` and add only
 assets and ports you are authorized to test.
 
-### 5. Run the End-to-End Simulation
+### 6. Run the End-to-End Simulation
 ```bash
 python run_simulation.py
 ```
@@ -254,8 +254,28 @@ No automated check proves the project is free of vulnerabilities.
 
 ## 🛡️ Honest Project Status
 
-**HELIOS-NET is a focused, research-grade Attack Surface Management and Scanning Framework.**
-Following a major strategic refactoring, all unused polyglot bloat, disconnected evasion stubs, and malware tooling have been surgically removed to focus entirely on robust orchestration, fast network discovery, asset graphing, and executive reporting.
+**HELIOS-NET is a focused, research-grade Attack Surface Management and scanning framework.**
+
+An earlier generation of this repository advertised raw SYN transport, DNS
+tunnelling, in-memory execution, direct-syscall evasion, and distributed
+consensus. None of that code is present today. The tree contains:
+
+| Layer | Present in this repository |
+| --- | --- |
+| Python | `core/` (scope, WAL, state, orchestration, reporting), `engine/` (graph, verdicts, risk scoring), `modules/` (discovery, recon, registry) |
+| Go | `transport/goscan/` — concurrent TCP discovery and the NDJSON `serve` worker |
+| C | `transport/c_core/` — Aho–Corasick/Boyer–Moore matching, hashing, and batch primitives |
+| Rust | `rust-core/` — string matching and graph analytics through a C ABI |
+
+The remaining helpers whose names suggest offensive use are offline or pacing
+logic, not execution: `engine/killchain/pathfinder.py` ranks inspection routes
+over an already collected asset graph (exposed as `graph analyze` with
+`--source-asset`/`--target-asset`), and `modules/stealth/pacer.py` paces
+requests. There is no payload, implant, C2 channel, credential-access code, or
+evasion binary in this repository.
+
+No component here exploits a vulnerability, and no automated check proves the
+project is free of vulnerabilities.
 
 ---
 
