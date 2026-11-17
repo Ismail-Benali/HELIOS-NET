@@ -22,8 +22,15 @@ MARKDOWN_DOCUMENTS = (
     ROOT / "ROADMAP.md",
     ROOT / "CONTRIBUTING.md",
     ROOT / "SECURITY.md",
+    ROOT / "CHANGELOG.md",
     *sorted((ROOT / "docs").glob("*.md")),
     *sorted((ROOT / ".github").glob("*.md")),
+)
+
+# CHANGELOG.md must name the components it removed, so it is excluded from the
+# stale-reference scan while still checked for links.
+CURRENT_STATE_DOCUMENTS = tuple(
+    document for document in MARKDOWN_DOCUMENTS if document.name != "CHANGELOG.md"
 )
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -62,6 +69,7 @@ DOCUMENTED_PATHS = (
     "docs/IPC-CONTRACT.md",
     "docs/ASSET-GRAPH.md",
     "docs/RISK-SCORING.md",
+    "CHANGELOG.md",
     ".github/workflows/build.yml",
     ".github/workflows/lint.yml",
 )
@@ -120,7 +128,7 @@ def test_documented_component_paths_exist(relative: str) -> None:
 def test_removed_components_are_not_documented(token: str) -> None:
     offenders = [
         document.relative_to(ROOT).as_posix()
-        for document in MARKDOWN_DOCUMENTS
+        for document in CURRENT_STATE_DOCUMENTS
         if token in document.read_text(encoding="utf-8")
     ]
     assert offenders == [], (
