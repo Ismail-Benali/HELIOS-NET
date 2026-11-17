@@ -116,6 +116,30 @@ Rust 73 tests (31 in-library, 21 property, 21 C-ABI) plus an in-library self
 test; C 297 native checks, 31,886 differential-fuzzer checks, and a 19-check
 self test.
 
+## Capability contract
+
+`core/native_contract.py` is the source-level matrix: which backend implements
+which capability, over which transport, independent of whether its binary can
+run on this host. `core/accel.py` derives every backend's advertised set from
+that matrix instead of repeating it, so the registry and the dispatcher cannot
+disagree about what a backend implements.
+
+Registry states are `ready`, `fallback`, `blocked`, `failed`, `unavailable` and
+`unsupported`. A blocked or failed core keeps its supported capabilities listed,
+which is what separates "this backend cannot do that" from "it could not run
+here". Every capability also names the public callable that serves it in
+`CAPABILITY_ENTRYPOINTS`; advertising a capability without an entrypoint is a
+test failure, not a documentation gap. `python run.py doctor` prints the matrix
+with the state of each backend.
+
+Normalized results from `normalize_outcome()` use a closed state set:
+`success`, `degraded`, `failed` and `unavailable`. Every result carries
+`contract_version`, `capability`, `status`, `backend`, `reason` and `result`, so
+a degraded or failed dispatch is reported instead of being mistaken for an empty
+success. `tests/test_capability_contract.py` covers the matrix/backend
+agreement, entrypoint resolution, the closed state set, and the degrade/fail
+paths for scanning, matching and graph operations.
+
 ## Verification layers
 
 `python build.py --test` is the gate, and it exits non-zero when any stage fails.
