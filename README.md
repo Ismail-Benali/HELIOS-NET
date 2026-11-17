@@ -86,6 +86,7 @@
 - [Native IPC and NDJSON contract](docs/IPC-CONTRACT.md)
 - [Typed asset graph contract](docs/ASSET-GRAPH.md)
 - [Engineering roadmap](ROADMAP.md)
+- [Changelog](CHANGELOG.md)
 
 ---
 
@@ -276,6 +277,9 @@ evasion binary in this repository.
 
 No component here exploits a vulnerability, and no automated check proves the
 project is free of vulnerabilities.
+
+The `v1.3.0` release notes predate this scope and describe components that are
+no longer in the tree; [CHANGELOG.md](CHANGELOG.md) records what changed.
 
 ---
 
