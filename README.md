@@ -79,6 +79,7 @@
 
 ## Technical References
 
+- [60-second local quickstart](docs/QUICKSTART.md)
 - [Polyglot architecture and native-core health](docs/Architecture.md)
 - [Internal API and module contracts](docs/API.md)
 - [Scope enforcement and authorization boundary](docs/SCOPE-ENFORCEMENT.md)
@@ -255,3 +256,16 @@ No automated check proves the project is free of vulnerabilities.
 
 **HELIOS-NET is a focused, research-grade Attack Surface Management and Scanning Framework.**
 Following a major strategic refactoring, all unused polyglot bloat, disconnected evasion stubs, and malware tooling have been surgically removed to focus entirely on robust orchestration, fast network discovery, asset graphing, and executive reporting.
+
+---
+
+## License
+
+HELIOS-NET uses a custom **ethical, non-commercial** license. Commercial use,
+sublicensing, or inclusion in a paid security product requires written
+permission from the author; see [LICENSE](LICENSE) for the exact terms.
+
+GitHub reports this custom text as `NOASSERTION` because it is not one of the
+standard SPDX licenses — the `LICENSE` file, not the badge, is authoritative.
+Contributions are welcome under the same terms; see [CONTRIBUTING.md](CONTRIBUTING.md)
+and [SECURITY.md](SECURITY.md).
