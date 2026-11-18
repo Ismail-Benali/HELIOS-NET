@@ -28,6 +28,7 @@ _LIB_NAMES = (
 _CANDIDATE_DIRS = (
     ROOT / "rust-core" / "target" / "release",
     ROOT / "rust-core" / "target" / "debug",
+    ROOT / "core" / "native",
 )
 
 # Exported ABI revision of the loaded library.

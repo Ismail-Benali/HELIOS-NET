@@ -40,9 +40,9 @@ def _discover_modules() -> list[str]:
             for p in rel.parts
         ):
             continue
-        # build.py is a script, not a library: importing it is harmless thanks
-        # to its __main__ guard, but it is not part of the package surface.
-        if rel.name == "build.py":
+        # build.py is a script and setup.py is a setuptools entry point: both
+        # are run, not imported, and neither is part of the package surface.
+        if rel.name in {"build.py", "setup.py"}:
             continue
 
         # Strip the extension before dropping __init__, otherwise a package

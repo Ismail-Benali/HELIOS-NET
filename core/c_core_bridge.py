@@ -25,9 +25,11 @@ ROOT = Path(__file__).resolve().parent.parent
 _CORE_DIR = ROOT / "transport" / "c_core"
 
 _EXE = ".exe" if os.name == "nt" else ""
+_BUNDLED_DIR = ROOT / "core" / "native"
 _BINARY_CANDIDATES = (
     _CORE_DIR / "build" / f"helios_core{_EXE}",
     _CORE_DIR / f"helios_core{_EXE}",
+    _BUNDLED_DIR / f"helios_core{_EXE}",
 )
 _ENV_KEY = "HELIOS_C_CORE"
 
@@ -144,6 +146,7 @@ def _locate_library() -> Path | None:
     name = _library_filename()
     candidates.append(_CORE_DIR / "build" / name)
     candidates.append(_CORE_DIR / name)
+    candidates.append(_BUNDLED_DIR / name)
 
     newest = _newest_c_source()
     for candidate in candidates:
