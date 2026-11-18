@@ -8,7 +8,7 @@ attributes, because Nmap's own output varies with the options used.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 - DTDs are rejected before parsing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -105,9 +105,17 @@ def _host(element: ET.Element) -> NmapHost | None:
 
 
 def parse_nmap_xml(text: str) -> tuple[NmapHost, ...]:
-    """Parses an Nmap XML document into hosts and ports."""
+    """Parses an Nmap XML document into hosts and ports.
+
+    DOCTYPEs and entity declarations are refused rather than parsed. Nmap does
+    not emit them, and rejecting them removes the expansion attacks that
+    ElementTree inherits from the XML specification.
+    """
+    lowered = text.lower()
+    if "<!doctype" in lowered or "<!entity" in lowered:
+        raise NmapError("documents with a DOCTYPE or entity declaration are refused")
     try:
-        root = ET.fromstring(text)
+        root = ET.fromstring(text)  # nosec B314 - DTD/entity guard above
     except ET.ParseError as exc:
         raise NmapError(f"not valid XML: {exc}") from exc
     if root.tag != "nmaprun":

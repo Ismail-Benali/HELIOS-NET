@@ -104,6 +104,13 @@ def test_parse_rejects_documents_it_cannot_trust():
         parse_nmap_xml("<nmaprun scanner='nmap'></nmaprun>")
 
 
+def test_doctype_and_entity_declarations_are_refused():
+    with pytest.raises(NmapError, match="DOCTYPE"):
+        parse_nmap_xml('<!DOCTYPE nmaprun [<!ENTITY x "y">]><nmaprun/>')
+    with pytest.raises(NmapError, match="DOCTYPE"):
+        parse_nmap_xml("<nmaprun><!ENTITY x 'y'></nmaprun>")
+
+
 def test_read_reports_missing_file(tmp_path):
     with pytest.raises(NmapError, match="cannot read"):
         read_nmap_xml(tmp_path / "absent.xml")

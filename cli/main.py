@@ -596,8 +596,12 @@ def cmd_ingest(args: Any) -> int:
             except ScopeError:
                 dropped += 1
                 continue
+        port = row["port"]
+        if not isinstance(port, int):
+            dropped += 1
+            continue
         try:
-            scope.check_ports([int(row["port"])])
+            scope.check_ports([port])
         except ScopeError:
             dropped += 1
             continue

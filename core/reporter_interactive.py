@@ -250,7 +250,7 @@ as text; no network requests are made.</div>
 <p id="edge-empty" class="empty" hidden>No relationship matches this filter.</p>
 
 <noscript><p class="empty">This report needs JavaScript for filtering. The graph
-data is embedded in the page and can be read from the source.</p></noscript>
+data is embedded in the page and can be read in the source.</p></noscript>
 </main>
 <footer>Schema {schema} -
 single file, no external assets.</footer>
