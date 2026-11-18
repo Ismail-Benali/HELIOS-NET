@@ -5,7 +5,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=release&color=black)](https://github.com/Ismail-Benali/HELIOS-NET/releases)
 [![Stars](https://img.shields.io/github/stars/Ismail-Benali/HELIOS-NET?style=for-the-badge&label=stars&color=black&logo=github)](https://github.com/Ismail-Benali/HELIOS-NET/stargazers)
-[![License](https://img.shields.io/badge/license-non--commercial-black.svg?style=for-the-badge&color=black)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg?style=for-the-badge)](LICENSE)
 [![CI/CD](https://img.shields.io/github/actions/workflow/status/Ismail-Benali/HELIOS-NET/build.yml?style=for-the-badge&label=build&logo=githubactions&logoColor=green)](https://github.com/Ismail-Benali/HELIOS-NET/actions)
 
 <br>
@@ -304,11 +304,17 @@ no longer in the tree; [CHANGELOG.md](CHANGELOG.md) records what changed.
 
 ## License
 
-HELIOS-NET uses a custom **ethical, non-commercial** license. Commercial use,
-sublicensing, or inclusion in a paid security product requires written
-permission from the author; see [LICENSE](LICENSE) for the exact terms.
+HELIOS-NET is licensed under the **GNU Affero General Public License v3.0
+only** (`AGPL-3.0-only`); see [LICENSE](LICENSE) for the full text. There is no
+non-commercial clause: commercial use is allowed on AGPL terms, which require
+that anyone offering a modified version over a network also offers its complete
+corresponding source.
 
-GitHub reports this custom text as `NOASSERTION` because it is not one of the
-standard SPDX licenses — the `LICENSE` file, not the badge, is authoritative.
-Contributions are welcome under the same terms; see [CONTRIBUTING.md](CONTRIBUTING.md)
-and [SECURITY.md](SECURITY.md).
+Authorized use is a project policy, not an extra license restriction. Run the
+tool only against assets you own or have written permission to test; that rule
+is in [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md), and the
+license grants no exception to computer-misuse law.
+
+Contributions are accepted under `AGPL-3.0-only`; see
+[CONTRIBUTING.md](CONTRIBUTING.md) for the contribution terms. The change from
+the earlier custom text is recorded in [CHANGELOG.md](CHANGELOG.md).

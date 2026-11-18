@@ -6,7 +6,13 @@ actually contains; `helios version` reports the revision with
 
 ## [Unreleased]
 
-Nothing since `v2.0.0-beta.1`.
+### Changed
+
+- Relicensed from the custom ethical/non-commercial text to
+  `AGPL-3.0-only`. The authorized-use requirement remains project policy in
+  `CONTRIBUTING.md` and `SECURITY.md`; it is not an additional license
+  restriction, and commercial use is allowed on AGPL terms (including the
+  network source-offer obligation).
 
 ## [2.0.0-beta.1] - 2026-11-17
 

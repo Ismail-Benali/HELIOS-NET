@@ -41,5 +41,5 @@ body:
       options:
         - label: I will keep examples scoped to loopback or example.test
           required: true
-        - label: I understand this project is non-commercial licensed
+        - label: I understand this project is AGPL-3.0-only and intended for authorized testing only
           required: true

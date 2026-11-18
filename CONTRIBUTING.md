@@ -130,6 +130,7 @@ Before submitting a pull request, confirm:
 - [ ] **English only.** All code comments, docstrings, CLI help, and documentation are in English.
 - [ ] **Zero external pip dependencies.** Core Python logic uses only the standard library. Native modules (Go/Rust/C) may use their respective toolchains' standards but must not require system-level package installation beyond the toolchain itself.
 - [ ] **Tests pass.** `python tests/smoke.py` completes with `ALL SETS PASSED`.
+- [ ] **License.** Contributions are accepted under `AGPL-3.0-only`; do not submit code you cannot license on those terms.
 - [ ] **Authorized-use framing.** No hardcoded third-party targets; offensive primitives framed within the red-teaming / ASM context.
 - [ ] **Documentation updated.** README, relevant `docs/`, or module docs reflect your change.
 
