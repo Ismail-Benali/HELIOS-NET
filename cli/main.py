@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.orchestrator import Orchestrator  # noqa: E402
+from core.paths import default_data_dir  # noqa: E402
 from core.planner import PlanStep  # noqa: E402
 from core.scope import ScopeEnforcer, ScopeError, resolve_scope_path  # noqa: E402
 from core.state import StateStore  # noqa: E402
@@ -31,7 +32,7 @@ from engine.plugins import plugin_registry  # noqa: E402
 from engine.verdict import VerdictEngine, default_rules  # noqa: E402
 from modules.registry import default_registry, discovery_runner  # noqa: E402
 
-DEFAULT_DATA = ROOT / "data"
+DEFAULT_DATA = default_data_dir()
 
 
 def _add_runtime_options(parser: argparse.ArgumentParser) -> None:
@@ -85,6 +86,13 @@ def cmd_version(args: Any) -> int:
             if result.returncode == 0 and result.stdout.strip():
                 revision = result.stdout.strip()
         except (OSError, subprocess.TimeoutExpired):
+            pass
+    if revision.startswith("unknown"):
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            revision = version("helios-net")
+        except PackageNotFoundError:
             pass
     print(f"HELIOS-NET revision: {revision}")
     print(f"Python runtime: {sys.version.split()[0]}")
@@ -389,7 +397,7 @@ def cmd_graph(args: Any) -> int:
 
     input_path = Path(args.input)
     try:
-        payload = json.loads(input_path.read_text(encoding="utf-8"))
+        payload = json.loads(input_path.read_text(encoding="utf-8-sig"))
         graph = load_typed_graph(payload)
         result = analyze_typed_graph(
             graph,
@@ -531,8 +539,131 @@ def cmd_dashboard(args: Any) -> int:
     return 0
 
 
+def _jsonl_lines(rows: Any) -> str:
+    """Serializes rows as sorted-key JSON Lines, one object per line."""
+    import json
+
+    return "".join(
+        json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows
+    )
+
+
+def _sarif_tool_version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("helios-net")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def cmd_ingest(args: Any) -> int:
+    """Imports offline scan data (currently Nmap XML) as JSON Lines."""
+    import sys
+    from pathlib import Path
+
+    from modules.ingest.nmap import NmapError, read_nmap_xml
+    from modules.ingest.nmap import findings as nmap_findings
+
+    try:
+        scope = _load_scope(getattr(args, "scope", None))
+    except ScopeError as exc:
+        print(f"[HELIOS] refused: {exc}")
+        return 2
+
+    source = Path(args.nmap_path)
+    try:
+        hosts = read_nmap_xml(source)
+    except NmapError as exc:
+        print(f"[HELIOS] cannot import {source}: {exc}")
+        return 2
+
+    states = None if getattr(args, "include_closed", False) else {"open"}
+    rows = nmap_findings(hosts, reference=str(source), states=states)
+
+    kept: list[dict[str, Any]] = []
+    dropped = 0
+    for row in rows:
+        try:
+            scope.check(str(row["host"]))
+        except ScopeError:
+            hostname = row.get("hostname")
+            if not hostname:
+                dropped += 1
+                continue
+            try:
+                scope.check(str(hostname))
+            except ScopeError:
+                dropped += 1
+                continue
+        port = row["port"]
+        if not isinstance(port, int):
+            dropped += 1
+            continue
+        try:
+            scope.check_ports([port])
+        except ScopeError:
+            dropped += 1
+            continue
+        kept.append(row)
+
+    payload = _jsonl_lines(kept)
+    output = getattr(args, "output", None)
+    if output:
+        destination = Path(output)
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(payload, encoding="utf-8")
+        except OSError as exc:
+            print(f"[HELIOS] cannot write {destination}: {exc}")
+            return 1
+        print(f"[HELIOS] imported findings: {destination}")
+    else:
+        sys.stdout.write(payload)
+    print(
+        f"[HELIOS] nmap ingest: hosts={len(hosts)} kept={len(kept)} "
+        f"dropped_out_of_scope={dropped}",
+        file=sys.stderr,
+    )
+    if rows and not kept:
+        print(
+            "[HELIOS] refused: every imported host is outside the authorized scope",
+            file=sys.stderr,
+        )
+        return 2
+    return 0
+
+
+def cmd_report(args: Any) -> int:
+    """Builds a single-file, offline interactive HTML report from a typed graph."""
+    import json
+    from pathlib import Path
+
+    from core.reporter_interactive import generate_interactive_report
+
+    source = Path(args.input)
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8-sig"))
+    except OSError as exc:
+        print(f"[HELIOS] cannot read {source}: {exc}")
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"[HELIOS] {source} is not valid JSON: {exc}")
+        return 2
+
+    try:
+        destination = generate_interactive_report(
+            payload, args.output, title=args.title
+        )
+    except ValueError as exc:
+        print(f"[HELIOS] cannot build the report: {exc}")
+        return 2
+    print(f"[HELIOS] interactive report: {destination}")
+    return 0
+
+
 def cmd_export(args: Any) -> int:
-    """Exports campaign findings and metadata to JSON, CSV, or SARIF."""
+    """Exports campaign findings and metadata to JSON, JSONL, CSV, or SARIF."""
     import csv
     import json
     import sys
@@ -549,6 +680,8 @@ def cmd_export(args: Any) -> int:
 
     if format_type == "json":
         print(json.dumps(state.to_dict(), indent=2, ensure_ascii=False))
+    elif format_type == "jsonl":
+        sys.stdout.write(_jsonl_lines(findings))
     elif format_type == "csv":
         writer = csv.writer(sys.stdout)
         writer.writerow(["host", "port", "service", "open", "banner", "latency_ms"])
@@ -569,7 +702,12 @@ def cmd_export(args: Any) -> int:
             "version": "2.1.0",
             "runs": [
                 {
-                    "tool": {"driver": {"name": "HELIOS-NET", "version": "3.0.0"}},
+                    "tool": {
+                        "driver": {
+                            "name": "HELIOS-NET",
+                            "version": _sarif_tool_version(),
+                        }
+                    },
                     "results": [
                         {
                             "ruleId": f.get("service", "open_port"),
@@ -756,14 +894,41 @@ def build_parser() -> argparse.ArgumentParser:
     _add_runtime_options(dash)
     dash.set_defaults(fn=cmd_dashboard)
 
+    ing = sub.add_parser(
+        "ingest", help="Import offline scan data as JSON Lines (currently Nmap XML)"
+    )
+    ing.add_argument(
+        "--nmap", required=True, dest="nmap_path", help="Nmap XML output to import"
+    )
+    ing.add_argument(
+        "--output", default=None, help="Write JSONL here instead of standard output"
+    )
+    ing.add_argument(
+        "--include-closed",
+        action="store_true",
+        help="Keep closed and filtered ports; the default keeps open ports only",
+    )
+    _add_runtime_options(ing)
+    ing.set_defaults(fn=cmd_ingest)
+
+    rep = sub.add_parser(
+        "report", help="Build an offline interactive HTML report from a typed graph"
+    )
+    rep.add_argument("--input", required=True, help="Typed graph JSON (assets export)")
+    rep.add_argument(
+        "--output", default="helios-report.html", help="Destination HTML file"
+    )
+    rep.add_argument("--title", default="HELIOS-NET asset graph")
+    rep.set_defaults(fn=cmd_report)
+
     exp = sub.add_parser(
-        "export", help="Export campaign results to JSON, CSV, or SARIF"
+        "export", help="Export campaign results to JSON, JSONL, CSV, or SARIF"
     )
     exp.add_argument("campaign_id", help="Campaign ID to export")
     exp.add_argument(
         "--format",
         default="json",
-        choices=["json", "csv", "sarif"],
+        choices=["json", "jsonl", "csv", "sarif"],
         help="Export format",
     )
     _add_runtime_options(exp)

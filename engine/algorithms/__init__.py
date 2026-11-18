@@ -13,9 +13,7 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable
-from typing import Any, TypeVar
-
-T = TypeVar("T")
+from typing import Any
 
 
 class AlgorithmError(Exception):
@@ -27,7 +25,7 @@ ALGO_REGISTRY: dict[str, dict[str, Callable[..., Any]]] = {}
 DEFAULT_FALLBACK = "__default__"
 
 
-def register_algo(
+def register_algo[T](
     kind: str, name: str, factory: Callable[..., T], default: bool = False
 ) -> None:
     """Registers an algorithm in its kind, optionally as the default fallback."""
