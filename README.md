@@ -257,6 +257,21 @@ python tools/gen_c_reference.py --check
 runs `helios version` inside it, and publishes `ghcr.io/<owner>/<repository>` on
 `v*` tags. It is a build check and release publisher, not a merge gate yet.
 
+### Container image
+
+`v2.0.0-beta.1` publishes
+`ghcr.io/ismail-benali/helios-net:2.0.0-beta.1`, alongside `latest` and a
+`sha-<commit>` tag:
+
+```bash
+docker run --rm ghcr.io/ismail-benali/helios-net:2.0.0-beta.1 version
+docker run --rm -v "$PWD/data:/app/data" ghcr.io/ismail-benali/helios-net:2.0.0-beta.1 doctor
+```
+
+The image carries the Python CLI and its native cores, so no toolchain is
+needed. It tracks a prerelease: pin the `sha-` tag or the digest, and mount the
+data directory explicitly if you want campaign state to survive the container.
+
 Coverage, Security (CodeQL, Trivy, Scorecards), Fuzz (nightly) and Release stay
 in the repository but run manually (`workflow_dispatch`) while the pipeline is
 being stabilized. They are not merge gates yet.
