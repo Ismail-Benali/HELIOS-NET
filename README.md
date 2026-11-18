@@ -45,6 +45,7 @@
 7. **Verdict & Rule Engine:** Classifies findings using built-in rules or dynamic JSON-driven rules (Dynamic DSL).
 8. **Executive HTML Reporting:** Generates self-contained dark-mode HTML executive briefing reports with full HTML escaping for XSS protection.
 9. **Native Capability Contract:** `core/native_contract.py` is the single backend/capability matrix. `core/accel.py` derives what each backend advertises from it, every capability names its callable, `python run.py doctor` prints the matrix, and degraded or failed dispatches report their reason instead of an empty success.
+10. **Interoperable Ingest and Reports:** Nmap XML imports as JSON Lines (`ingest`) under the same scope gate, exports are available as JSON, JSONL, CSV, or SARIF, and `report` builds a single-file, offline, filterable HTML view of a typed asset graph.
 
 ---
 
@@ -86,6 +87,7 @@
 - [Scope enforcement and authorization boundary](docs/SCOPE-ENFORCEMENT.md)
 - [Native IPC and NDJSON contract](docs/IPC-CONTRACT.md)
 - [Typed asset graph contract](docs/ASSET-GRAPH.md)
+- [Reproducible benchmarks](docs/BENCHMARKS.md)
 - [Engineering roadmap](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
 
@@ -94,6 +96,33 @@
 ## 🚀 Quick Start & CLI Usage
 
 HELIOS-NET requires **zero external pip dependencies** for its core control plane.
+
+Install the CLI as a command (`pipx` is preferred so it lives in its own
+environment):
+
+```bash
+python -m pipx install .
+helios version
+```
+
+Or run the wrapper, which checks for Python 3.12, uses `pipx` when available,
+and otherwise falls back to a user install:
+
+```bash
+sh install.sh          # Linux and macOS
+.\install.ps1          # Windows PowerShell
+```
+
+An installed command keeps campaign state in `~/.helios-net`
+(`%USERPROFILE%\.helios-net` on Windows); set `HELIOS_DATA` to put it elsewhere.
+The `python run.py ...` form remains the way to run an uninstalled checkout.
+
+The wheel ships the Python control plane and its configuration, not the compiled
+Go, C, and Rust binaries: those are platform-specific and are built locally by
+`python build.py`. An installed `helios` therefore reports them as unavailable
+in `helios doctor` and uses the Python fallback. For native throughput, build the
+cores and run from the checkout; `helios doctor` always states which path is
+live.
 
 Every network command is scope-checked. Edit `config/scope.yaml` (or pass
 `--scope path.json`) to list the domains, CIDRs, and ports you are authorized to
@@ -202,20 +231,66 @@ assets and ports you are authorized to test.
 python run_simulation.py
 ```
 
+### 7. Import an Existing Nmap Scan
+
+Collection can stay in Nmap; HELIOS-NET imports the XML without opening a
+socket. Hosts and ports outside the authorized scope are dropped, and the
+default keeps open ports only:
+
+```bash
+python run.py ingest --nmap scan.xml --output data/imports/scan.jsonl
+python run.py ingest --nmap scan.xml --include-closed
+```
+
+The JSON Lines format is the same one `export` produces, so results from
+separate tools can be concatenated and processed a record at a time:
+
+```bash
+python run.py export CAMPAIGN_ID --format jsonl > findings.jsonl
+```
+
+### 8. Build an Offline Interactive Report
+
+`report` turns a typed graph export into one HTML file with filters for asset
+type, relationship type, and free-text search. It has no external assets, no
+CDN, and no server; every value is rendered as text, and the graph is embedded
+as escaped JSON:
+
+```bash
+python run.py assets --target example.test --graph-output data/graphs/example-test.json
+python run.py report --input data/graphs/example-test.json --output data/reports/example-test.html
+```
+
+Open the file directly from disk. This is the offline alternative to the
+`dashboard` command, which serves a live local view.
+
 ---
 
 ## Performance Measurement
 
-The numeric claims live in `tools/bench_scan.py` rather than in this file:
+The numeric claims live in scripts rather than in this file. Live network
+throughput comes from `tools/bench_scan.py`:
 
 ```bash
 python tools/bench_scan.py --host 127.0.0.1 --ports 1-1024 --repeat 3
 ```
 
 It reports the median wall time, ports/second, which backend answered, and the
-spread across runs. Numbers depend on the host, the open/closed mix, and whether
-the Go binary was built (`python build.py`), so measure on the machine you care
-about.
+spread across runs. It measures real sockets, so numbers depend on the host, the
+open/closed mix, and whether the Go binary was built (`python build.py`).
+
+Deterministic component costs (Nmap parsing, signature matching, fingerprinting,
+graph centrality, report generation) come from `tools/bench.py`, which uses the
+same synthetic input for every backend:
+
+```bash
+python tools/bench.py --repeat 5 --markdown
+python tools/bench.py --backend python --json
+```
+
+The recorded run and its interpretation are in
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md). Measure on the machine you care about;
+absolute milliseconds are not portable.
 
 ---
 

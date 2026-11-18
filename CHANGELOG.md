@@ -6,7 +6,30 @@ actually contains; `helios version` reports the revision with
 
 ## [Unreleased]
 
-Nothing since `v2.0.0-beta.1`.
+### Added
+
+- Installable package (`pyproject.toml`, console script `helios`, PEP 440
+  version `2.0.0b1`) with `install.sh` and `install.ps1` wrappers that prefer
+  `pipx` and fall back to a user install. Installed runs keep campaign state in
+  `~/.helios-net`; `HELIOS_DATA` overrides it, and a checkout still uses
+  `data/`.
+- Nmap XML ingest (`helios ingest --nmap FILE`) that maps hosts, ports,
+  services, versions and CPEs to findings, drops hosts and ports outside the
+  authorized scope, and writes JSON Lines.
+- `export --format jsonl` alongside JSON, CSV and SARIF.
+- Offline interactive HTML report (`helios report --input graph.json`) with
+  asset/relationship filters, embedded escaped JSON, `textContent` rendering,
+  a restrictive CSP, and no external assets.
+- Deterministic component benchmarks (`tools/bench.py`, JSON and Markdown
+  output) and a recorded run with reproduction steps in
+  `docs/BENCHMARKS.md`.
+
+### Fixed
+
+- `judge` and `report` accept UTF-8 JSON with a byte-order mark, which Windows
+  tools commonly write.
+- SARIF exports no longer report a hard-coded tool version; it comes from the
+  installed package metadata.
 
 ## [2.0.0-beta.1] - 2026-11-17
 
