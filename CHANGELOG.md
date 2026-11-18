@@ -6,13 +6,7 @@ actually contains; `helios version` reports the revision with
 
 ## [Unreleased]
 
-### Changed
-
-- Relicensed from the custom ethical/non-commercial text to
-  `AGPL-3.0-only`. The authorized-use requirement remains project policy in
-  `CONTRIBUTING.md` and `SECURITY.md`; it is not an additional license
-  restriction, and commercial use is allowed on AGPL terms (including the
-  network source-offer obligation).
+Nothing since `v2.0.0-beta.1`.
 
 ## [2.0.0-beta.1] - 2026-11-17
 
@@ -61,6 +55,11 @@ or evasion binary remains.
 
 ### Changed
 
+- Relicensed from the custom ethical/non-commercial text to `AGPL-3.0-only`.
+  The authorized-use requirement remains project policy in `CONTRIBUTING.md`
+  and `SECURITY.md`; it is not an additional license restriction, and
+  commercial use is allowed on AGPL terms (including the network source-offer
+  obligation).
 - Fail-closed scope enforcement: an unreadable, malformed, or `*` scope is an
   error rather than a wildcard, and denied targets produce no connection
   (`core/scope.py`).
