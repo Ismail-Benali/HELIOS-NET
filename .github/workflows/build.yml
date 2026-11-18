@@ -339,3 +339,52 @@ jobs:
 
       - name: Report Native Core Health
         run: python -c "from core.cores import health_report, format_report; print(format_report(health_report()))"
+
+  wheel:
+    name: Wheel with native cores (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: transport/goscan/go.mod
+          cache: true
+          cache-dependency-path: transport/goscan/go.sum
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # The wheel ships the cores built on this runner, so the wheel job has to
+      # build them first. `build_py` then finds them in the checkout, copies
+      # them into the artifact and switches the wheel to a platform tag. Without
+      # this step the result would be the pure wheel that falls back to Python.
+      - name: Build native cores
+        run: python build.py
+
+      - name: Build the wheel
+        run: python -m pip wheel . --no-deps -w dist
+
+      - name: Show the wheel tag and contents
+        run: python -c "import glob, zipfile; wheel = glob.glob('dist/*.whl')[0]; archive = zipfile.ZipFile(wheel); print(wheel); print(archive.read([n for n in archive.namelist() if n.endswith('/WHEEL')][0]).decode()); print([n for n in archive.namelist() if '/core/native/' in n])"
+
+      # Installs the artifact in a fresh environment outside the checkout and
+      # asserts the C, Rust and Go backends really load. A wheel that contains
+      # the files but cannot execute them is still a broken wheel.
+      - name: Verify the installed wheel loads the cores
+        run: python tools/verify_wheel.py --wheel "dist/*.whl" --require c rust go

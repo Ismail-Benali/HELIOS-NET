@@ -33,7 +33,11 @@ from core.input_guard import sanitize_banner
 
 ROOT = Path(__file__).resolve().parents[2]
 _EXE = ".exe" if os.name == "nt" else ""
-GOSCAN_BIN = ROOT / "transport" / "goscan" / f"goscan{_EXE}"
+_CHECKOUT_BIN = ROOT / "transport" / "goscan" / f"goscan{_EXE}"
+_BUNDLED_BIN = ROOT / "core" / "native" / f"goscan{_EXE}"
+# A checkout binary wins while it exists; a wheel has no transport tree, so the
+# bundled copy is the only one left. Tests replace this name directly.
+GOSCAN_BIN = _CHECKOUT_BIN if _CHECKOUT_BIN.exists() else _BUNDLED_BIN
 
 _IO_ENCODING = "utf-8"
 

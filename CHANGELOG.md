@@ -23,6 +23,13 @@ actually contains; `helios version` reports the revision with
 - Deterministic component benchmarks (`tools/bench.py`, JSON and Markdown
   output) and a recorded run with reproduction steps in
   `docs/BENCHMARKS.md`.
+- Native cores inside the wheel: a checkout with `python build.py` output
+  bundles its platform's Go, C, and Rust artifacts into `core/native/`
+  automatically (`tools/bundle_cores.py`), takes a platform wheel tag, and the
+  bridges fall back to the bundled copies when no checkout tree exists. A new
+  `wheel` CI job builds the artifact on Ubuntu and Windows, installs it in a
+  clean environment, and fails if a required backend does not load
+  (`tools/verify_wheel.py`).
 
 ### Fixed
 

@@ -117,12 +117,22 @@ An installed command keeps campaign state in `~/.helios-net`
 (`%USERPROFILE%\.helios-net` on Windows); set `HELIOS_DATA` to put it elsewhere.
 The `python run.py ...` form remains the way to run an uninstalled checkout.
 
-The wheel ships the Python control plane and its configuration, not the compiled
-Go, C, and Rust binaries: those are platform-specific and are built locally by
-`python build.py`. An installed `helios` therefore reports them as unavailable
-in `helios doctor` and uses the Python fallback. For native throughput, build the
-cores and run from the checkout; `helios doctor` always states which path is
-live.
+Build the native cores before installing if you want them inside the wheel:
+
+```bash
+python build.py
+python -m pipx install --force .
+```
+
+The wheel build picks up the cores it finds in the checkout and packs them into
+`core/native/` inside the artifact, so the resulting wheel is platform-tagged
+(`py3-none-win_amd64`, `py3-none-linux_x86_64`, ...) and ships the Go, C, and Rust
+binaries alongside the Python control plane. Installing from a checkout where
+nothing was built produces a pure wheel; `helios doctor` then reports the cores
+as unavailable and uses the Python fallback. The `wheel` CI job builds and
+installs the artifact on Ubuntu and Windows and fails if a core does not load,
+so the two cases are both tested. `tools/bundle_cores.py` can be run explicitly
+when a build pipeline wants that step to be visible.
 
 Every network command is scope-checked. Edit `config/scope.yaml` (or pass
 `--scope path.json`) to list the domains, CIDRs, and ports you are authorized to

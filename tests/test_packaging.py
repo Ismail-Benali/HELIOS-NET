@@ -45,10 +45,18 @@ def test_runtime_data_is_declared_as_package_data():
     for package in ("core", "cli", "engine", "modules", "config"):
         assert f"{package}*" in find["include"]
     assert find["namespaces"] is True
-    assert PYPROJECT["tool"]["setuptools"]["package-data"]["config"] == [
-        "*.yaml",
-        "*.txt",
-    ]
+    data = PYPROJECT["tool"]["setuptools"]["package-data"]
+    assert data["config"] == ["*.yaml", "*.txt"]
+    assert set(data["core.native"]) == {"*.exe", "*.dll", "*.so", "*.dylib"}
+    assert (ROOT / "core" / "native" / "__init__.py").is_file()
+
+
+def test_wheel_build_can_tag_native_artifacts():
+    build = PYPROJECT["build-system"]["requires"]
+    assert any(requirement.startswith("wheel") for requirement in build)
+    setup_py = (ROOT / "setup.py").read_text(encoding="utf-8")
+    assert "root_is_pure" in setup_py
+    assert '"py3", "none", platform' in setup_py
 
 
 def test_data_dir_honours_environment(monkeypatch, tmp_path):
