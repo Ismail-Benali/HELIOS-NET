@@ -6,31 +6,13 @@ actually contains; `helios version` reports the revision with
 
 ## [Unreleased]
 
-### Added
+Nothing since `v2.0.0-beta.1`.
 
-- Docker workflow (`docker.yml`): builds the image on pull requests and `master`
-  pushes, smoke-tests `helios version` inside the container, and publishes
-  `ghcr.io/<owner>/<repository>` on `v*` tags.
-- The native capability contract is now authoritative: `core/accel.py` derives
-  each backend's advertised capabilities from `core/native_contract.py`, every
-  capability names a tested entrypoint, `helios doctor` prints the matrix, and
-  `tests/test_capability_contract.py` covers matrix agreement, the closed
-  outcome-state set, and degraded/failed dispatch for scanning, matching and
-  graph operations.
+## [2.0.0-beta.1] - 2026-11-17
 
-### Changed
-
-- A skipped test now fails the run unless `--allow-skips` is passed. Every skip
-  in this suite meant a native core had not been built, so a green run could
-  claim C, Rust and Go parity, FFI and golden coverage it never executed; CI
-  already builds every core, and `python build.py` does the same locally.
-
-### Fixed
-
-- The runtime image now includes `cli/` and `config/`, which the entrypoint
-  needs (`run.py` imports `cli.main`) and which the previous Dockerfile omitted.
-
-## [2.0.0] - 2026-11-17
+**Pre-release.** There is no stable release. A `v2.0.0` tag briefly existed and
+was withdrawn: the tree is under active development, interfaces can change
+without a deprecation cycle, and no part of it is supported for production use.
 
 This release supersedes `v1.3.0`. HELIOS-NET is now an authorized attack
 surface management and network-discovery project. The offensive transport,
@@ -61,6 +43,15 @@ or evasion binary remains.
 - Documentation guards: `tests/test_docs_paths.py` fails on broken relative
   links, missing documented component paths, removed-component references, or a
   second architecture document (PR #52).
+- Docker workflow (`docker.yml`): builds the image on pull requests and `master`
+  pushes, smoke-tests `helios version` inside the container, and publishes
+  `ghcr.io/<owner>/<repository>` on `v*` tags.
+- The native capability contract is authoritative: `core/accel.py` derives each
+  backend's advertised capabilities from `core/native_contract.py`, every
+  capability names a tested entrypoint, `helios doctor` prints the matrix, and
+  `tests/test_capability_contract.py` covers matrix agreement, the closed
+  outcome-state set, and degraded/failed dispatch for scanning, matching and
+  graph operations.
 
 ### Changed
 
@@ -73,8 +64,15 @@ or evasion binary remains.
   socket probe otherwise) and records which engine answered.
 - `build.yml` and `lint.yml` are the required merge gates on `master`; coverage,
   security, nightly fuzz, and release stay manually dispatched for now.
-- Test suite: 889 collected, 781 passing and 108 platform-gated skips in a
-  local Windows run; CI runs the same suites on Ubuntu 24.04 and Windows.
+- Test suite: 907 tests with every native core built, on Ubuntu 24.04 and
+  Windows. A skipped test now fails the run unless `--allow-skips` is passed:
+  every skip meant a core had not been built, so a green run could claim C, Rust
+  and Go parity, FFI and golden coverage it never executed.
+
+### Fixed
+
+- The runtime image now includes `cli/` and `config/`, which the entrypoint
+  needs (`run.py` imports `cli.main`) and which the previous Dockerfile omitted.
 
 ### Removed
 

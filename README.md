@@ -269,6 +269,13 @@ No automated check proves the project is free of vulnerabilities.
 
 **HELIOS-NET is a focused, research-grade Attack Surface Management and scanning framework.**
 
+**Status: pre-release (`v2.0.0-beta.1`).** There is no stable release. An earlier
+`v2.0.0` tag was withdrawn because the tree is under active development:
+interfaces can change without a deprecation cycle, and nothing here is
+supported for production use. Pin an exact commit, run it only against assets
+you are authorized to test, and treat every result as evidence to verify rather
+than a verdict.
+
 An earlier generation of this repository advertised raw SYN transport, DNS
 tunnelling, in-memory execution, direct-syscall evasion, and distributed
 consensus. None of that code is present today. The tree contains:

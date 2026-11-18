@@ -60,6 +60,9 @@ and evidence model as one-time campaigns.
 - Evasion, endpoint bypass, and stealth expansion are not roadmap priorities.
   The project should first demonstrate reliable, auditable, authorized
   discovery and analysis.
+- Release status is pre-release (`v2.0.0-beta.1`). The earlier `v2.0.0` tag was
+  withdrawn so no one reads a stable version number into a tree whose interfaces
+  are still moving; no release is frozen and none is supported for production.
 
 - The explainable risk-scoring increment is merged into `master` (PR #33).
 - The typed Asset Graph model (PR #34) and scope-bound HTTP discovery ingestion
