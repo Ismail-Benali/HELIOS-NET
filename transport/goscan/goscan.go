@@ -116,7 +116,7 @@ func (l *rateLimiter) wait() {
 	slot := l.next
 	l.next = l.next.Add(l.interval)
 	l.mu.Unlock()
-	if delay := slot.Sub(time.Now()); delay > 0 {
+	if delay := time.Until(slot); delay > 0 {
 		time.Sleep(delay)
 	}
 }
@@ -761,20 +761,10 @@ func usage() {
 	_, _ = fmt.Fprintln(os.Stderr, "  goscan version                print the version string")
 }
 
-// scanPort dials one port and reports it. It runs on a pool worker rather than
-// on its own goroutine, so it takes no semaphore and no WaitGroup: the number of
-// workers already bounds how many of these run at once. A per-port semaphore
-// here would be a second, weaker bound that buys nothing.
-func scanPort(ip string, port int, timeout time.Duration, results chan<- PortResult) {
-	opts := defaultScanOptions()
-	opts.timeout = timeout
-	scanPortWithOptions(ip, port, opts, nil, results)
-}
-
-// scanPortWithOptions is the real dial path. Retries apply only to a timeout: a
-// refusal is the peer's answer, and repeating it adds traffic without changing
-// the verdict. The rate limiter paces attempt starts, not workers, so a 300-wide
-// pool still produces a bounded request rate when one is requested.
+// scanPortWithOptions dials one port and reports it. It runs on a pool worker
+// rather than on its own goroutine, so it takes no semaphore and no WaitGroup:
+// the number of workers already bounds how many of these run at once. A per-port
+// semaphore here would be a second, weaker bound that buys nothing.
 func scanPortWithOptions(
 	host string,
 	port int,
