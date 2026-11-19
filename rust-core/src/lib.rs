@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * HELIOS-NET :: rust-core
  *
  * Native acceleration core exposed over a C ABI and consumed from Python via
@@ -17,6 +17,7 @@
  */
 
 pub mod aho;
+pub mod analytics;
 pub mod graph;
 
 use std::ffi::{CStr, CString};
@@ -25,10 +26,11 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::OnceLock;
 
 use aho::AhoCorasick;
+use analytics::Csr;
 use graph::Graph;
 
 /// Version of the exported ABI, bumped on any breaking signature change.
-const ABI_VERSION: c_int = 2;
+const ABI_VERSION: c_int = 3;
 
 /// Hard cap on an input banner, mirroring the C core's line limit.
 const MAX_INPUT_BYTES: usize = 1 << 20; // 1 MiB
@@ -174,6 +176,19 @@ pub extern "C" fn helios_selftest() -> c_int {
     let g = Graph::from_edges(3, &[(0, 1), (1, 2)]);
     if g.shortest_path(0, 2).map(|(c, _)| c) != Some(2) {
         return 2;
+    }
+    let weighted = Csr::from_edges(3, &[(0, 1, 2), (1, 2, 3), (0, 2, 10)], false);
+    if weighted.weighted_shortest_path(0, 2).map(|(c, _)| c) != Some(5) {
+        return 3;
+    }
+    let (points, bridges) =
+        Csr::from_edges(3, &[(0, 1, 1), (1, 2, 1)], false).articulation_and_bridges();
+    if points != vec![1] || bridges != vec![(0, 1), (1, 2)] {
+        return 4;
+    }
+    let rank = weighted.pagerank();
+    if rank.len() != 3 || rank.iter().any(|value| !value.is_finite()) {
+        return 5;
     }
     0
 }
@@ -420,6 +435,178 @@ pub unsafe extern "C" fn helios_graph_shortest_path(
             }
             None => into_raw(to_cstring("{\"error\":\"unreachable\"}")),
         }
+    })
+}
+
+// -------------------------------------------------------------- analytics
+
+/// Reads the parallel edge arrays into a CSR graph.
+///
+/// Returns `None` for a negative node/edge count, a null endpoint array with a
+/// positive count, or a null weight array when weights were required. Counts are
+/// clamped to the same resource caps as the legacy graph calls.
+///
+/// # Safety
+/// The pointers must be readable for the requested element counts.
+unsafe fn build_csr(
+    n: c_int,
+    sources: *const u32,
+    targets: *const u32,
+    weights: *const u32,
+    edge_count: c_int,
+    directed: bool,
+) -> Option<Csr> {
+    if n < 0 || edge_count < 0 {
+        return None;
+    }
+    let nodes = (n as usize).min(MAX_NODES);
+    let count = (edge_count as usize).min(MAX_EDGES);
+    if count == 0 {
+        return Some(Csr::from_edges(nodes, &[], directed));
+    }
+    if sources.is_null() || targets.is_null() || weights.is_null() {
+        return None;
+    }
+    let sources = std::slice::from_raw_parts(sources, count);
+    let targets = std::slice::from_raw_parts(targets, count);
+    let weights = std::slice::from_raw_parts(weights, count);
+    let edges: Vec<(usize, usize, u64)> = sources
+        .iter()
+        .zip(targets)
+        .zip(weights)
+        .map(|((&a, &b), &weight)| (a as usize, b as usize, u64::from(weight)))
+        .collect();
+    Some(Csr::from_edges(nodes, &edges, directed))
+}
+
+fn push_usize_array(json: &mut String, values: &[usize]) {
+    json.push('[');
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        json.push_str(&value.to_string());
+    }
+    json.push(']');
+}
+
+fn push_f64_array(json: &mut String, values: &[f64]) {
+    json.push('[');
+    for (index, value) in values.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        json.push_str(&format!("{value:.9}"));
+    }
+    json.push(']');
+}
+
+/// Returns `{"count":N,"values":[F,...]}` with PageRank per node.
+/// Free with `helios_free_string`.
+///
+/// # Safety
+/// The arrays must hold `edge_count` readable `u32` values each, or be null when
+/// `edge_count` is 0. `directed` is non-zero for a directed graph.
+#[no_mangle]
+pub unsafe extern "C" fn helios_graph_page_rank(
+    n: c_int,
+    sources: *const u32,
+    targets: *const u32,
+    weights: *const u32,
+    edge_count: c_int,
+    directed: c_int,
+) -> *mut c_char {
+    guard(|| {
+        let Some(graph) = build_csr(n, sources, targets, weights, edge_count, directed != 0) else {
+            return std::ptr::null_mut();
+        };
+        let values = graph.pagerank();
+        let mut json = format!("{{\"count\":{},\"values\":", values.len());
+        push_f64_array(&mut json, &values);
+        json.push('}');
+        into_raw(to_cstring(&json))
+    })
+}
+
+/// Returns `{"cost":N,"path":[...]}`, or `{"error":"unreachable"}`.
+/// Free with `helios_free_string`.
+///
+/// # Safety
+/// The arrays must hold `edge_count` readable `u32` values each, or be null when
+/// `edge_count` is 0. `directed` is non-zero for a directed graph.
+#[no_mangle]
+pub unsafe extern "C" fn helios_graph_weighted_path(
+    n: c_int,
+    sources: *const u32,
+    targets: *const u32,
+    weights: *const u32,
+    edge_count: c_int,
+    directed: c_int,
+    source: u32,
+    goal: u32,
+) -> *mut c_char {
+    guard(|| {
+        let Some(graph) = build_csr(n, sources, targets, weights, edge_count, directed != 0) else {
+            return std::ptr::null_mut();
+        };
+        match graph.weighted_shortest_path(source as usize, goal as usize) {
+            Some((cost, path)) => {
+                let mut json = format!("{{\"cost\":{cost},\"path\":");
+                push_usize_array(&mut json, &path);
+                json.push('}');
+                into_raw(to_cstring(&json))
+            }
+            None => into_raw(to_cstring("{\"error\":\"unreachable\"}")),
+        }
+    })
+}
+
+/// Returns `{"articulation":[...],"bridges":[[a,b],...]}` for the undirected
+/// view of the stored edges. Free with `helios_free_string`.
+///
+/// # Safety
+/// The arrays must hold `edge_count` readable `u32` values each, or be null when
+/// `edge_count` is 0.
+#[no_mangle]
+pub unsafe extern "C" fn helios_graph_articulation(
+    n: c_int,
+    sources: *const u32,
+    targets: *const u32,
+    edge_count: c_int,
+) -> *mut c_char {
+    guard(|| {
+        if n < 0 || edge_count < 0 {
+            return std::ptr::null_mut();
+        }
+        let nodes = (n as usize).min(MAX_NODES);
+        let count = (edge_count as usize).min(MAX_EDGES);
+        let edges: Vec<(usize, usize, u64)> = if count == 0 {
+            Vec::new()
+        } else {
+            if sources.is_null() || targets.is_null() {
+                return std::ptr::null_mut();
+            }
+            let sources = std::slice::from_raw_parts(sources, count);
+            let targets = std::slice::from_raw_parts(targets, count);
+            sources
+                .iter()
+                .zip(targets)
+                .map(|(&a, &b)| (a as usize, b as usize, 1u64))
+                .collect()
+        };
+        let graph = Csr::from_edges(nodes, &edges, false);
+        let (points, bridges) = graph.articulation_and_bridges();
+        let mut json = String::from("{\"articulation\":");
+        push_usize_array(&mut json, &points);
+        json.push_str(",\"bridges\":[");
+        for (index, &(a, b)) in bridges.iter().enumerate() {
+            if index > 0 {
+                json.push(',');
+            }
+            json.push_str(&format!("[{a},{b}]"));
+        }
+        json.push_str("]}");
+        into_raw(to_cstring(&json))
     })
 }
 

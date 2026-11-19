@@ -33,18 +33,21 @@ python tools/bench_scan.py --host 127.0.0.1 --ports 1-1024 --repeat 3
 | Platform | Windows 11 (10.0.26200), AMD64 |
 | Python | 3.12.0 |
 | Native backends available | C, Rust, Go, Python |
-| Date | 2026-11-18 |
+| Date | 2026-11-19 |
 
 ## Results (5 runs, median)
 
 | Case | Backend | Median (ms) | Workload |
 | --- | --- | ---: | --- |
-| `nmap-parse` | python | 72.04 | 5,000 ports from 500 hosts |
-| `match-signatures` | c-native | 5.22 | 31 KiB text, 204 patterns |
-| `fingerprint` | c-native | 0.43 | 31 KiB text, FNV-1a 32-bit |
-| `graph-degree` | rust-native | 6.97 | 2,000 nodes, 8,000 edges |
-| `graph-betweenness` | rust-native | 14.89 | 300 nodes, 1,200 edges |
-| `html-report` | python | 8.81 | 1,000 assets, 2,500 edges |
+| `nmap-parse` | python | 48.15 | 5,000 ports from 500 hosts |
+| `match-signatures` | c-native | 4.83 | 31 KiB text, 204 patterns |
+| `fingerprint` | c-native | 0.50 | 31 KiB text, FNV-1a 32-bit |
+| `graph-degree` | rust-native | 6.84 | 2,000 nodes, 8,000 edges |
+| `graph-betweenness` | rust-native | 12.56 | 300 nodes, 1,200 edges |
+| `graph-pagerank` | rust-native | 4.96 | 1,500 nodes, 7,499 edges |
+| `graph-weighted-path` | rust-native | 3.74 | 1,500 nodes, 7,499 weighted edges |
+| `graph-articulation` | rust-native | 6.65 | 1,500 nodes, 7,499 edges |
+| `html-report` | python | 8.52 | 1,000 assets, 2,500 edges |
 
 ## Interpretation
 
@@ -54,10 +57,13 @@ python tools/bench_scan.py --host 127.0.0.1 --ports 1-1024 --repeat 3
   Python cost of reading a document and writing a page, not a claim about the
   Python parser being slow.
 - The difference between `auto` and `--backend python` is the point of the
-  native cores. On this host, forcing Python moves fingerprinting from 0.43 ms
-  to 49.81 ms, degree centrality from 6.97 ms to 30.83 ms, and betweenness from
-  14.89 ms to 276.77 ms. Matching barely moves because the Python implementation
-  is already a tight loop over a small pattern set.
+  native cores. On this host, forcing Python moves fingerprinting from 0.50 ms
+  to 50.42 ms, degree centrality from 6.84 ms to 27.43 ms, and betweenness from
+  12.56 ms to 257.29 ms. PageRank drops from 29.02 ms to 4.96 ms, articulation
+  from 10.70 ms to 6.65 ms, and weighted routing is already competitive at
+  3.74 ms versus 5.04 ms because both run a heap-based search over the same
+  graph. Matching barely moves because the Python implementation is already a
+  tight loop over a small pattern set.
 - Absolute numbers are not portable. Compare the same host across revisions;
   compare different hosts only in ratios.
 

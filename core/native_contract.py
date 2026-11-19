@@ -28,10 +28,13 @@ SUPPORTED_CAPABILITIES: dict[str, frozenset[str]] = {
         {
             "match",
             "fnv1a32",
-            "graph_degree",
+            "graph_articulation",
             "graph_betweenness",
             "graph_components",
+            "graph_degree",
+            "graph_pagerank",
             "graph_shortest_path",
+            "graph_weighted_shortest_path",
         }
     ),
     "python": frozenset(
@@ -39,10 +42,13 @@ SUPPORTED_CAPABILITIES: dict[str, frozenset[str]] = {
             "match",
             "fingerprint",
             "scan_ports",
-            "graph_degree",
+            "graph_articulation",
             "graph_betweenness",
             "graph_components",
+            "graph_degree",
+            "graph_pagerank",
             "graph_shortest_path",
+            "graph_weighted_shortest_path",
         }
     ),
 }
@@ -76,10 +82,13 @@ OUTCOME_STATES = frozenset({"success", "degraded", "failed", "unavailable"})
 CAPABILITY_ENTRYPOINTS: dict[str, str] = {
     "fingerprint": "core.accel.fingerprint",
     "fnv1a32": "core.accel.fingerprint",
+    "graph_articulation": "core.accel.graph_articulation",
     "graph_betweenness": "core.accel.graph_betweenness",
     "graph_components": "core.accel.graph_components",
     "graph_degree": "core.accel.graph_degree_centrality",
+    "graph_pagerank": "core.accel.graph_pagerank",
     "graph_shortest_path": "core.accel.graph_shortest_path",
+    "graph_weighted_shortest_path": "core.accel.graph_weighted_shortest_path",
     "match": "core.accel.match_signatures",
     "scan_ports": "core.accel.scan_ports",
 }

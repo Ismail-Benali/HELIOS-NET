@@ -16,8 +16,9 @@ use std::os::raw::{c_char, c_int};
 
 use helios_rust_core::{
     helios_abi_version, helios_abi_version as abi_v, helios_fnv1a32, helios_free_string,
-    helios_graph_betweenness, helios_graph_centrality, helios_graph_components,
-    helios_graph_shortest_path, helios_match_json, helios_match_signatures, helios_rust_version,
+    helios_graph_articulation, helios_graph_betweenness, helios_graph_centrality,
+    helios_graph_components, helios_graph_page_rank, helios_graph_shortest_path,
+    helios_graph_weighted_path, helios_match_json, helios_match_signatures, helios_rust_version,
     helios_selftest,
 };
 
@@ -392,5 +393,156 @@ fn null_edges_with_positive_count_is_safe() {
     unsafe {
         let out = take_owned(helios_graph_components(4, std::ptr::null(), 2)).unwrap();
         assert!(out.contains("\"count\":4"), "null edges produced {out}");
+    }
+}
+
+// --------------------------------------------------------- directed analytics
+
+#[test]
+fn analytics_reject_null_arrays_with_positive_counts() {
+    unsafe {
+        assert!(take_owned(helios_graph_page_rank(
+            2,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+            1
+        ))
+        .is_none());
+        assert!(take_owned(helios_graph_weighted_path(
+            2,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+            1,
+            0,
+            1
+        ))
+        .is_none());
+        assert!(take_owned(helios_graph_articulation(
+            2,
+            std::ptr::null(),
+            std::ptr::null(),
+            1
+        ))
+        .is_none());
+    }
+}
+
+#[test]
+fn analytics_empty_graphs_still_return_valid_json() {
+    unsafe {
+        let rank = take_owned(helios_graph_page_rank(
+            0,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            1,
+        ))
+        .unwrap();
+        assert_eq!(rank, "{\"count\":0,\"values\":[]}");
+
+        let path = take_owned(helios_graph_weighted_path(
+            0,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            1,
+            0,
+            0,
+        ))
+        .unwrap();
+        assert!(path.contains("unreachable"), "empty graph produced {path}");
+
+        let articulation = take_owned(helios_graph_articulation(
+            0,
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+        ))
+        .unwrap();
+        assert_eq!(articulation, "{\"articulation\":[],\"bridges\":[]}");
+    }
+}
+
+#[test]
+fn directed_weighted_path_reports_cost_and_route() {
+    let sources: [u32; 2] = [0, 1];
+    let targets: [u32; 2] = [1, 2];
+    let weights: [u32; 2] = [2, 3];
+    unsafe {
+        let out = take_owned(helios_graph_weighted_path(
+            3,
+            sources.as_ptr(),
+            targets.as_ptr(),
+            weights.as_ptr(),
+            2,
+            1,
+            0,
+            2,
+        ))
+        .unwrap();
+        assert!(out.contains("\"cost\":5"), "wrong cost in {out}");
+        assert!(out.contains("\"path\":[0,1,2]"), "wrong route in {out}");
+
+        let reverse = take_owned(helios_graph_weighted_path(
+            3,
+            sources.as_ptr(),
+            targets.as_ptr(),
+            weights.as_ptr(),
+            2,
+            1,
+            2,
+            0,
+        ))
+        .unwrap();
+        assert!(
+            reverse.contains("unreachable"),
+            "direction ignored: {reverse}"
+        );
+    }
+}
+
+#[test]
+fn page_rank_is_a_distribution() {
+    let sources: [u32; 3] = [0, 1, 2];
+    let targets: [u32; 3] = [1, 2, 0];
+    let weights: [u32; 3] = [1, 1, 1];
+    unsafe {
+        let out = take_owned(helios_graph_page_rank(
+            3,
+            sources.as_ptr(),
+            targets.as_ptr(),
+            weights.as_ptr(),
+            3,
+            1,
+        ))
+        .unwrap();
+        assert!(out.contains("\"count\":3"), "wrong shape: {out}");
+        assert!(out.contains("0.333333333"), "not uniform: {out}");
+    }
+}
+
+#[test]
+fn articulation_reports_the_bridge_of_a_chain() {
+    let sources: [u32; 2] = [0, 1];
+    let targets: [u32; 2] = [1, 2];
+    unsafe {
+        let out = take_owned(helios_graph_articulation(
+            3,
+            sources.as_ptr(),
+            targets.as_ptr(),
+            2,
+        ))
+        .unwrap();
+        assert!(out.contains("\"articulation\":[1]"), "wrong points: {out}");
+        assert!(
+            out.contains("[0,1]") && out.contains("[1,2]"),
+            "wrong bridges: {out}"
+        );
     }
 }

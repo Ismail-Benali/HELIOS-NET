@@ -32,7 +32,7 @@ _CANDIDATE_DIRS = (
 )
 
 # Exported ABI revision of the loaded library.
-ABI_VERSION = 2
+ABI_VERSION = 3
 
 _IO_ENCODING = "utf-8"
 
@@ -88,6 +88,26 @@ def _load() -> CDLL | None:
             lib.helios_graph_betweenness.argtypes = graph_args
             lib.helios_graph_shortest_path.restype = c_void_p
             lib.helios_graph_shortest_path.argtypes = graph_args + [c_uint, c_uint]
+
+            analytics_args: list[Any] = [
+                c_int,
+                POINTER(c_uint),
+                POINTER(c_uint),
+                POINTER(c_uint),
+                c_int,
+                c_int,
+            ]
+            lib.helios_graph_page_rank.restype = c_void_p
+            lib.helios_graph_page_rank.argtypes = analytics_args
+            lib.helios_graph_weighted_path.restype = c_void_p
+            lib.helios_graph_weighted_path.argtypes = analytics_args + [c_uint, c_uint]
+            lib.helios_graph_articulation.restype = c_void_p
+            lib.helios_graph_articulation.argtypes = [
+                c_int,
+                POINTER(c_uint),
+                POINTER(c_uint),
+                c_int,
+            ]
         except AttributeError:
             # A stale library from an older build: missing entry points.
             continue
@@ -327,3 +347,118 @@ def graph_shortest_path_rust(
     if not isinstance(parsed, dict) or "error" in parsed:
         return None
     return int(parsed["hops"]), list(parsed.get("path", []))
+
+
+def _weighted_buffers(
+    edges: Sequence[tuple[int, int, int]],
+) -> tuple[Any, Any, Any]:
+    """Packs weighted edges into the three parallel u32 arrays the ABI expects."""
+    length = len(edges)
+    sources = (c_uint * length)()
+    targets = (c_uint * length)()
+    weights = (c_uint * length)()
+    for index, (source, target, weight) in enumerate(edges):
+        sources[index] = int(source)
+        targets[index] = int(target)
+        weights[index] = int(weight)
+    return sources, targets, weights
+
+
+def graph_pagerank_rust(
+    node_count: int,
+    edges: Sequence[tuple[int, int, int]],
+    directed: bool = False,
+) -> list[float]:
+    """PageRank per node, or an empty list when the library is unavailable."""
+    if _LIB is None:
+        return []
+    try:
+        sources, targets, weights = _weighted_buffers(edges)
+        raw = _LIB.helios_graph_page_rank(
+            int(node_count),
+            sources if edges else None,
+            targets if edges else None,
+            weights if edges else None,
+            len(edges),
+            1 if directed else 0,
+        )
+    except Exception:
+        return []
+    decoded = _take(raw)
+    if not decoded:
+        return []
+    try:
+        parsed = json.loads(decoded)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(parsed, dict):
+        return []
+    return [float(value) for value in parsed.get("values", [])]
+
+
+def graph_weighted_path_rust(
+    node_count: int,
+    edges: Sequence[tuple[int, int, int]],
+    directed: bool,
+    source: int,
+    goal: int,
+) -> tuple[int, list[int]] | None:
+    """Cheapest `(cost, path)`, or None when unreachable or unavailable."""
+    if _LIB is None:
+        return None
+    try:
+        sources, targets, weights = _weighted_buffers(edges)
+        raw = _LIB.helios_graph_weighted_path(
+            int(node_count),
+            sources if edges else None,
+            targets if edges else None,
+            weights if edges else None,
+            len(edges),
+            1 if directed else 0,
+            int(source),
+            int(goal),
+        )
+    except Exception:
+        return None
+    decoded = _take(raw)
+    if not decoded:
+        return None
+    try:
+        parsed = json.loads(decoded)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(parsed, dict) or "error" in parsed:
+        return None
+    return int(parsed["cost"]), [int(node) for node in parsed.get("path", [])]
+
+
+def graph_articulation_rust(
+    node_count: int, edges: Sequence[tuple[int, int]]
+) -> tuple[list[int], list[tuple[int, int]]]:
+    """`(articulation_points, bridges)` for the undirected view of `edges`."""
+    if _LIB is None:
+        return [], []
+    try:
+        sources, targets, _ = _weighted_buffers(
+            [(source, target, 1) for source, target in edges]
+        )
+        raw = _LIB.helios_graph_articulation(
+            int(node_count),
+            sources if edges else None,
+            targets if edges else None,
+            len(edges),
+        )
+    except Exception:
+        return [], []
+    decoded = _take(raw)
+    if not decoded:
+        return [], []
+    try:
+        parsed = json.loads(decoded)
+    except (ValueError, TypeError):
+        return [], []
+    if not isinstance(parsed, dict):
+        return [], []
+    points = [int(node) for node in parsed.get("articulation", [])]
+    bridges = [(int(pair[0]), int(pair[1])) for pair in parsed.get("bridges", [])]
+    return points, bridges

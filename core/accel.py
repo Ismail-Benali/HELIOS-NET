@@ -51,10 +51,13 @@ __all__ = [
     "backend_infos_by_name",
     "match_signatures",
     "fingerprint",
+    "graph_articulation",
     "graph_degree_centrality",
     "graph_betweenness",
     "graph_components",
+    "graph_pagerank",
     "graph_shortest_path",
+    "graph_weighted_shortest_path",
     "scan_ports",
     "compare_backends",
 ]
@@ -223,7 +226,7 @@ def _go_info() -> BackendInfo:
 _BACKENDS = {"c": _c_info, "rust": _rust_info, "go": _go_info, "python": _python_info}
 
 #: Preference order for the text capabilities. The C core is first because its
-#: matcher is the one the differential fuzzer and the C↔Python parity work
+#: matcher is the one the differential fuzzer and the Câ†”Python parity work
 #: actually cover; the Rust core is next; Python is the floor and is never
 #: unavailable, so this list always resolves to something.
 #:
@@ -683,6 +686,87 @@ def graph_shortest_path(
         return None if path is None else (len(path) - 1, [int(x) for x in path])
 
     return _graph_dispatch("graph_shortest_path", native, fallback, prefer)
+
+
+def graph_pagerank(
+    node_count: int,
+    edges: Sequence[tuple[int, int, int]],
+    directed: bool = False,
+    prefer: str | None = None,
+) -> GraphOutcome:
+    """PageRank per node, indexed by node; the ranking sums to one.
+
+    ``edges`` carry a weight for the routing call, but PageRank is defined over
+    links, so the weight is ignored on both backends rather than letting the two
+    disagree about whether a relationship counts once or by its cost.
+    """
+
+    def native() -> Any:
+        from core import rust_bridge
+
+        return rust_bridge.graph_pagerank_rust(node_count, list(edges), directed)
+
+    def fallback() -> Any:
+        from engine.graph.analytics import pagerank
+
+        return pagerank(node_count, list(edges), directed)
+
+    return _graph_dispatch("graph_pagerank", native, fallback, prefer)
+
+
+def graph_weighted_shortest_path(
+    node_count: int,
+    edges: Sequence[tuple[int, int, int]],
+    source: int,
+    target: int,
+    directed: bool = True,
+    prefer: str | None = None,
+) -> GraphOutcome:
+    """Cheapest `(cost, path)` from `source` to `target`, or None.
+
+    Costs are unsigned 64-bit on the native side; a route whose total would
+    overflow is reported unreachable instead of wrapping into a cheaper-looking
+    answer.
+    """
+
+    def native() -> Any:
+        from core import rust_bridge
+
+        return rust_bridge.graph_weighted_path_rust(
+            node_count, list(edges), directed, source, target
+        )
+
+    def fallback() -> Any:
+        from engine.graph.analytics import weighted_shortest_path
+
+        return weighted_shortest_path(node_count, list(edges), directed, source, target)
+
+    return _graph_dispatch("graph_weighted_shortest_path", native, fallback, prefer)
+
+
+def graph_articulation(
+    node_count: int,
+    edges: Sequence[tuple[int, int]],
+    prefer: str | None = None,
+) -> GraphOutcome:
+    """`(articulation_points, bridges)` for the undirected view of `edges`.
+
+    Direction and weight are irrelevant to the question: removing the node or
+    edge partitions the network whichever way the relationship was recorded.
+    """
+
+    def native() -> Any:
+        from core import rust_bridge
+
+        return rust_bridge.graph_articulation_rust(node_count, list(edges))
+
+    def fallback() -> Any:
+        from engine.graph.analytics import articulation_and_bridges
+
+        weighted = [(source, target, 1) for source, target in edges]
+        return articulation_and_bridges(node_count, weighted)
+
+    return _graph_dispatch("graph_articulation", native, fallback, prefer)
 
 
 @dataclass(frozen=True)

@@ -30,6 +30,16 @@ actually contains; `helios version` reports the revision with
   `wheel` CI job builds the artifact on Ubuntu and Windows, installs it in a
   clean environment, and fails if a required backend does not load
   (`tools/verify_wheel.py`).
+- Directed and weighted graph analytics in the Rust core (ABI v3): cheapest-route
+  search with overflow-safe costs, PageRank with dangling-node redistribution,
+  and articulation points/bridges over an undirected view. `helios_graph_page_rank`,
+  `helios_graph_weighted_path` and `helios_graph_articulation` are exposed
+  through `core/rust_bridge.py`, `core/accel.py` and the capability contract.
+- `engine/graph/analytics.py` is the pure-Python reference for the same three
+  questions, so a host without the Rust library still gets identical answers;
+  parity tests compare routes, rankings and cut points on random graphs.
+- Benchmarks for PageRank, weighted routing and articulation in `tools/bench.py`,
+  with recorded numbers in `docs/BENCHMARKS.md`.
 
 ### Fixed
 
