@@ -11,8 +11,13 @@ from __future__ import annotations
 
 import pytest
 
-from modules.discovery import service
+from modules.discovery import goscan_bridge, service
 from modules.recon import fingerprint
+
+
+@pytest.fixture(autouse=True)
+def _reset_go_summary(monkeypatch):
+    monkeypatch.setattr(goscan_bridge, "LAST_SUMMARY", None)
 
 
 class FakeSocket:
@@ -192,6 +197,76 @@ def test_a_go_miss_with_no_error_is_reported_as_closed_by_the_go_core(monkeypatc
     assert result["state"] == "closed"
     assert result["source"] == "native(Go)", "an empty answer is still an answer"
     assert result["engine"] == "go-native"
+
+
+def test_a_go_timeout_is_reported_as_filtered(monkeypatch):
+    _go_available(monkeypatch)
+    monkeypatch.setattr(goscan_bridge, "run_go_scan", lambda *a, **k: [])
+    monkeypatch.setattr(
+        goscan_bridge,
+        "LAST_SUMMARY",
+        {
+            "attempted": 1,
+            "open": 0,
+            "refused": 0,
+            "timeout": 1,
+            "unreachable": 0,
+            "errors": 0,
+            "target": "10.0.0.1",
+            "ports": "22",
+        },
+    )
+
+    result = service.native_connect_probe("10.0.0.1", 22)
+    assert result["state"] == "filtered"
+    assert result["close_reason"] == "timeout"
+    assert result["source"] == "native(Go)"
+
+
+def test_a_go_refusal_is_reported_as_closed_with_its_reason(monkeypatch):
+    _go_available(monkeypatch)
+    monkeypatch.setattr(goscan_bridge, "run_go_scan", lambda *a, **k: [])
+    monkeypatch.setattr(
+        goscan_bridge,
+        "LAST_SUMMARY",
+        {
+            "attempted": 1,
+            "open": 0,
+            "refused": 1,
+            "timeout": 0,
+            "unreachable": 0,
+            "errors": 0,
+            "target": "10.0.0.1",
+            "ports": "22",
+        },
+    )
+
+    result = service.native_connect_probe("10.0.0.1", 22)
+    assert result["state"] == "closed"
+    assert result["close_reason"] == "refused"
+
+
+def test_a_summary_for_another_target_is_not_used(monkeypatch):
+    _go_available(monkeypatch)
+    monkeypatch.setattr(goscan_bridge, "run_go_scan", lambda *a, **k: [])
+    monkeypatch.setattr(
+        goscan_bridge,
+        "LAST_SUMMARY",
+        {
+            "attempted": 1,
+            "open": 0,
+            "refused": 0,
+            "timeout": 1,
+            "unreachable": 0,
+            "errors": 0,
+            "target": "10.0.0.9",
+            "ports": "22",
+        },
+    )
+
+    result = service.native_connect_probe("10.0.0.1", 22)
+    assert result["state"] == "closed", "a stale summary must not colour this probe"
+    assert "close_reason" not in result
 
 
 def test_a_failed_go_core_falls_back_and_says_so(monkeypatch):

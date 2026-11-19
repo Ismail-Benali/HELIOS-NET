@@ -113,7 +113,7 @@ compared directly:
 {"status": "ok", "checks": 19, "failures": 0, "version": "..."}
 ```
 
-Current coverage: Go 30 unit tests plus 4 fuzz targets and a 19-check self test;
+Current coverage: Go 56 unit tests plus 4 fuzz targets and a 27-check self test;
 Rust 91 tests (33 in-library, 21 property, 26 C-ABI, 11 analytics) plus an in-library self
 test; C 341 native checks, a differential fuzzer, a signature-loader fuzzer, and a 19-check
 self test.

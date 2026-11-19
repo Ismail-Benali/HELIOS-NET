@@ -8,12 +8,15 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -36,13 +39,94 @@ const (
 
 	// commonPorts is the default sweep when the port argument is not parseable.
 	commonPorts = "21,22,23,25,53,80,110,443,445,3306,3389,5432,8080"
+
+	// maxRetries bounds extra dial attempts per port. A timeout is the only
+	// failure worth retrying; a refusal is deterministic and retrying it only
+	// adds load.
+	maxRetries = 5
+
+	// maxRatePerSecond bounds an optional per-scan dial pacing rate.
+	maxRatePerSecond = 100000
+
+	// maxScanTimeout bounds one dial attempt; a request above this is a mistake,
+	// not a long scan.
+	maxScanTimeout = 10 * time.Minute
 )
 
+// scanOptions carries per-request knobs. The zero value is the historical
+// behaviour: one attempt per port, no pacing beyond the worker pool.
+type scanOptions struct {
+	timeout    time.Duration
+	retries    int
+	ratePerSec int
+}
+
+func defaultScanOptions() scanOptions {
+	return scanOptions{timeout: scanTimeout}
+}
+
+// normalise validates a request's knobs instead of silently clamping them, so a
+// caller that asks for something the core cannot honour learns about it.
+func (o scanOptions) normalise() (scanOptions, error) {
+	if o.timeout <= 0 {
+		return o, errors.New("timeout must be positive")
+	}
+	if o.timeout > maxScanTimeout {
+		return o, fmt.Errorf("timeout must not exceed %s", maxScanTimeout)
+	}
+	if o.retries < 0 || o.retries > maxRetries {
+		return o, fmt.Errorf("retries must be between 0 and %d", maxRetries)
+	}
+	if o.ratePerSec < 0 || o.ratePerSec > maxRatePerSecond {
+		return o, fmt.Errorf("rate must be between 0 and %d", maxRatePerSecond)
+	}
+	return o, nil
+}
+
+// rateLimiter spaces dial starts across a whole sweep. It serialises only the
+// scheduling decision, never the dial or the banner read, and uses a monotonic
+// "next slot" rather than sleeping a fixed interval per worker, so a slow dial
+// cannot turn the configured rate into a lower one.
+type rateLimiter struct {
+	mu       sync.Mutex
+	interval time.Duration
+	next     time.Time
+}
+
+func newRateLimiter(perSecond int) *rateLimiter {
+	if perSecond <= 0 {
+		return nil
+	}
+	interval := time.Second / time.Duration(perSecond)
+	if interval < time.Microsecond {
+		interval = time.Microsecond
+	}
+	return &rateLimiter{interval: interval}
+}
+
+func (l *rateLimiter) wait() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	now := time.Now()
+	if l.next.Before(now) {
+		l.next = now
+	}
+	slot := l.next
+	l.next = l.next.Add(l.interval)
+	l.mu.Unlock()
+	if delay := slot.Sub(time.Now()); delay > 0 {
+		time.Sleep(delay)
+	}
+}
+
 type TLSInfo struct {
-	Version  string `json:"version"`
-	Issuer   string `json:"issuer,omitempty"`
-	NotAfter string `json:"not_after,omitempty"`
-	Valid    bool   `json:"valid"`
+	Version    string `json:"version"`
+	ServerName string `json:"server_name,omitempty"`
+	Issuer     string `json:"issuer,omitempty"`
+	NotAfter   string `json:"not_after,omitempty"`
+	Valid      bool   `json:"valid"`
 }
 
 type PortResult struct {
@@ -53,6 +137,13 @@ type PortResult struct {
 	TLS       *TLSInfo `json:"tls,omitempty"`
 	LatencyMs int64    `json:"latency_ms"`
 	Time      string   `json:"time"`
+	// Reason qualifies a closed port: "refused", "timeout", "unreachable" or
+	// "error". A closed port is not one condition, and callers were previously
+	// forced to guess from an empty result set.
+	Reason string `json:"reason,omitempty"`
+	// Attempts is set only when retries were used, so the historical record
+	// shape is unchanged for a normal single-attempt scan.
+	Attempts int `json:"attempts,omitempty"`
 }
 
 type ErrorEnvelope struct {
@@ -95,6 +186,41 @@ func sanitizeBanner(raw string) string {
 
 // grabBanner attempts to read a greeting banner from an open TCP connection with a strict timeout.
 func grabBanner(conn net.Conn, port int) (string, string) {
+	return grabBannerForHost(conn, port, "")
+}
+
+// httpHost is the value for the Host header. It uses the scanned target rather
+// than a hard-coded localhost, because a virtual host answers differently for
+// the name it was asked for. A non-default port is included, and JoinHostPort
+// brackets IPv6 literals as the header syntax requires.
+func httpHost(host string, port int) string {
+	if port == 80 || port == 443 {
+		return host
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+// safeHostValue rejects targets that would let a crafted hostname inject a new
+// header line into the HTTP probe. Dialling would usually fail later, but the
+// request is built as a string, so this is checked before it is built.
+func safeHostValue(host string) bool {
+	return host != "" && !strings.ContainsAny(host, "\r\n\x00 \t/")
+}
+
+// tlsServerName is the SNI value. Browsers omit SNI for an IP literal and a
+// certificate cannot match one, so an IP target yields "" instead of a fake
+// name.
+func tlsServerName(host string) string {
+	if net.ParseIP(host) != nil {
+		return ""
+	}
+	return strings.TrimSuffix(host, ".")
+}
+
+// grabBannerForHost reads a passive greeting first and only then, on a known web
+// port, sends one HTTP probe. The binary NUL in the search set is deliberate:
+// control bytes in the target are as dangerous in a request line as CR/LF.
+func grabBannerForHost(conn net.Conn, port int, host string) (string, string) {
 	_ = conn.SetReadDeadline(time.Now().Add(bannerTimeout))
 	reader := bufio.NewReader(conn)
 
@@ -109,9 +235,12 @@ func grabBanner(conn net.Conn, port int) (string, string) {
 	}
 
 	// Active HTTP probing for web ports if no passive banner received
-	if port == 80 || port == 8080 || port == 8000 || port == 443 || port == 8443 {
+	if (port == 80 || port == 8080 || port == 8000 || port == 443 || port == 8443) &&
+		safeHostValue(host) {
+		request := "GET / HTTP/1.1\r\nHost: " + httpHost(host, port) +
+			"\r\nUser-Agent: HELIOS-NET\r\nConnection: close\r\n\r\n"
 		_ = conn.SetWriteDeadline(time.Now().Add(bannerTimeout))
-		_, _ = conn.Write([]byte("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"))
+		_, _ = conn.Write([]byte(request))
 		_ = conn.SetReadDeadline(time.Now().Add(bannerTimeout))
 		n, err = reader.Read(buf)
 		if err == nil && n > 0 {
@@ -123,6 +252,47 @@ func grabBanner(conn net.Conn, port int) (string, string) {
 	}
 
 	return "", ""
+}
+
+// classifyDialError maps a dial failure onto the vocabulary the Python discovery
+// layer already uses for a qualified state.
+//
+// The errno is compared numerically rather than through errors.Is(err,
+// syscall.ECONNREFUSED): on Windows that constant and the value carried by a
+// failed connectex differ, and the human-readable message is localised, so
+// string matching is not an option either.
+func classifyDialError(err error) string {
+	if err == nil {
+		return "open"
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "timeout"
+	}
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		if isConnectionRefused(errno) {
+			return "refused"
+		}
+		if isUnreachable(errno) {
+			return "unreachable"
+		}
+	}
+	return "error"
+}
+
+func isConnectionRefused(errno syscall.Errno) bool {
+	if runtime.GOOS == "windows" {
+		return errno == 10061 // WSAECONNREFUSED
+	}
+	return errno == syscall.ECONNREFUSED
+}
+
+func isUnreachable(errno syscall.Errno) bool {
+	if runtime.GOOS == "windows" {
+		return errno == 10051 || errno == 10065 // WSAENETUNREACH, WSAEHOSTUNREACH
+	}
+	return errno == syscall.ENETUNREACH || errno == syscall.EHOSTUNREACH
 }
 
 func guessServiceFromBanner(banner string) string {
@@ -380,6 +550,52 @@ func parsePortToken(token string) ([]int, bool) {
 	return ports, true
 }
 
+// parseScanArgs reads the two positional arguments and the optional tuning
+// flags. Unknown options are rejected rather than ignored, because a typo in a
+// rate flag that silently does nothing is worse than a parse error.
+func parseScanArgs(args []string) (string, string, scanOptions, error) {
+	opts := defaultScanOptions()
+	if len(args) < 2 {
+		return "", "", opts, errors.New("missing target or ports")
+	}
+	target, portArg := args[0], args[1]
+	for i := 2; i < len(args); i++ {
+		name := args[i]
+		if i+1 >= len(args) {
+			return "", "", opts, fmt.Errorf("%s needs a value", name)
+		}
+		value := args[i+1]
+		i++
+		switch name {
+		case "--timeout-ms":
+			ms, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || ms < 1 || ms > int64(maxScanTimeout/time.Millisecond) {
+				return "", "", opts, fmt.Errorf("--timeout-ms must be between 1 and %d", maxScanTimeout/time.Millisecond)
+			}
+			opts.timeout = time.Duration(ms) * time.Millisecond
+		case "--retries":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return "", "", opts, fmt.Errorf("invalid --retries %q", value)
+			}
+			opts.retries = n
+		case "--rate":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return "", "", opts, fmt.Errorf("invalid --rate %q", value)
+			}
+			opts.ratePerSec = n
+		default:
+			return "", "", opts, fmt.Errorf("unknown option %q", name)
+		}
+	}
+	normalised, err := opts.normalise()
+	if err != nil {
+		return "", "", opts, err
+	}
+	return target, portArg, normalised, nil
+}
+
 func main() {
 	args := os.Args[1:]
 
@@ -399,21 +615,23 @@ func main() {
 		os.Exit(0)
 	}
 
-	if len(args) < 2 {
-		emitEnvelope("PARSE_ERROR", "usage: goscan <target-ip> <ports: 80 or 1-1000 or 80,443>", "goscan")
+	targetIP, portArg, opts, err := parseScanArgs(args)
+	if err != nil {
+		emitEnvelope("PARSE_ERROR", err.Error(), "goscan")
 		usage()
 		os.Exit(2)
 	}
-
-	targetIP := args[0]
-	portArg := args[1]
+	if !safeHostValue(targetIP) {
+		emitEnvelope("PARSE_ERROR", "target contains characters that cannot be dialled or probed", "goscan")
+		os.Exit(2)
+	}
 	ports := parsePorts(portArg)
 	if len(ports) == 0 {
 		emitEnvelope("PARSE_ERROR", "no valid ports in argument: "+portArg, "goscan")
 		os.Exit(2)
 	}
 
-	resultsChan, wait := startScan(targetIP, ports, scanTimeout)
+	resultsChan, wait := startScanWithOptions(targetIP, ports, opts)
 
 	encoder := json.NewEncoder(os.Stdout)
 	for res := range resultsChan {
@@ -429,10 +647,24 @@ func main() {
 
 // scanRequest is one line on the persistent worker's stdin.
 type scanRequest struct {
-	ID        int    `json:"id"`
-	Target    string `json:"target"`
-	Ports     string `json:"ports"`
-	TimeoutMS int64  `json:"timeout_ms,omitempty"`
+	ID         int    `json:"id"`
+	Target     string `json:"target"`
+	Ports      string `json:"ports"`
+	TimeoutMS  int64  `json:"timeout_ms,omitempty"`
+	Retries    int    `json:"retries,omitempty"`
+	RatePerSec int    `json:"rate_per_sec,omitempty"`
+}
+
+// ScanSummary is the account of every port in a sweep, including the closed
+// ones the results array omits. Without it a caller sees an empty results array
+// and cannot tell "nothing was open" from "everything timed out".
+type ScanSummary struct {
+	Attempted   int `json:"attempted"`
+	Open        int `json:"open"`
+	Refused     int `json:"refused"`
+	Timeout     int `json:"timeout"`
+	Unreachable int `json:"unreachable"`
+	Errors      int `json:"errors"`
 }
 
 // scanResponse is one line on the persistent worker's stdout. Keeping the port
@@ -440,6 +672,7 @@ type scanRequest struct {
 type scanResponse struct {
 	ID      int          `json:"id"`
 	Results []PortResult `json:"results"`
+	Summary ScanSummary  `json:"summary"`
 	Error   string       `json:"error,omitempty"`
 }
 
@@ -465,25 +698,49 @@ func runServe() int {
 			_ = encoder.Encode(scanResponse{ID: req.ID, Error: "missing target"})
 			continue
 		}
+		if !safeHostValue(req.Target) {
+			_ = encoder.Encode(scanResponse{ID: req.ID, Error: "target contains unsafe characters"})
+			continue
+		}
 		ports := parsePorts(req.Ports)
 		if len(ports) == 0 {
 			_ = encoder.Encode(scanResponse{ID: req.ID, Error: "no valid ports: " + req.Ports})
 			continue
 		}
-		timeout := scanTimeout
-		if req.TimeoutMS > 0 {
-			timeout = time.Duration(req.TimeoutMS) * time.Millisecond
+		opts := defaultScanOptions()
+		if req.TimeoutMS != 0 {
+			opts.timeout = time.Duration(req.TimeoutMS) * time.Millisecond
+		}
+		opts.retries = req.Retries
+		opts.ratePerSec = req.RatePerSec
+		opts, err := opts.normalise()
+		if err != nil {
+			_ = encoder.Encode(scanResponse{ID: req.ID, Error: err.Error()})
+			continue
 		}
 
-		resultsChan, wait := startScan(req.Target, ports, timeout)
+		resultsChan, wait := startScanWithOptions(req.Target, ports, opts)
 		results := make([]PortResult, 0)
+		summary := ScanSummary{Attempted: len(ports)}
 		for res := range resultsChan {
 			if res.Open {
+				summary.Open++
 				results = append(results, res)
+				continue
+			}
+			switch res.Reason {
+			case "refused":
+				summary.Refused++
+			case "timeout":
+				summary.Timeout++
+			case "unreachable":
+				summary.Unreachable++
+			default:
+				summary.Errors++
 			}
 		}
 		wait()
-		if err := encoder.Encode(scanResponse{ID: req.ID, Results: results}); err != nil {
+		if err := encoder.Encode(scanResponse{ID: req.ID, Results: results, Summary: summary}); err != nil {
 			emitEnvelope("IO_ERROR", "failed writing serve response: "+err.Error(), "goscan")
 			return 3
 		}
@@ -497,7 +754,8 @@ func runServe() int {
 
 func usage() {
 	_, _ = fmt.Fprintln(os.Stderr, "usage:")
-	_, _ = fmt.Fprintln(os.Stderr, "  goscan <target-ip> <ports>   scan (80, 1-1000, 80,443, 'common' or 'all')")
+	_, _ = fmt.Fprintln(os.Stderr, "  goscan <target> <ports> [--timeout-ms N] [--retries N] [--rate N]")
+	_, _ = fmt.Fprintln(os.Stderr, "                                scan (80, 1-1000, 80,443, 'common' or 'all')")
 	_, _ = fmt.Fprintln(os.Stderr, "  goscan serve                  persistent NDJSON worker (stdin/stdout)")
 	_, _ = fmt.Fprintln(os.Stderr, "  goscan selftest               run offline internal checks")
 	_, _ = fmt.Fprintln(os.Stderr, "  goscan version                print the version string")
@@ -508,52 +766,109 @@ func usage() {
 // workers already bounds how many of these run at once. A per-port semaphore
 // here would be a second, weaker bound that buys nothing.
 func scanPort(ip string, port int, timeout time.Duration, results chan<- PortResult) {
+	opts := defaultScanOptions()
+	opts.timeout = timeout
+	scanPortWithOptions(ip, port, opts, nil, results)
+}
+
+// scanPortWithOptions is the real dial path. Retries apply only to a timeout: a
+// refusal is the peer's answer, and repeating it adds traffic without changing
+// the verdict. The rate limiter paces attempt starts, not workers, so a 300-wide
+// pool still produces a bounded request rate when one is requested.
+func scanPortWithOptions(
+	host string,
+	port int,
+	opts scanOptions,
+	limiter *rateLimiter,
+	results chan<- PortResult,
+) {
 	// JoinHostPort brackets IPv6 literals, so IPv6 targets are dialable
 	// instead of being mis-parsed as host:port.
-	target := net.JoinHostPort(ip, strconv.Itoa(port))
-	start := time.Now()
-	conn, err := net.DialTimeout("tcp", target, timeout)
-	latency := time.Since(start).Milliseconds()
+	target := net.JoinHostPort(host, strconv.Itoa(port))
 
-	if err == nil {
-		defer func() { _ = conn.Close() }()
-		var tlsInfo *TLSInfo
-		if port == 443 || port == 8443 {
-			tlsConn := tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
-			_ = tlsConn.SetDeadline(time.Now().Add(timeout))
-			if handshakeErr := tlsConn.Handshake(); handshakeErr == nil {
-				state := tlsConn.ConnectionState()
-				if len(state.PeerCertificates) > 0 {
-					cert := state.PeerCertificates[0]
-					versionStr := "TLS 1.2"
-					if state.Version == tls.VersionTLS13 {
-						versionStr = "TLS 1.3"
-					}
-					tlsInfo = &TLSInfo{
-						Version:  versionStr,
-						Issuer:   cert.Issuer.CommonName,
-						NotAfter: cert.NotAfter.Format(time.RFC3339),
-						Valid:    time.Now().Before(cert.NotAfter),
-					}
-				}
-			}
+	var conn net.Conn
+	var reason string
+	var latency int64
+	attempts := 0
+	for attempts < opts.retries+1 {
+		limiter.wait()
+		start := time.Now()
+		opened, err := net.DialTimeout("tcp", target, opts.timeout)
+		latency = time.Since(start).Milliseconds()
+		attempts++
+		if err == nil {
+			conn = opened
+			reason = "open"
+			break
 		}
-		banner, service := grabBanner(conn, port)
-		results <- PortResult{
-			Port:      port,
-			Open:      true,
-			Banner:    banner,
-			Service:   resolveService(service, port),
-			TLS:       tlsInfo,
-			LatencyMs: latency,
-			Time:      time.Now().Format(time.RFC3339),
-		}
-	} else {
-		results <- PortResult{
-			Port: port,
-			Open: false,
+		reason = classifyDialError(err)
+		if reason != "timeout" {
+			break
 		}
 	}
+
+	if conn == nil {
+		results <- PortResult{
+			Port:      port,
+			Open:      false,
+			LatencyMs: latency,
+			Time:      time.Now().Format(time.RFC3339),
+			Reason:    reason,
+			Attempts:  attemptsIfRetried(attempts),
+		}
+		return
+	}
+	defer func() { _ = conn.Close() }()
+
+	var tlsInfo *TLSInfo
+	bannerConn := conn
+	if port == 443 || port == 8443 {
+		serverName := tlsServerName(host)
+		tlsConn := tls.Client(conn, &tls.Config{
+			InsecureSkipVerify: true,
+			ServerName:         serverName,
+		})
+		_ = tlsConn.SetDeadline(time.Now().Add(opts.timeout))
+		if handshakeErr := tlsConn.Handshake(); handshakeErr == nil {
+			state := tlsConn.ConnectionState()
+			versionStr := "TLS 1.2"
+			if state.Version == tls.VersionTLS13 {
+				versionStr = "TLS 1.3"
+			}
+			tlsInfo = &TLSInfo{
+				Version:    versionStr,
+				ServerName: serverName,
+				Valid:      true,
+			}
+			if len(state.PeerCertificates) > 0 {
+				cert := state.PeerCertificates[0]
+				tlsInfo.Issuer = cert.Issuer.CommonName
+				tlsInfo.NotAfter = cert.NotAfter.Format(time.RFC3339)
+				tlsInfo.Valid = time.Now().Before(cert.NotAfter)
+			}
+			// Read and probe over the TLS session. Using the raw conn here
+			// would mix plaintext HTTP into an encrypted session.
+			bannerConn = tlsConn
+		}
+	}
+	banner, service := grabBannerForHost(bannerConn, port, host)
+	results <- PortResult{
+		Port:      port,
+		Open:      true,
+		Banner:    banner,
+		Service:   resolveService(service, port),
+		TLS:       tlsInfo,
+		LatencyMs: latency,
+		Time:      time.Now().Format(time.RFC3339),
+		Attempts:  attemptsIfRetried(attempts),
+	}
+}
+
+func attemptsIfRetried(attempts int) int {
+	if attempts > 1 {
+		return attempts
+	}
+	return 0
 }
 
 // startScan dispatches the sweep over a fixed set of workers and returns the
@@ -571,6 +886,16 @@ func scanPort(ip string, port int, timeout time.Duration, results chan<- PortRes
 // on a result send even if the consumer stops reading, and no drain goroutine
 // is needed for it.
 func startScan(targetIP string, ports []int, timeout time.Duration) (chan PortResult, func()) {
+	opts := defaultScanOptions()
+	opts.timeout = timeout
+	return startScanWithOptions(targetIP, ports, opts)
+}
+
+func startScanWithOptions(
+	targetIP string,
+	ports []int,
+	opts scanOptions,
+) (chan PortResult, func()) {
 	// Nothing to scan: close the stream up front, otherwise a consumer ranging
 	// over it waits for a closer that zero workers would never run.
 	if len(ports) == 0 {
@@ -590,6 +915,7 @@ func startScan(targetIP string, ports []int, timeout time.Duration) (chan PortRe
 
 	workers := maxWorkersFor(len(ports))
 	resultsChan := make(chan PortResult, len(ports))
+	limiter := newRateLimiter(opts.ratePerSec)
 
 	var wg sync.WaitGroup
 	wg.Add(workers)
@@ -597,7 +923,7 @@ func startScan(targetIP string, ports []int, timeout time.Duration) (chan PortRe
 		go func() {
 			defer wg.Done()
 			for port := range work {
-				scanPort(targetIP, port, timeout, resultsChan)
+				scanPortWithOptions(targetIP, port, opts, limiter, resultsChan)
 			}
 		}()
 	}

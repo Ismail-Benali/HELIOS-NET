@@ -82,6 +82,33 @@ def discover_ports(
     return results
 
 
+def _go_close_state(host: str) -> tuple[str, str | None]:
+    """Reads the Go sweep summary for the one port that was just probed.
+
+    The summary is used only when it demonstrably belongs to this probe: same
+    target and exactly one attempted port. A missing or stale summary falls back
+    to "closed", which is what an empty Go answer meant before summaries existed.
+    """
+    from modules.discovery import goscan_bridge
+
+    summary = goscan_bridge.LAST_SUMMARY
+    if (
+        not isinstance(summary, dict)
+        or summary.get("target") != host
+        or summary.get("attempted") != 1
+    ):
+        return "closed", None
+    for key, state in (
+        ("timeout", "filtered"),
+        ("refused", "closed"),
+        ("unreachable", "unreachable"),
+        ("errors", "unknown"),
+    ):
+        if summary.get(key, 0) > 0:
+            return state, key
+    return "closed", None
+
+
 def native_connect_probe(host: str, port: int, timeout: float = 5.0) -> dict[str, Any]:
     """Probes a single port through the Go core's concurrent scanner.
 
@@ -90,9 +117,11 @@ def native_connect_probe(host: str, port: int, timeout: float = 5.0) -> dict[str
     it would need elevated privileges, so this function does not claim to do it.
     The state is reported honestly:
 
-      - open:     the connect completed.
-      - closed:   the peer actively refused the connection.
-      - filtered: the connection timed out.
+      - open:        the connect completed.
+      - closed:      the peer actively refused the connection.
+      - filtered:    the connection timed out.
+      - unreachable: the network or host reported it cannot reach the target.
+      - unknown:     the core ran but could not classify the failure.
 
     If the Go core cannot run, `core.accel` serves this from the socket probe and
     the answer says which one produced it in `source` and `engine`, because a
@@ -117,17 +146,21 @@ def native_connect_probe(host: str, port: int, timeout: float = 5.0) -> dict[str
                 "note": outcome.reason,
             }
         # A backend ran and reported the port closed. That is only a real
-        # "closed" verdict when the Go core said so: a socket probe returning
-        # nothing proves less, so it stays "unknown" with the reason attached.
+        # verdict when the Go core said so: a socket probe returning nothing
+        # proves less, so it stays "unknown" with the reason attached.
+        state, close_reason = "closed", None
+        if native:
+            state, close_reason = _go_close_state(host)
         return {
             "module": "discovery",
             "host": host,
             "port": port,
             "open": False,
-            "state": "closed" if native else "unknown",
+            "state": state if native else "unknown",
             "source": "native(Go)" if native else "fallback(socket)",
             "engine": outcome.engine,
             "engine_reason": outcome.reason,
+            **({} if close_reason is None else {"close_reason": close_reason}),
             **({} if native else {"note": outcome.reason}),
         }
 

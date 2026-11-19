@@ -11,6 +11,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -270,6 +271,43 @@ func selftestChecks() []check {
 		case <-time.After(20 * time.Second):
 			add("scan/pipeline-terminates", false, "still blocked after 20s (deadlock)")
 		}
+	}
+
+	// 11. Per-sweep tuning and the qualified close vocabulary.
+	{
+		_, _, opts, err := parseScanArgs([]string{
+			"example.test", "80", "--timeout-ms", "250", "--retries", "2", "--rate", "40",
+		})
+		ok := err == nil && opts.timeout == 250*time.Millisecond &&
+			opts.retries == 2 && opts.ratePerSec == 40
+		add("options/flags-applied", ok, fmt.Sprintf("%+v err=%v", opts, err))
+	}
+	{
+		_, _, _, err := parseScanArgs([]string{"example.test", "80", "--rate", "100001"})
+		add("options/out-of-range-rejected", err != nil, fmt.Sprintf("%v", err))
+	}
+	{
+		ok := httpHost("example.test", 8080) == "example.test:8080" &&
+			httpHost("2001:db8::1", 8443) == "[2001:db8::1]:8443"
+		add("http/host-header", ok, httpHost("2001:db8::1", 8443))
+	}
+	{
+		ok := !safeHostValue("a\r\nX: y") && safeHostValue("example.test")
+		add("http/host-injection-rejected", ok, "CRLF refused")
+	}
+	{
+		ok := tlsServerName("192.0.2.1") == "" && tlsServerName("example.test.") == "example.test"
+		add("tls/server-name", ok, tlsServerName("example.test."))
+	}
+	{
+		ok := classifyDialError(nil) == "open" &&
+			classifyDialError(errors.New("boom")) == "error" &&
+			classifyDialError(&net.DNSError{IsTimeout: true}) == "timeout"
+		add("dial/reason-classification", ok, "open/error/timeout")
+	}
+	{
+		ok := newRateLimiter(0) == nil && newRateLimiter(10).interval == 100*time.Millisecond
+		add("rate/interval", ok, "disabled=0, 10/s=100ms")
 	}
 
 	return checks

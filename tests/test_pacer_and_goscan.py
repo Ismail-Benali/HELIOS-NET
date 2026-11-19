@@ -345,9 +345,11 @@ def _envelope(code: str = "EDR_BLOCKED", message: str = "blocked by policy") -> 
 def _reset_bridge_globals():
     """The bridge keeps module-level state, so each test starts clean."""
     goscan_bridge.LAST_ERROR = None
+    goscan_bridge.LAST_SUMMARY = None
     goscan_bridge.mutation_engine = None
     yield
     goscan_bridge.LAST_ERROR = None
+    goscan_bridge.LAST_SUMMARY = None
     goscan_bridge.mutation_engine = None
 
 
@@ -960,3 +962,105 @@ def test_a_failure_to_start_the_event_loop_raises_in_strict_mode(monkeypatch):
 
     with pytest.raises(GoscanError, match="no event loop"):
         goscan_bridge.run_go_scan("10.0.0.1", strict=True)
+
+
+# --------------------------------------------------------------------------- #
+# tuning options and the per-sweep summary
+# --------------------------------------------------------------------------- #
+
+
+def test_validated_summary_requires_every_count():
+    good = {
+        "attempted": 2,
+        "open": 1,
+        "refused": 1,
+        "timeout": 0,
+        "unreachable": 0,
+        "errors": 0,
+    }
+    assert goscan_bridge._validated_summary(good) == good
+    for broken in (
+        None,
+        [],
+        {**good, "timeout": -1},
+        {**good, "timeout": True},
+        {**good, "timeout": "0"},
+        {k: v for k, v in good.items() if k != "errors"},
+    ):
+        assert goscan_bridge._validated_summary(broken) is None, broken
+
+
+def test_scan_options_are_forwarded_as_keywords(monkeypatch):
+    seen: dict[str, object] = {}
+
+    def fake_scan(target, port_arg, timeout, **kwargs):
+        seen.update(kwargs)
+        return []
+
+    monkeypatch.setattr(goscan_bridge._WORKER, "scan", fake_scan)
+    goscan_bridge._scan_with_options(
+        "10.0.0.1",
+        "22",
+        7.0,
+        dial_timeout_ms=250,
+        retries=2,
+        rate_per_sec=40,
+    )
+    assert seen == {"dial_timeout_ms": 250, "retries": 2, "rate_per_sec": 40}
+
+
+def test_default_scan_keeps_the_three_argument_worker_contract(monkeypatch):
+    seen: list[tuple[object, ...]] = []
+
+    def fake_scan(*args):
+        seen.append(args)
+        return []
+
+    monkeypatch.setattr(goscan_bridge._WORKER, "scan", fake_scan)
+    goscan_bridge._scan_with_options(
+        "10.0.0.1", "22", 7.0, dial_timeout_ms=0, retries=0, rate_per_sec=0
+    )
+    assert seen == [("10.0.0.1", "22", 7.0)]
+
+
+def test_run_go_scan_records_the_summary_with_its_request(monkeypatch):
+    monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: True)
+    monkeypatch.setattr(
+        goscan_bridge._WORKER,
+        "scan",
+        lambda target, port_arg, timeout, **kwargs: [],
+    )
+    monkeypatch.setattr(
+        goscan_bridge._WORKER,
+        "last_summary",
+        {
+            "attempted": 1,
+            "open": 0,
+            "refused": 0,
+            "timeout": 1,
+            "unreachable": 0,
+            "errors": 0,
+        },
+    )
+
+    rows = goscan_bridge.run_go_scan("10.0.0.1", "22")
+
+    assert rows == []
+    assert goscan_bridge.LAST_SUMMARY is not None
+    assert goscan_bridge.LAST_SUMMARY["timeout"] == 1
+    assert goscan_bridge.LAST_SUMMARY["target"] == "10.0.0.1"
+    assert goscan_bridge.LAST_SUMMARY["ports"] == "22"
+
+
+def test_run_go_scan_clears_a_stale_summary_on_failure(monkeypatch):
+    monkeypatch.setattr(goscan_bridge.GOSCAN_BIN.__class__, "exists", lambda self: True)
+    goscan_bridge.LAST_SUMMARY = {"attempted": 1}
+
+    def broken(target, port_arg, timeout, **kwargs):
+        raise GoscanError("worker died")
+
+    monkeypatch.setattr(goscan_bridge._WORKER, "scan", broken)
+    monkeypatch.setattr(goscan_bridge, "run_go_scan_async", lambda *a, **k: [])
+
+    assert goscan_bridge.run_go_scan("10.0.0.1") == []
+    assert goscan_bridge.LAST_SUMMARY is None

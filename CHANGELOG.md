@@ -8,6 +8,19 @@ actually contains; `helios version` reports the revision with
 
 ### Added
 
+- Go scanner sweeps accept a per-dial `--timeout-ms`, a bounded `--retries`
+  (timeouts only) and `--rate` pacing, exposed through `serve` as
+  `timeout_ms`, `retries` and `rate_per_sec`. The response now carries a
+  `summary` that counts attempted/open/refused/timeout/unreachable/error, so an
+  empty result list no longer means four different things.
+- Closed ports carry a `reason` (`refused`, `timeout`, `unreachable`, `error`)
+  and `attempts` when a retry was used; the Python bridge exposes the sweep
+  summary as `goscan_bridge.LAST_SUMMARY` and the discovery probe reports
+  `filtered` / `unreachable` instead of flattening every miss to `closed`.
+- TLS probing sends SNI for named targets and reads the banner over the TLS
+  session, and the HTTP probe uses the real target in `Host` (with port and
+  IPv6 brackets) instead of `localhost`. Unsafe targets are refused before a
+  request is built.
 - Installable package (`pyproject.toml`, console script `helios`, PEP 440
   version `2.0.0b1`) with `install.sh` and `install.ps1` wrappers that prefer
   `pipx` and fall back to a user install. Installed runs keep campaign state in
