@@ -134,6 +134,21 @@ installs the artifact on Ubuntu and Windows and fails if a core does not load,
 so the two cases are both tested. `tools/bundle_cores.py` can be run explicitly
 when a build pipeline wants that step to be visible.
 
+The version in `pyproject.toml` is `2.0.0b1` for this pre-release, so the
+artifact names carry the matching tag:
+
+```bash
+python -m pip wheel . --no-deps -w dist
+# dist/helios_net-2.0.0b1-py3-none-win_amd64.whl    (Windows x86-64, cores inside)
+# dist/helios_net-2.0.0b1-py3-none-linux_x86_64.whl (Linux x86-64, cores inside)
+# dist/helios_net-2.0.0b1-py3-none-any.whl          (pure Python, no cores)
+python tools/verify_wheel.py --wheel "dist/*.whl" --require c rust go
+```
+
+`verify_wheel.py` installs the artifact in a throwaway virtual environment
+outside the checkout and fails unless the C, Rust, and Go backends load from the
+installed package.
+
 Every network command is scope-checked. Edit `config/scope.yaml` (or pass
 `--scope path.json`) to list the domains, CIDRs, and ports you are authorized to
 touch. The default file covers `example.test`, `lab.test`, and a loopback range;

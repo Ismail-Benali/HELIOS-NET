@@ -86,7 +86,26 @@ To compile all native binaries automatically:
 python build.py
 ```
 
-### 3. Run the verification suite
+### 3. Build and verify the wheel
+A checkout with built cores produces a platform wheel that carries them; a
+checkout without cores produces the pure wheel that uses the Python fallback.
+The version comes from `pyproject.toml` (`2.0.0b1` in this pre-release):
+
+```bash
+python build.py
+python -m pip wheel . --no-deps -w dist
+# dist/helios_net-2.0.0b1-py3-none-win_amd64.whl
+# dist/helios_net-2.0.0b1-py3-none-linux_x86_64.whl
+# dist/helios_net-2.0.0b1-py3-none-any.whl  (nothing built)
+python tools/verify_wheel.py --wheel "dist/*.whl" --require c rust go
+```
+
+`verify_wheel.py` installs the artifact in a clean virtual environment outside
+the checkout and fails unless the requested backends load. The `wheel` CI job
+runs the same sequence on Ubuntu 24.04 and Windows, so a packaging change that
+only works in a source checkout is caught before merge.
+
+### 4. Run the verification suite
 ```bash
 python tests/smoke.py
 ```
