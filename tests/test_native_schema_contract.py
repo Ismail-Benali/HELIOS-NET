@@ -52,7 +52,7 @@ BRIDGE_SRC = ROOT / "modules" / "discovery" / "goscan_bridge.py"
 
 #: Keys that belong to the persistent `goscan serve` envelope, not to a port
 #: record. The bridge reads both shapes from the same file.
-PROTOCOL_KEYS = {"id", "results", "error"}
+PROTOCOL_KEYS = {"id", "results", "error", "summary"}
 
 
 def go_sources() -> str:
@@ -247,8 +247,11 @@ def test_the_scan_argv_shape_matches_the_go_usage():
         r"create_subprocess_exec\(\s*str\(GOSCAN_BIN\),\s*target,\s*port_arg",
         BRIDGE_SRC.read_text(encoding="utf-8"),
     )
-    assert re.search(r"targetIP\s*:=\s*args\[0\]", go_source("goscan.go"))
-    assert re.search(r"portArg\s*:=\s*args\[1\]", go_source("goscan.go"))
+    source = go_source("goscan.go")
+    assert "parseScanArgs(args)" in source, (
+        "main() must parse through the tested parser"
+    )
+    assert re.search(r"target,\s*portArg\s*:=\s*args\[0\],\s*args\[1\]", source)
 
 
 def test_the_port_specs_the_bridge_advertises_are_the_ones_go_parses():
@@ -402,3 +405,12 @@ def test_a_record_missing_the_filter_key_is_a_provable_defect():
         "the bridge cannot know, so it reports success. This is exactly why "
         "test_the_filter_key_is_guaranteed_to_arrive must exist."
     )
+
+
+def test_the_serve_envelope_always_carries_a_summary():
+    """`summary` is protocol-level, so it is not in PortResult, but the bridge
+    reads it from every serve reply. If it became omitempty, an all-closed sweep
+    would lose the only account of why nothing was open."""
+    produced = go_struct("scanResponse")
+    assert "summary" in produced
+    assert produced["summary"] is False, "summary must never be omitted"

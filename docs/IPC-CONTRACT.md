@@ -29,6 +29,19 @@ not as an uncorrelated stream of findings. See
 `modules/discovery/goscan_bridge.py` for the consumer implementation and the
 Go worker source for the producer.
 
+Per-request tuning is optional and additive. `timeout_ms` bounds one dial,
+`retries` (0-5) repeats timeouts only, and `rate_per_sec` (0 disables) paces
+dial starts across the sweep. The response always carries a `summary`:
+
+```json
+{"id":7,"results":[],"summary":{"attempted":1024,"open":0,"refused":1023,"timeout":1,"unreachable":0,"errors":0}}
+```
+
+`results` contains open ports only; `summary` accounts for every attempted
+port, so an empty `results` cannot be mistaken for "nothing was scanned". Each
+open record may also carry `tls.server_name` (the SNI value requested) and
+`attempts` when a timeout was retried.
+
 ## C signature and fingerprint core
 
 The C command-line front end consumes line-delimited JSON requests and returns

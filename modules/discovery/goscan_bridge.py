@@ -48,6 +48,30 @@ mutation_engine = None
 #: An empty list from `run_go_scan` is trustworthy only when this is None.
 LAST_ERROR: str | None = None
 
+#: Per-sweep account from the Go core, including closed ports: attempted, open,
+#: refused, timeout, unreachable, errors, plus the target and port spec. An
+#: empty result list says nothing about *why* a port was closed; this does.
+LAST_SUMMARY: dict[str, Any] | None = None
+
+_SUMMARY_KEYS = ("attempted", "open", "refused", "timeout", "unreachable", "errors")
+
+
+def _validated_summary(raw: Any) -> dict[str, int] | None:
+    """Returns a fully-populated count dict, or None for a malformed summary.
+
+    Partial acceptance would be worse than none: a missing "timeout" key would
+    read as zero timeouts, which is a claim the core never made.
+    """
+    if not isinstance(raw, dict):
+        return None
+    counts: dict[str, int] = {}
+    for key in _SUMMARY_KEYS:
+        value = raw.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None
+        counts[key] = value
+    return counts
+
 
 def attach_mutation_engine(engine: Any) -> None:
     """Allows the orchestrator to bind a MutationEngine for tactical adaptation."""
@@ -134,6 +158,7 @@ class _ServeWorker:
         self._bin = ""
         self._lock = threading.Lock()
         self._seq = 0
+        self.last_summary: dict[str, Any] | None = None
 
     def _drain_errors(self, proc: subprocess.Popen[str]) -> None:
         if proc.stderr is None:
@@ -178,8 +203,18 @@ class _ServeWorker:
         with self._lock:
             self._stop()
 
-    def scan(self, target: str, port_arg: str, timeout: float) -> list[dict[str, Any]]:
+    def scan(
+        self,
+        target: str,
+        port_arg: str,
+        timeout: float,
+        *,
+        dial_timeout_ms: int = 0,
+        retries: int = 0,
+        rate_per_sec: int = 0,
+    ) -> list[dict[str, Any]]:
         with self._lock:
+            self.last_summary = None
             if (
                 self._proc is None
                 or self._proc.poll() is not None
@@ -193,7 +228,18 @@ class _ServeWorker:
             stdout = proc.stdout
 
             self._seq += 1
-            request = json.dumps({"id": self._seq, "target": target, "ports": port_arg})
+            payload: dict[str, Any] = {
+                "id": self._seq,
+                "target": target,
+                "ports": port_arg,
+            }
+            if dial_timeout_ms > 0:
+                payload["timeout_ms"] = dial_timeout_ms
+            if retries > 0:
+                payload["retries"] = retries
+            if rate_per_sec > 0:
+                payload["rate_per_sec"] = rate_per_sec
+            request = json.dumps(payload)
             try:
                 proc.stdin.write(request + "\n")
                 proc.stdin.flush()
@@ -234,6 +280,7 @@ class _ServeWorker:
             if not isinstance(raw_results, list):
                 self._stop()
                 raise GoscanError("Go serve worker sent a non-list results field")
+            self.last_summary = _validated_summary(reply.get("summary"))
 
             results: list[dict[str, Any]] = []
             for data in raw_results:
@@ -272,19 +319,69 @@ def shutdown_worker() -> None:
     _WORKER.close()
 
 
+def _scan_with_options(
+    target: str,
+    port_arg: str,
+    timeout: float,
+    *,
+    dial_timeout_ms: int,
+    retries: int,
+    rate_per_sec: int,
+) -> list[dict[str, Any]]:
+    """Calls the worker with only the options the caller set.
+
+    The three-argument call is kept for the common case so the documented worker
+    contract and test doubles that implement it do not have to grow parameters
+    they never use.
+    """
+    if dial_timeout_ms or retries or rate_per_sec:
+        return _WORKER.scan(
+            target,
+            port_arg,
+            timeout,
+            dial_timeout_ms=dial_timeout_ms,
+            retries=retries,
+            rate_per_sec=rate_per_sec,
+        )
+    return _WORKER.scan(target, port_arg, timeout)
+
+
+def _record_summary(target: str, port_arg: str) -> None:
+    global LAST_SUMMARY
+    raw = getattr(_WORKER, "last_summary", None)
+    LAST_SUMMARY = None if raw is None else {**raw, "target": target, "ports": port_arg}
+
+
 def run_go_scan_persistent(
-    target: str, port_arg: str = "common", strict: bool = False, timeout: float = 300.0
+    target: str,
+    port_arg: str = "common",
+    strict: bool = False,
+    timeout: float = 300.0,
+    *,
+    dial_timeout_ms: int = 0,
+    retries: int = 0,
+    rate_per_sec: int = 0,
 ) -> list[dict[str, Any]]:
     """Scans through the long-lived `goscan serve` worker."""
-    global LAST_ERROR
+    global LAST_ERROR, LAST_SUMMARY
     LAST_ERROR = None
+    LAST_SUMMARY = None
     if not GOSCAN_BIN.exists():
         LAST_ERROR = f"Go core binary not found at {GOSCAN_BIN}"
         if strict:
             raise GoscanError(LAST_ERROR)
         return []
     try:
-        return _WORKER.scan(target, port_arg, timeout)
+        rows = _scan_with_options(
+            target,
+            port_arg,
+            timeout,
+            dial_timeout_ms=dial_timeout_ms,
+            retries=retries,
+            rate_per_sec=rate_per_sec,
+        )
+        _record_summary(target, port_arg)
+        return rows
     except GoscanError as exc:
         LAST_ERROR = str(exc)
         if strict:
@@ -412,6 +509,10 @@ def run_go_scan(
     port_arg: str = "common",
     strict: bool = False,
     timeout: float = 300.0,
+    *,
+    dial_timeout_ms: int = 0,
+    retries: int = 0,
+    rate_per_sec: int = 0,
 ) -> list[dict[str, Any]]:
     """Synchronous wrapper for Go scanner execution.
 
@@ -422,15 +523,25 @@ def run_go_scan(
     clean sweep.
 
     `timeout` bounds a whole sweep on the persistent worker, not a single dial.
-    It is generous by default because a full 65k-port sweep is a long request;
-    a wedged worker is still killed and replaced rather than blocking forever.
+    The tuning keywords are the per-dial knobs: `dial_timeout_ms`, `retries`
+    (timeouts only) and `rate_per_sec` (0 means unpaced).
     """
-    global LAST_ERROR
+    global LAST_ERROR, LAST_SUMMARY
+    LAST_ERROR = None
+    LAST_SUMMARY = None
     worker_error: str | None = None
     if GOSCAN_BIN.exists():
         try:
-            rows = _WORKER.scan(target, port_arg, timeout)
+            rows = _scan_with_options(
+                target,
+                port_arg,
+                timeout,
+                dial_timeout_ms=dial_timeout_ms,
+                retries=retries,
+                rate_per_sec=rate_per_sec,
+            )
             LAST_ERROR = None
+            _record_summary(target, port_arg)
             return rows
         except (GoscanError, OSError, subprocess.SubprocessError) as exc:
             worker_error = f"{type(exc).__name__}: {exc}"
