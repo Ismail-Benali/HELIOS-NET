@@ -24,6 +24,7 @@ runners.
 | P1 | Unify C/Rust/Go engine interfaces | Done | `core/native_contract.py` is authoritative; one closed outcome-state set; capability entrypoints are tested; degraded and failed dispatches carry a reason. Closed by PR #55 and covered by `tests/test_capability_contract.py`. |
 | P1 | Develop Asset Graph | Done | Stable asset identities, typed relationships, provenance, deduplication, isolated nodes, and reproducible graph exports (PRs #34, #35, #45). |
 | P1 | Develop Risk Scoring | Done | Explainable factors, evidence references, confidence, severity, and deterministic scoring with regression fixtures (PR #33). |
+| P1 | Directed and weighted graph analytics | Done | Rust CSR paths for weighted routing, PageRank, articulation points and bridges (ABI v3) with a Python reference and parity tests; capability contract and benchmarks cover both backends. |
 
 **Exit gate:** equivalent inputs produce consistent normalized findings;
 engine selection and fallback are visible in reports; every risk score can be
@@ -33,7 +34,7 @@ explained from evidence.
 
 | Priority | Work | State | Completion evidence |
 |---|---|---|---|
-| P2 | Dashboard | In progress | Campaign list/detail, live state, backend health, errors, and scope visibility |
+| P2 | Dashboard | Deferred | Campaign list/detail, live state, backend health, errors, and scope visibility. Deliberately postponed until the analytics and monitoring contracts settle. |
 | P2 | Interactive reports | Done | `helios report` builds a single-file offline report from a typed graph with asset/relationship filters, degree and evidence counts, escaped embedded JSON, and no network requests. Hosted filtering of live campaigns remains part of the dashboard item. |
 
 **Exit gate:** the UI consumes versioned internal APIs and does not duplicate
@@ -51,6 +52,10 @@ and evidence model as one-time campaigns.
 ## Current implementation notes
 
 - P0 scope and contract hardening is merged into `master` (PR #31).
+- Graph analytics are available on both the Rust core and Python: the same
+  directed/weighted inputs produce the same route, ranking and cut points, and
+  only the reported engine changes. The native core is an accelerator, never a
+  prerequisite.
 - The Go scanner is a process/NDJSON component, the C core is a process
   component, and Rust is currently exposed through a C ABI. They do not share
   one transport protocol.

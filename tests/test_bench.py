@@ -37,6 +37,9 @@ def test_cases_cover_every_measured_component():
         "fingerprint",
         "graph-degree",
         "graph-betweenness",
+        "graph-pagerank",
+        "graph-weighted-path",
+        "graph-articulation",
         "html-report",
     }
 

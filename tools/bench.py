@@ -56,6 +56,16 @@ def _graph(node_count: int, edge_count: int) -> list[tuple[int, int]]:
     return sorted(edges)
 
 
+def _weighted_graph(node_count: int, edge_count: int) -> list[tuple[int, int, int]]:
+    rng = random.Random(20240101)
+    edges: set[tuple[int, int, int]] = set()
+    while len(edges) < edge_count:
+        a, b = rng.randrange(node_count), rng.randrange(node_count)
+        if a != b:
+            edges.add((a, b, rng.randrange(1, 100)))
+    return sorted(edges)
+
+
 def _nmap_document(hosts: int = 500, ports: int = 10) -> str:
     records = []
     for host in range(hosts):
@@ -122,12 +132,24 @@ def cases(backend: str) -> list[Case]:
     nmap_document = _nmap_document()
     graph_degree = _graph(2000, 8000)
     graph_betweenness = _graph(300, 1200)
+    graph_analytics = _weighted_graph(1500, 6000)
+    graph_route = [(node, node + 1, 1) for node in range(1499)]
+    graph_weighted = sorted(set(graph_analytics + graph_route))
     prefer = None if backend == "auto" else backend
     degree_backend = accel.graph_degree_centrality(
         2000, graph_degree, prefer=prefer
     ).engine
     betweenness_backend = accel.graph_betweenness(
         300, graph_betweenness, prefer=prefer
+    ).engine
+    pagerank_backend = accel.graph_pagerank(
+        1500, graph_weighted, directed=True, prefer=prefer
+    ).engine
+    route_backend = accel.graph_weighted_shortest_path(
+        1500, graph_weighted, 0, 1499, prefer=prefer
+    ).engine
+    articulation_backend = accel.graph_articulation(
+        1500, [(a, b) for a, b, _ in graph_weighted], prefer=prefer
     ).engine
     match_backend = accel.match_signatures(TEXT, PATTERNS, prefer=prefer).engine
     fingerprint_backend = accel.fingerprint(TEXT, prefer=prefer).engine
@@ -162,6 +184,30 @@ def cases(backend: str) -> list[Case]:
             betweenness_backend,
             lambda: accel.graph_betweenness(300, graph_betweenness, prefer=prefer),
             "300 nodes, 1,200 edges",
+        ),
+        Case(
+            "graph-pagerank",
+            pagerank_backend,
+            lambda: accel.graph_pagerank(
+                1500, graph_weighted, directed=True, prefer=prefer
+            ),
+            "1,500 nodes, 7,499 edges",
+        ),
+        Case(
+            "graph-weighted-path",
+            route_backend,
+            lambda: accel.graph_weighted_shortest_path(
+                1500, graph_weighted, 0, 1499, prefer=prefer
+            ),
+            "1,500 nodes, 7,499 weighted edges",
+        ),
+        Case(
+            "graph-articulation",
+            articulation_backend,
+            lambda: accel.graph_articulation(
+                1500, [(a, b) for a, b, _ in graph_weighted], prefer=prefer
+            ),
+            "1,500 nodes, 7,499 edges",
         ),
         Case("html-report", "python", _report_case(), "1,000 assets, 2,500 edges"),
     ]

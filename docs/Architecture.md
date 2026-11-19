@@ -6,7 +6,7 @@ HELIOS-NET is engineered as a polyglot architecture across four languages, each
 selected for a specific strength:
 
 - **Python — control plane.** Orchestration, campaign state, dependency planning,
-  asset graphing (Dijkstra / Degree Centrality), verdict classification, and
+  asset graphing (Dijkstra, Degree Centrality, PageRank, articulation points),\n  verdict classification, and
   executive HTML reporting.
 - **Go — network plane.** High-concurrency TCP port scanning and banner grabbing
   using bounded worker pools and NDJSON streaming (`transport/goscan`).
@@ -24,7 +24,7 @@ selected for a specific strength:
 |---|---|---|
 | `transport/goscan` | `goscan match <sigfile>` | Go port scanner, NDJSON stream |
 | `transport/c_core` | `helios_core match\|fp\|selftest` | C signature & fingerprint core |
-| `rust-core` | `helios_match_signatures` (C-ABI) | Rust signature matching, loaded by ctypes |
+| `rust-core` | `helios_match_signatures` (C-ABI) | Rust signature matching and graph analytics, loaded by ctypes |
 
 ## Process IPC contracts
 
@@ -55,7 +55,7 @@ host-blocked binary and falls back to a pure-Python path:
 |---|---|---|
 | Go `goscan` | `modules/discovery/goscan_bridge.py` | records the reason in `LAST_ERROR`, raises in `strict=True` |
 | C core | `core/c_core_bridge.py` | Python digests + Python substring match |
-| Rust core | `core/rust_bridge.py` | `engine/pattern_matcher.py` uses its Aho-Corasick automaton |
+| Rust core | `core/rust_bridge.py` | `engine/pattern_matcher.py` and `engine/graph/analytics.py` |
 
 A native fault therefore degrades that single module; it never terminates the
 orchestrator or drops the campaign.
@@ -112,7 +112,7 @@ compared directly:
 ```
 
 Current coverage: Go 30 unit tests plus 4 fuzz targets and a 19-check self test;
-Rust 73 tests (31 in-library, 21 property, 21 C-ABI) plus an in-library self
+Rust 91 tests (33 in-library, 21 property, 26 C-ABI, 11 analytics) plus an in-library self
 test; C 297 native checks, 31,886 differential-fuzzer checks, and a 19-check
 self test.
 
