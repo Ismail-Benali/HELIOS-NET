@@ -110,6 +110,45 @@ HC_API char *hc_dll_match_json(void *handle, const char *text) {
     return out;
 }
 
+HC_API void *hc_dll_stream_new(void *handle) {
+    if (handle == NULL) {
+        return NULL;
+    }
+    return (void *)hc_ac_stream_new((const hc_ac_t *)handle);
+}
+
+HC_API void hc_dll_stream_free(void *stream) {
+    if (stream != NULL) {
+        hc_ac_stream_free((hc_ac_stream_t *)stream);
+    }
+}
+
+HC_API int hc_dll_stream_reset(void *stream) {
+    return (int)hc_ac_stream_reset((hc_ac_stream_t *)stream);
+}
+
+HC_API unsigned long long hc_dll_stream_position(void *stream) {
+    return (unsigned long long)hc_ac_stream_position(
+        (const hc_ac_stream_t *)stream);
+}
+
+HC_API char *hc_dll_stream_feed_json(void *stream, const char *text) {
+    if (stream == NULL || text == NULL) {
+        return NULL;
+    }
+    size_t cap = HC_DLL_OUT_CAP;
+    char *out = (char *)malloc(cap);
+    if (out == NULL) {
+        return NULL;
+    }
+    if (hc_batch_stream_json((hc_ac_stream_t *)stream, text, out, &cap, NULL,
+                             NULL) != HC_OK) {
+        free(out);
+        return NULL;
+    }
+    return out;
+}
+
 /* Fingerprints one banner. Returns NULL on failure; free with hc_free(). */
 HC_API char *hc_dll_fp_json(const char *text) {
     if (text == NULL) {

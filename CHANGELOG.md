@@ -40,6 +40,14 @@ actually contains; `helios version` reports the revision with
   parity tests compare routes, rankings and cut points on random graphs.
 - Benchmarks for PageRank, weighted routing and articulation in `tools/bench.py`,
   with recorded numbers in `docs/BENCHMARKS.md`.
+- Chunked matching in the C core (`hc_ac_stream_*`, `hc_dll_stream_*`): a banner
+  split across reads is matched once, with absolute byte offsets, without
+  joining the pieces first. Exposed as `core.accel.match_stream` with a Python
+  fallback and a `match_stream` capability in the contract.
+- The C signature loader now treats its input as hostile: whole-file read with a
+  4 MiB cap, a 100,000-signature cap, overlong-line rejection, and refusal of
+  files containing embedded NUL bytes. A dedicated signature-loader fuzzer runs
+  in the sanitizer CI stage and nightly fuzzing.
 
 ### Fixed
 

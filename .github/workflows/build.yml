@@ -1,4 +1,4 @@
-﻿name: HELIOS-NET CI/CD Build Pipeline
+name: HELIOS-NET CI/CD Build Pipeline
 
 on:
   push:
@@ -221,7 +221,8 @@ jobs:
           echo "Using $CC_BIN: $($CC_BIN --version | head -1)"
 
           SRC="transport/c_core/src/aho_corasick.c transport/c_core/src/boyer_moore.c \
-               transport/c_core/src/hashing.c transport/c_core/src/helios_core.c"
+               transport/c_core/src/hashing.c transport/c_core/src/helios_batch.c \
+               transport/c_core/src/helios_core.c"
           INC="transport/c_core/include"
 
           mkdir -p /tmp/helios-san
@@ -245,6 +246,18 @@ jobs:
 
           echo "::group::run differential fuzzer under ASan/UBSan"
           ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 /tmp/helios-san/fuzz_harness
+          echo "::endgroup::"
+
+          echo "::group::build signature loader fuzzer with sanitizers"
+          $CC_BIN -std=c11 -O1 -g -fsanitize=address,undefined \
+            -fno-omit-frame-pointer -fno-sanitize-recover=all \
+            -Wall -Wextra -Werror -I"$INC" \
+            $SRC transport/c_core/tests/fuzz_sig_harness.c \
+            -o /tmp/helios-san/fuzz_sig_harness
+          echo "::endgroup::"
+
+          echo "::group::run signature loader fuzzer under ASan/UBSan"
+          ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 /tmp/helios-san/fuzz_sig_harness 2000
           echo "::endgroup::"
 
       # Closes the loop. Signing is only worth anything if it makes the native

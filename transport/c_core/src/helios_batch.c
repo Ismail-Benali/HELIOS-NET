@@ -18,15 +18,56 @@
 
 /* ------------------------------------------------------------------ input */
 
-static int read_line(FILE *fp, char *buf, size_t cap) {
-    if (fgets(buf, (int)cap, fp) == NULL) {
+/*
+ * Reads the whole signature file, enforcing the limits declared in
+ * helios_batch.h. Reading it in one piece is what makes embedded NUL bytes
+ * detectable: the previous fgets loop called strlen on each buffer, so a NUL in
+ * the middle silently split one line into two, and the two halves became
+ * signatures the operator never wrote. It also makes an overlong line obvious
+ * instead of looking like several valid lines.
+ *
+ * Returns 1 on success. The caller owns `*out` and frees it.
+ */
+static int read_signature_file(const char *path, char **out, size_t *out_len) {
+    FILE *fp = fopen(path, "rb");
+    if (fp == NULL) {
         return 0;
     }
-    size_t n = strlen(buf);
-    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) {
-        buf[--n] = '\0';
+    int ok = 0;
+    char *data = NULL;
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        fclose(fp);
+        return 0;
     }
-    return 1;
+    long size = ftell(fp);
+    if (size <= 0 || (unsigned long)size > HC_MAX_SIG_FILE) {
+        fclose(fp);
+        return 0;
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) {
+        fclose(fp);
+        return 0;
+    }
+    data = (char *)malloc((size_t)size + 1);
+    if (data == NULL) {
+        fclose(fp);
+        return 0;
+    }
+    size_t got = fread(data, 1, (size_t)size, fp);
+    fclose(fp);
+    if (got != (size_t)size) {
+        free(data);
+        return 0;
+    }
+    data[size] = '\0';
+    if (memchr(data, '\0', (size_t)size) != NULL) {
+        free(data);
+        return 0;
+    }
+    *out = data;
+    *out_len = (size_t)size;
+    ok = 1;
+    return ok;
 }
 
 static void trim(char *s) {
@@ -47,20 +88,39 @@ hc_ac_t *hc_sig_load(const char *path, size_t *out_count) {
     if (path == NULL) {
         return NULL;
     }
-    FILE *fp = fopen(path, "r");
-    if (fp == NULL) {
+    char *data = NULL;
+    size_t length = 0;
+    if (!read_signature_file(path, &data, &length)) {
         return NULL;
     }
     hc_ac_t *ac = hc_ac_new();
     if (ac == NULL) {
-        fclose(fp);
+        free(data);
         return NULL;
     }
 
-    char line[HC_MAX_LINE];
     size_t loaded = 0;
+    size_t offset = 0;
     int first_line = 1;
-    while (read_line(fp, line, sizeof(line))) {
+    int invalid = 0;
+
+    while (offset < length && !invalid) {
+        char *line = data + offset;
+        size_t remaining = length - offset;
+        char *newline = (char *)memchr(line, '\n', remaining);
+        size_t line_len = newline ? (size_t)(newline - line) : remaining;
+        offset += line_len + (newline ? 1 : 0);
+
+        /* Terminate and strip CR so both LF and CRLF files read identically. */
+        line[line_len] = '\0';
+        while (line_len > 0 && line[line_len - 1] == '\r') {
+            line[--line_len] = '\0';
+        }
+        if (line_len > HC_MAX_LINE - 1) {
+            invalid = 1;
+            break;
+        }
+
         /*
          * Strip a leading UTF-8 BOM. PowerShell 5.1, Notepad and several other
          * Windows editors write one by default, and without this the three BOM
@@ -70,9 +130,10 @@ hc_ac_t *hc_sig_load(const char *path, size_t *out_count) {
          */
         if (first_line) {
             first_line = 0;
-            if ((unsigned char)line[0] == 0xEF && (unsigned char)line[1] == 0xBB &&
-                (unsigned char)line[2] == 0xBF) {
-                memmove(line, line + 3, strlen(line + 3) + 1);
+            if (line_len >= 3 && (unsigned char)line[0] == 0xEF &&
+                (unsigned char)line[1] == 0xBB && (unsigned char)line[2] == 0xBF) {
+                memmove(line, line + 3, line_len - 3 + 1);
+                line_len -= 3;
             }
         }
         trim(line);
@@ -89,13 +150,20 @@ hc_ac_t *hc_sig_load(const char *path, size_t *out_count) {
             pattern = tab + 1;
         }
 
-        if (hc_ac_add(ac, name, pattern) == HC_OK) {
+        if (loaded >= HC_MAX_SIGNATURES) {
+            invalid = 1;
+            break;
+        }
+        hc_status status = hc_ac_add(ac, name, pattern);
+        if (status == HC_OK) {
             loaded++;
+        } else if (status != HC_ERR_DUP && status != HC_ERR_EMPTY) {
+            invalid = 1;
         }
     }
-    fclose(fp);
+    free(data);
 
-    if (loaded == 0 || hc_ac_build(ac) != HC_OK) {
+    if (invalid || loaded == 0 || hc_ac_build(ac) != HC_OK) {
         hc_ac_free(ac);
         return NULL;
     }
@@ -227,6 +295,54 @@ hc_status hc_batch_match_json(const hc_ac_t *ac, const char *text,
     }
     free(matches);
     free(escaped);
+
+    if (n < 0 || (size_t)n >= *out_len) {
+        return HC_ERR_TRUNC;
+    }
+    *out_len = (size_t)n;
+    return HC_OK;
+}
+
+hc_status hc_batch_stream_json(hc_ac_stream_t *stream, const char *text,
+                               char *out, size_t *out_len,
+                               int *out_count, int *out_truncated) {
+    if (stream == NULL || text == NULL || out == NULL || out_len == NULL) {
+        return HC_ERR_NULL;
+    }
+    if (*out_len == 0) {
+        return HC_ERR_RANGE;
+    }
+
+    char *matches = (char *)malloc(HC_MATCH_BUFFER);
+    size_t scratch_cap = HC_MAX_LINE * 6 + 1;
+    char *scratch = (char *)malloc(scratch_cap);
+    if (matches == NULL || scratch == NULL) {
+        free(matches);
+        free(scratch);
+        return HC_ERR_NOMEM;
+    }
+
+    match_ctx_t ctx = { matches, HC_MATCH_BUFFER, 0, 0, 0, scratch, scratch_cap };
+    int reported = hc_ac_stream_feed(stream, text, strlen(text), on_match, &ctx);
+    free(scratch);
+    if (reported < 0) {
+        free(matches);
+        return (hc_status)reported;
+    }
+
+    int n = snprintf(out, *out_len,
+                     "{\"status\":\"ok\",\"matches\":[%s],"
+                     "\"match_count\":%d,\"truncated\":%s}",
+                     ctx.count ? matches : "", ctx.count,
+                     ctx.overflow ? "true" : "false");
+
+    if (out_count != NULL) {
+        *out_count = ctx.count;
+    }
+    if (out_truncated != NULL) {
+        *out_truncated = ctx.overflow;
+    }
+    free(matches);
 
     if (n < 0 || (size_t)n >= *out_len) {
         return HC_ERR_TRUNC;

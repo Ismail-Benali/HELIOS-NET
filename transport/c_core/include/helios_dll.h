@@ -67,6 +67,28 @@ HC_API unsigned long hc_dll_node_count(void *handle);
  */
 HC_API char *hc_dll_match_json(void *handle, const char *text);
 
+/*
+ * Opens an incremental stream over a handle's automaton. The handle must
+ * outlive the stream. Returns NULL for a NULL or unusable handle; free with
+ * hc_dll_stream_free().
+ */
+HC_API void *hc_dll_stream_new(void *handle);
+
+/* Releases a stream from hc_dll_stream_new. NULL is a no-op. */
+HC_API void hc_dll_stream_free(void *stream);
+
+/* Discards carried state and position. Returns 0 or a negative status. */
+HC_API int hc_dll_stream_reset(void *stream);
+
+/* Bytes fed to this stream so far, or 0 for a NULL stream. */
+HC_API unsigned long long hc_dll_stream_position(void *stream);
+
+/*
+ * Feeds one chunk and returns a JSON object with that chunk's matches.
+ * Returns NULL on failure; free the result with hc_free().
+ */
+HC_API char *hc_dll_stream_feed_json(void *stream, const char *text);
+
 /* Fingerprints one banner. Returns NULL on failure; free with hc_free(). */
 HC_API char *hc_dll_fp_json(const char *text);
 

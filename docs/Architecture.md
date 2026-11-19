@@ -12,8 +12,10 @@ selected for a specific strength:
   using bounded worker pools and NDJSON streaming (`transport/goscan`).
 - **C — hot-path primitives.** A self-contained C11 signature & fingerprint
   core (`transport/c_core`): Boyer-Moore-Horspool single-pattern search with the
-  Galil optimisation, a sparse Aho-Corasick multi-pattern automaton, FNV-1a
-  32/64 and CRC-32 digests, and a streaming NDJSON CLI front end.
+  Galil optimisation, a sparse Aho-Corasick multi-pattern automaton that also
+  matches chunked banners across boundaries, FNV-1a 32/64 and CRC-32 digests,
+  and a streaming NDJSON CLI front end. Signature files are read as untrusted
+  input: bounded size, bounded line length, no embedded NUL, bounded patterns.
 - **Rust — native acceleration.** Graph pathfinding plus native signature matching
   exposed as a C-ABI shared library (`rust-core`), consumed from Python through
   `core/rust_bridge.py` via `ctypes`.
@@ -113,7 +115,7 @@ compared directly:
 
 Current coverage: Go 30 unit tests plus 4 fuzz targets and a 19-check self test;
 Rust 91 tests (33 in-library, 21 property, 26 C-ABI, 11 analytics) plus an in-library self
-test; C 297 native checks, 31,886 differential-fuzzer checks, and a 19-check
+test; C 341 native checks, a differential fuzzer, a signature-loader fuzzer, and a 19-check
 self test.
 
 ## Capability contract
