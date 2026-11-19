@@ -71,3 +71,19 @@ jobs:
       - name: Run fuzz (600s)
         run: |
           transport/c_core/build/fuzz_harness 600 2>&1 | tail -30
+
+      - name: Build signature loader fuzzer (with sanitizers)
+        run: |
+          gcc -std=c11 -O2 -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Itransport/c_core/include \
+            transport/c_core/tests/fuzz_sig_harness.c \
+            transport/c_core/src/aho_corasick.c \
+            transport/c_core/src/boyer_moore.c \
+            transport/c_core/src/hashing.c \
+            transport/c_core/src/helios_batch.c \
+            transport/c_core/src/helios_core.c \
+            -o transport/c_core/build/fuzz_sig_harness
+
+      - name: Run signature loader fuzz (20000 iterations)
+        run: |
+          transport/c_core/build/fuzz_sig_harness 20000 2>&1 | tail -10

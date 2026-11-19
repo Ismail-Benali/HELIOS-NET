@@ -191,6 +191,21 @@ def _bind(lib: Any) -> None:
     lib.hc_dll_match_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.hc_dll_match_json.restype = ctypes.c_void_p
 
+    lib.hc_dll_stream_new.argtypes = [ctypes.c_void_p]
+    lib.hc_dll_stream_new.restype = ctypes.c_void_p
+
+    lib.hc_dll_stream_free.argtypes = [ctypes.c_void_p]
+    lib.hc_dll_stream_free.restype = None
+
+    lib.hc_dll_stream_reset.argtypes = [ctypes.c_void_p]
+    lib.hc_dll_stream_reset.restype = ctypes.c_int
+
+    lib.hc_dll_stream_position.argtypes = [ctypes.c_void_p]
+    lib.hc_dll_stream_position.restype = ctypes.c_ulonglong
+
+    lib.hc_dll_stream_feed_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    lib.hc_dll_stream_feed_json.restype = ctypes.c_void_p
+
     lib.hc_dll_fp_json.argtypes = [ctypes.c_char_p]
     lib.hc_dll_fp_json.restype = ctypes.c_void_p
 
@@ -616,6 +631,56 @@ def selftest() -> dict[str, Any]:
             "error": "selftest output was not an object",
         }
     return parsed
+
+
+def stream_banners(
+    chunks: Iterable[str], signatures_path: str | Path
+) -> list[dict[str, Any]] | None:
+    """Matches one logical banner supplied as successive chunks.
+
+    Only the in-process library can carry state across calls, so this returns
+    None rather than silently starting a fresh scan per chunk: a caller that
+    received independent answers would lose every match that crosses a chunk
+    boundary and could not tell that from a banner with no hits.
+    """
+    if not ffi_available():
+        return None
+    sig_path = Path(signatures_path)
+    lib = _library()
+    if lib is None or not sig_path.exists():
+        return None
+
+    handle = lib.hc_dll_open(str(sig_path).encode(_IO_ENCODING))
+    if not handle:
+        return None
+    stream = lib.hc_dll_stream_new(ctypes.c_void_p(handle))
+    if not stream:
+        lib.hc_dll_close(ctypes.c_void_p(handle))
+        return None
+
+    hits: list[dict[str, Any]] = []
+    try:
+        for chunk in chunks:
+            raw = _ffi_call(
+                "hc_dll_stream_feed_json", stream, chunk.encode(_IO_ENCODING)
+            )
+            if raw is None:
+                return None
+            try:
+                parsed = json.loads(raw.decode(_IO_ENCODING))
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                return None
+            if not isinstance(parsed, dict) or parsed.get("status") != "ok":
+                return None
+            if parsed.get("truncated"):
+                return None
+            for match in parsed.get("matches", []):
+                if isinstance(match, dict):
+                    hits.append(match)
+        return hits
+    finally:
+        lib.hc_dll_stream_free(ctypes.c_void_p(stream))
+        lib.hc_dll_close(ctypes.c_void_p(handle))
 
 
 def scan_banners(

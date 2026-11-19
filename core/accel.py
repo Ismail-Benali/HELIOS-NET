@@ -50,6 +50,7 @@ __all__ = [
     "backend_infos",
     "backend_infos_by_name",
     "match_signatures",
+    "match_stream",
     "fingerprint",
     "graph_articulation",
     "graph_degree_centrality",
@@ -424,6 +425,88 @@ def _rust_match(text: str, patterns: Sequence[str]) -> tuple[Match, ...]:
     return tuple(
         Match(str(m["signature"]), int(m["position"]))
         for m in raw
+        if isinstance(m, dict) and "signature" in m and "position" in m
+    )
+
+
+def match_stream(
+    chunks: Iterable[str],
+    patterns: Sequence[str],
+    prefer: str | None = None,
+) -> MatchOutcome:
+    """Matches one banner that arrives as successive chunks.
+
+    Positions are offsets into the concatenation of all chunks, so a match that
+    spans a chunk boundary is reported once with the same offset a whole-banner
+    scan would produce. Only the C core keeps automaton state across calls; the
+    Python fallback joins the chunks, which is correct but uses memory in
+    proportion to their total size.
+    """
+    chunk_list = list(chunks)
+    pattern_list = list(patterns)
+    if not any(chunk_list) or not pattern_list:
+        return MatchOutcome((), "none", "nothing to match: empty text or pattern set")
+
+    order = list(_PREFERENCE)
+    if prefer:
+        if prefer not in _BACKENDS:
+            raise ValueError(
+                f"unknown backend {prefer!r}; expected one of {sorted(_BACKENDS)}"
+            )
+        order = [prefer] + [name for name in order if name != prefer]
+
+    reasons: list[str] = []
+    for name in order:
+        info = _BACKENDS[name]()
+        if not info.available:
+            reasons.append(f"{name}: {info.reason}")
+            continue
+        if "match_stream" not in info.capabilities:
+            reasons.append(f"{name}: does not implement match_stream")
+            continue
+
+        try:
+            if name == "c":
+                raw_hits = _c_match_stream(chunk_list, pattern_list)
+            else:
+                raw_hits = _python_match("".join(chunk_list), pattern_list)
+        except Exception as exc:  # noqa: BLE001 - degradation is the design
+            reasons.append(f"{name}: raised {type(exc).__name__}: {exc}")
+            continue
+
+        engine = "c-native" if name == "c" else "python-fallback"
+        reason = "skipped " + "; ".join(reasons) if reasons else ""
+        if name == "c":
+            reason = (reason + "; " if reason else "") + f"served by {_c_path()}"
+        return MatchOutcome(_normalise(raw_hits), engine, reason)
+
+    return MatchOutcome(
+        (), "none", "no backend could serve the request: " + "; ".join(reasons)
+    )
+
+
+def _c_match_stream(
+    chunks: Sequence[str], patterns: Sequence[str]
+) -> tuple[Match, ...]:
+    from core import c_core_bridge
+
+    placeholders = {f"s{i}": p for i, p in enumerate(patterns)}
+    with tempfile.TemporaryDirectory() as tmp:
+        sig = Path(tmp) / "accel_stream_signatures.txt"
+        sig.write_text(
+            "".join(f"{name}\t{pattern}\n" for name, pattern in placeholders.items()),
+            encoding="utf-8",
+        )
+        results = c_core_bridge.stream_banners(chunks, sig)
+
+    if results is None:
+        raise RuntimeError("the C core could not stream this input")
+    return tuple(
+        Match(
+            placeholders.get(str(m["signature"]), str(m["signature"])),
+            int(m["position"]),
+        )
+        for m in results
         if isinstance(m, dict) and "signature" in m and "position" in m
     )
 

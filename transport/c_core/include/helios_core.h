@@ -112,6 +112,43 @@ int hc_ac_scan(const hc_ac_t *ac, const char *text, size_t text_len,
 hc_status hc_ac_scan_to_buffer(const hc_ac_t *ac, const char *text,
                                char *out, size_t *out_len, size_t max_names);
 
+/*
+ * Incremental matcher for input that arrives in pieces.
+ *
+ * A banner split across TCP reads is the normal case, not the exception. The
+ * one-shot hc_ac_scan() can only answer for a complete buffer, so a caller had
+ * to concatenate every chunk first; that is unbounded memory for a large body
+ * and it copies data the automaton is about to walk anyway. A stream keeps one
+ * automaton state plus the absolute byte offset, so matches that span a chunk
+ * boundary are found exactly once, with positions that refer to the whole
+ * input rather than to the current chunk.
+ *
+ * Streams borrow the automaton: it must stay alive and built until the stream
+ * is freed. One stream is single-threaded; separate streams over one immutable
+ * automaton may run concurrently.
+ */
+typedef struct hc_ac_stream hc_ac_stream_t;
+
+/* Creates a stream over a built automaton, or NULL for NULL/unbuilt input. */
+hc_ac_stream_t *hc_ac_stream_new(const hc_ac_t *ac);
+
+/* Releases a stream. NULL is a no-op. The automaton is not freed. */
+void hc_ac_stream_free(hc_ac_stream_t *stream);
+
+/* Drops all carried state and absolute position. Returns HC_OK or HC_ERR_NULL. */
+hc_status hc_ac_stream_reset(hc_ac_stream_t *stream);
+
+/*
+ * Feeds the next chunk. Positions passed to `cb` are absolute offsets into the
+ * concatenation of every chunk fed so far, using the same definition as
+ * hc_ac_scan(). Returns the number of matches reported or a negative status.
+ */
+int hc_ac_stream_feed(hc_ac_stream_t *stream, const char *data, size_t len,
+                      hc_ac_match_fn cb, void *user);
+
+/* Total bytes fed since creation or the last reset. */
+size_t hc_ac_stream_position(const hc_ac_stream_t *stream);
+
 /* ------------------------------------------------------------- utilities */
 
 /* Returns non-zero when `text` contains `needle`, ignoring ASCII case. */

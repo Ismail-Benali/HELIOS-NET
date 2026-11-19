@@ -1172,6 +1172,98 @@ def run_c_fuzz_harness() -> str:
     return "failed"
 
 
+def run_c_sig_fuzz() -> str:
+    """Builds and runs the signature-file loader fuzzer.
+
+    The matching fuzzer never touches hc_sig_load, yet the loader is the first
+    consumer of operator-supplied bytes. This harness writes generated files
+    (random, structured, BOM-prefixed, NUL-bearing) and loads them under the
+    same host-policy rules as the other native stages.
+    """
+    c_core = ROOT / "transport" / "c_core"
+    include = c_core / "include"
+    src_dir = c_core / "src"
+    harness = c_core / "tests" / "fuzz_sig_harness.c"
+    build_dir = c_core / "build"
+
+    if not harness.exists():
+        print("[-] c_core signature fuzz harness not found.")
+        return "skipped"
+
+    build_dir.mkdir(parents=True, exist_ok=True)
+    sources = [str(p) for p in sorted(src_dir.glob("*.c")) if p.name != "main.c"]
+    binary = build_dir / f"fuzz_sig_harness{'.exe' if os.name == 'nt' else ''}"
+
+    cmd = [
+        "gcc",
+        "-std=c11",
+        "-O1",
+        "-g",
+        "-Werror",
+        *C_STRICT_FLAGS,
+        f"-I{include}",
+        str(harness),
+        *sources,
+        "-o",
+        str(binary),
+    ]
+    compiled = run_cmd(cmd, ROOT)
+    if not compiled:
+        cmd[0] = "clang"
+        compiled = run_cmd(cmd, ROOT)
+
+    if not compiled:
+        usable, why = _usable_prebuilt(binary, c_core)
+        if not usable:
+            print(f"[-] Could not compile the signature fuzzer and {why}.")
+            return "skipped"
+        print(
+            f"[!] No usable C compiler here, so the prebuilt {binary.name} stands in."
+        )
+
+    _sign_and_report(binary)
+
+    print(f"[*] Running c_core signature fuzzer: {binary.name}")
+    result = None
+    blocked_exc: OSError | None = None
+    for _ in range(_FUZZ_ATTEMPTS):
+        try:
+            result = subprocess.run(
+                [str(binary), "2000"],
+                cwd=str(ROOT),
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            break
+        except OSError as exc:
+            blocked_exc = exc
+            if not _is_policy_block(exc):
+                print(f"[-] Could not execute the signature fuzzer: {exc}")
+                return "failed"
+            time.sleep(_FUZZ_RETRY_DELAY)
+
+    if result is None:
+        assert blocked_exc is not None
+        print(
+            "[!] BLOCKED: the host policy refused the signature fuzzer on all "
+            f"{_FUZZ_ATTEMPTS} attempts; it did not execute."
+        )
+        return "blocked"
+
+    for line in result.stdout.splitlines():
+        print(f"    {line.strip()}")
+    if result.returncode == 0:
+        print("[+] c_core signature fuzzer passed.")
+        return "passed"
+    print(f"[-] c_core signature fuzzer FAILED (exit={result.returncode}).")
+    for line in result.stderr.splitlines()[-25:]:
+        print(f"    {line}")
+    return "failed"
+
+
 def main() -> None:
     print(
         "[HELIOS-NET] Initializing Polyglot Build Pipeline & Pre-flight Diagnostics..."
@@ -1186,6 +1278,7 @@ def main() -> None:
         "c_tests": False,
         "c_build": None,
         "c_fuzz": "skipped",
+        "c_sig_fuzz": "skipped",
         "health": "skipped",
     }
     run_tests = "--test" in sys.argv
@@ -1285,6 +1378,7 @@ def main() -> None:
         # and 31886 differential fuzz checks that run and pass on this host.
         toolchain_status["c_tests"] = run_c_core_tests()
         toolchain_status["c_fuzz"] = run_c_fuzz_harness()
+        toolchain_status["c_sig_fuzz"] = run_c_sig_fuzz()
 
     health = run_core_health() if run_tests else None
     if health is not None:
@@ -1343,7 +1437,14 @@ def main() -> None:
         print(f"    - Go Unit Tests:   {go_state}")
         print(f"    - Rust Unit Tests: {rust_state}")
         print(f"    - C Core Tests:    {c_state}")
+        sig_fuzz_state = {
+            "passed": "PASSED",
+            "failed": "FAILED",
+            "blocked": "BLOCKED BY HOST POLICY",
+            "skipped": "SKIPPED",
+        }.get(toolchain_status.get("c_sig_fuzz", "skipped"), "SKIPPED")
         print(f"    - C Core Fuzzer:   {fuzz_state}")
+        print(f"    - C Sig Fuzzer:    {sig_fuzz_state}")
         print(f"    - Core Health:     {health_state}")
         if go_race_note:
             print(f"      note: {go_race_note}")
@@ -1356,6 +1457,7 @@ def main() -> None:
                 ("the Go test/race suite", go_state),
                 ("the C unit suite", c_state),
                 ("the C differential fuzzer", fuzz_state),
+                ("the C signature fuzzer", sig_fuzz_state),
                 ("the native core health probe", health_state),
             )
             if value.startswith("BLOCKED") or value.startswith("SKIPPED")
@@ -1396,6 +1498,7 @@ def main() -> None:
                 "Rust unit tests": rust_state,
                 "C core tests": c_state,
                 "C core fuzzer": fuzz_state,
+                "C signature fuzzer": sig_fuzz_state,
                 "core health": health_state,
             }
         )

@@ -384,7 +384,7 @@ class TestPrebuiltCBinaryIsAcceptedOnlyWhenCurrent:
         """
         core = ROOT / "transport" / "c_core"
         checked = 0
-        for name in ("helios_core", "test_core", "fuzz_harness"):
+        for name in ("helios_core", "test_core", "fuzz_harness", "fuzz_sig_harness"):
             for suffix in (".exe", ""):
                 binary = core / "build" / f"{name}{suffix}"
                 if not binary.exists():

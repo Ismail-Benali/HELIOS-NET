@@ -408,3 +408,54 @@ def _python_c_native(sig, banner):
     from core import c_core_bridge
 
     return c_core_bridge.scan_banners([banner], sig)[0]["matches"]
+
+
+# ------------------------------------------- chunked matching across boundaries
+
+
+def test_stream_matches_every_split_point(sig_file):
+    from core import c_core_bridge
+
+    if not c_core_bridge.ffi_available():
+        pytest.skip("the in-process C library is unavailable on this host")
+
+    sig = sig_file("alpha\tfoo\nbeta\tbar\n")
+    text = "xxFOOyyBARfoo"
+    whole = c_core_bridge.stream_banners([text], sig)
+    assert whole is not None
+    expected = [(m["signature"], m["position"]) for m in whole]
+    assert expected == [("alpha", 2), ("beta", 7), ("alpha", 10)]
+
+    for split in range(1, len(text)):
+        hits = c_core_bridge.stream_banners([text[:split], text[split:]], sig)
+        assert hits is not None
+        assert [(m["signature"], m["position"]) for m in hits] == expected
+
+    byte_by_byte = c_core_bridge.stream_banners(list(text), sig)
+    assert byte_by_byte is not None
+    assert [(m["signature"], m["position"]) for m in byte_by_byte] == expected
+
+
+def test_stream_falls_back_to_python_without_the_library(monkeypatch):
+    from core import c_core_bridge
+
+    monkeypatch.setattr(c_core_bridge, "ffi_available", lambda: False)
+    assert c_core_bridge.stream_banners(["foo"], "unused") is None
+
+
+def test_accel_stream_selects_backends_with_identical_positions():
+    chunks = ["xxF", "OOyy", "BAR", "foo"]
+    native = accel.match_stream(chunks, ["foo", "bar"], prefer="python")
+    assert native.engine == "python-fallback"
+    assert [(m.signature, m.position) for m in native.matches] == [
+        ("foo", 2),
+        ("bar", 7),
+        ("foo", 10),
+    ]
+
+    from core import c_core_bridge
+
+    if c_core_bridge.ffi_available():
+        accelerated = accel.match_stream(chunks, ["foo", "bar"], prefer="c")
+        assert accelerated.engine == "c-native"
+        assert accelerated.matches == native.matches

@@ -31,6 +31,12 @@ typedef struct {
     uint32_t  n_outputs;
 } ac_node_t;
 
+struct hc_ac_stream {
+    const hc_ac_t *ac;
+    uint32_t       state;
+    size_t         position;
+};
+
 struct hc_ac {
     ac_node_t *nodes;
     size_t     n_nodes;
@@ -481,4 +487,73 @@ hc_status hc_ac_scan_to_buffer(const hc_ac_t *ac, const char *text,
     out[written] = '\0';
     *out_len = written;
     return HC_OK;
+}
+
+
+/* ------------------------------------------------------------ streaming */
+
+hc_ac_stream_t *hc_ac_stream_new(const hc_ac_t *ac) {
+    if (ac == NULL || !ac->built) {
+        return NULL;
+    }
+    hc_ac_stream_t *stream = (hc_ac_stream_t *)calloc(1, sizeof(*stream));
+    if (stream == NULL) {
+        return NULL;
+    }
+    stream->ac = ac;
+    return stream;
+}
+
+void hc_ac_stream_free(hc_ac_stream_t *stream) {
+    free(stream);
+}
+
+hc_status hc_ac_stream_reset(hc_ac_stream_t *stream) {
+    if (stream == NULL) {
+        return HC_ERR_NULL;
+    }
+    stream->state = 0;
+    stream->position = 0;
+    return HC_OK;
+}
+
+size_t hc_ac_stream_position(const hc_ac_stream_t *stream) {
+    return stream ? stream->position : 0;
+}
+
+int hc_ac_stream_feed(hc_ac_stream_t *stream, const char *data, size_t len,
+                      hc_ac_match_fn cb, void *user) {
+    if (stream == NULL || cb == NULL || (data == NULL && len > 0)) {
+        return HC_ERR_NULL;
+    }
+    if (len == 0) {
+        return 0;
+    }
+    if (len > SIZE_MAX - stream->position) {
+        return HC_ERR_RANGE;
+    }
+
+    const hc_ac_t *ac = stream->ac;
+    const uint8_t *t = (const uint8_t *)data;
+    int reported = 0;
+
+    for (size_t i = 0; i < len; i++) {
+        ac_advance(ac, stream->state, lower_ascii(t[i]), &stream->state);
+
+        const ac_node_t *node = &ac->nodes[stream->state];
+        size_t end = stream->position + i + 1;
+        for (uint32_t k = 0; k < node->n_outputs; k++) {
+            uint32_t pattern_index = node->outputs[k];
+            size_t pattern_len = strlen(ac->patterns[pattern_index]);
+            /* A match found at `end` began no earlier than byte zero of the
+             * stream, so the subtraction cannot underflow once the automaton
+             * reports it. The guard exists for a corrupt automaton, not for
+             * normal input. */
+            size_t start = pattern_len <= end ? end - pattern_len : 0;
+            cb(ac->names[pattern_index], ac->patterns[pattern_index], start, user);
+            reported++;
+        }
+    }
+    stream->position += len;
+    return reported;
 }

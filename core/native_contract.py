@@ -23,7 +23,7 @@ CONTRACT_VERSION = "1.0.0"
 # erase knowledge of what a backend is designed to implement.
 SUPPORTED_CAPABILITIES: dict[str, frozenset[str]] = {
     "go": frozenset({"scan_ports"}),
-    "c": frozenset({"match", "fingerprint"}),
+    "c": frozenset({"match", "match_stream", "fingerprint"}),
     "rust": frozenset(
         {
             "match",
@@ -40,6 +40,7 @@ SUPPORTED_CAPABILITIES: dict[str, frozenset[str]] = {
     "python": frozenset(
         {
             "match",
+            "match_stream",
             "fingerprint",
             "scan_ports",
             "graph_articulation",
@@ -90,6 +91,7 @@ CAPABILITY_ENTRYPOINTS: dict[str, str] = {
     "graph_shortest_path": "core.accel.graph_shortest_path",
     "graph_weighted_shortest_path": "core.accel.graph_weighted_shortest_path",
     "match": "core.accel.match_signatures",
+    "match_stream": "core.accel.match_stream",
     "scan_ports": "core.accel.scan_ports",
 }
 

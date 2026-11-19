@@ -8,9 +8,11 @@
  *       src/aho_corasick.c src/helios_core.c tests/test_core.c -o test_core
  */
 
+#include "helios_batch.h"
 #include "helios_core.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int g_failures = 0;
@@ -265,6 +267,167 @@ static void test_aho_corasick_scale(void) {
 
 /* ------------------------------------------------------------------ json */
 
+static int write_bytes(const char *path, const void *data, size_t length) {
+    FILE *fp = fopen(path, "wb");
+    if (fp == NULL) {
+        return 0;
+    }
+    size_t written = fwrite(data, 1, length, fp);
+    fclose(fp);
+    return written == length;
+}
+
+static void count_cb(const char *name, const char *pattern, size_t position,
+                     void *user) {
+    (void)name;
+    (void)pattern;
+    (void)position;
+    int *count = (int *)user;
+    (*count)++;
+}
+
+static int count_matches_in_buffer(const char *text, hc_ac_t *ac) {
+    int count = 0;
+    int reported = hc_ac_scan(ac, text, strlen(text), count_cb, &count);
+    return reported < 0 ? reported : count;
+}
+
+static void test_signature_loader(void) {
+    const char *path = "helios_sig_test.tmp";
+
+    const char *good = "\xEF\xBB\xBF# comment\r\nalpha\tfoo\r\nbeta\tbar";
+    CHECK(write_bytes(path, good, strlen(good)), "write good signature file");
+    size_t count = 0;
+    hc_ac_t *ac = hc_sig_load(path, &count);
+    CHECK(ac != NULL, "signature loader accepts BOM, CRLF and no final newline");
+    CHECK(count == 2, "signature loader counts two signatures");
+    if (ac != NULL) {
+        CHECK(count_matches_in_buffer("xxFOOyyBAR", ac) == 2,
+              "loaded signatures match case-insensitively");
+        hc_ac_free(ac);
+    }
+
+    const char *duplicates = "dup\tfoo\ndup\tfoo\n";
+    CHECK(write_bytes(path, duplicates, strlen(duplicates)), "write duplicate file");
+    ac = hc_sig_load(path, &count);
+    CHECK(ac != NULL, "duplicate signatures do not reject the file");
+    CHECK(count == 1, "identical name and pattern are stored once");
+    hc_ac_free(ac);
+
+    const char nul_data[] = {'a', 'l', 'p', 'h', 'a', '\t', 'f', '\0', 'o', '\n'};
+    CHECK(write_bytes(path, nul_data, sizeof(nul_data)), "write NUL file");
+    CHECK(hc_sig_load(path, &count) == NULL, "embedded NUL rejects the signature file");
+
+    CHECK(write_bytes(path, "", 0), "write empty file");
+    CHECK(hc_sig_load(path, &count) == NULL, "empty signature file is rejected");
+
+    size_t big_len = HC_MAX_LINE + 16;
+    char *big = (char *)malloc(big_len);
+    if (big != NULL) {
+        memset(big, 'a', big_len - 1);
+        big[big_len - 1] = '\n';
+        CHECK(write_bytes(path, big, big_len), "write oversized line");
+        CHECK(hc_sig_load(path, &count) == NULL,
+              "overlong signature line rejects the file");
+        free(big);
+    }
+
+    remove(path);
+}
+
+typedef struct {
+    size_t positions[64];
+    int count;
+} capture_t;
+
+static void capture_cb(const char *name, const char *pattern, size_t position,
+                       void *user) {
+    (void)name;
+    (void)pattern;
+    capture_t *capture = (capture_t *)user;
+    if (capture->count < (int)(sizeof(capture->positions) / sizeof(size_t))) {
+        capture->positions[capture->count] = position;
+    }
+    capture->count++;
+}
+
+static int same_capture(const capture_t *left, const capture_t *right) {
+    if (left->count != right->count) {
+        return 0;
+    }
+    for (int i = 0; i < left->count; i++) {
+        if (left->positions[i] != right->positions[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void test_streaming(void) {
+    hc_ac_t *ac = hc_ac_new();
+    CHECK(ac != NULL, "stream: automaton allocated");
+    if (ac == NULL) {
+        return;
+    }
+    CHECK(hc_ac_add(ac, "foo", "foo") == HC_OK, "stream: add foo");
+    CHECK(hc_ac_add(ac, "bar", "bar") == HC_OK, "stream: add bar");
+    CHECK(hc_ac_build(ac) == HC_OK, "stream: build");
+
+    const char *text = "xxFOOyyBARfoo";
+    size_t text_len = strlen(text);
+
+    capture_t whole = {{0}, 0};
+    hc_ac_stream_t *stream = hc_ac_stream_new(ac);
+    CHECK(stream != NULL, "stream: created over built automaton");
+    if (stream != NULL) {
+        int reported = hc_ac_stream_feed(stream, text, text_len, capture_cb, &whole);
+        CHECK(reported == 3, "stream: whole input reports three matches");
+        CHECK(hc_ac_stream_position(stream) == text_len, "stream: position advances");
+        CHECK(whole.count == 3 && whole.positions[0] == 2 && whole.positions[1] == 7 &&
+                  whole.positions[2] == 10,
+              "stream: absolute positions match one-shot scan");
+    }
+
+    for (size_t split = 1; split < text_len; split++) {
+        capture_t capture = {{0}, 0};
+        hc_ac_stream_reset(stream);
+        hc_ac_stream_feed(stream, text, split, capture_cb, &capture);
+        hc_ac_stream_feed(stream, text + split, text_len - split, capture_cb,
+                          &capture);
+        CHECK(same_capture(&whole, &capture), "stream: split matches whole input");
+    }
+
+    capture_t single = {{0}, 0};
+    hc_ac_stream_reset(stream);
+    for (size_t i = 0; i < text_len; i++) {
+        hc_ac_stream_feed(stream, text + i, 1, capture_cb, &single);
+    }
+    CHECK(same_capture(&whole, &single), "stream: byte-at-a-time matches whole input");
+
+    char json[4096];
+    size_t cap = sizeof(json);
+    int count = -1;
+    CHECK(hc_ac_stream_reset(stream) == HC_OK, "stream: reset succeeds");
+    CHECK(hc_batch_stream_json(stream, "xxF", json, &cap, &count, NULL) == HC_OK,
+          "stream: JSON encodes a partial chunk");
+    CHECK(count == 0, "stream: partial chunk has no match yet");
+    cap = sizeof(json);
+    CHECK(hc_batch_stream_json(stream, "OO", json, &cap, &count, NULL) == HC_OK,
+          "stream: JSON encodes the completing chunk");
+    CHECK(count == 1, "stream: cross-chunk match is reported");
+    CHECK(strstr(json, "\"position\":2") != NULL, "stream: JSON uses absolute position");
+
+    CHECK(hc_ac_stream_new(NULL) == NULL, "stream: NULL automaton rejected");
+    CHECK(hc_ac_stream_reset(NULL) == HC_ERR_NULL, "stream: NULL reset rejected");
+    CHECK(hc_ac_stream_feed(NULL, "x", 1, capture_cb, &whole) == HC_ERR_NULL,
+          "stream: NULL feed rejected");
+    CHECK(hc_ac_stream_feed(stream, NULL, 1, capture_cb, &whole) == HC_ERR_NULL,
+          "stream: NULL chunk rejected");
+
+    hc_ac_stream_free(stream);
+    hc_ac_free(ac);
+}
+
 static void test_json_escape(void) {
     char out[128];
     size_t len;
@@ -310,6 +473,8 @@ int main(void) {
     test_aho_corasick();
     test_aho_corasick_duplicate_registration();
     test_aho_corasick_scale();
+    test_signature_loader();
+    test_streaming();
     test_json_escape();
 
     if (g_failures == 0) {
