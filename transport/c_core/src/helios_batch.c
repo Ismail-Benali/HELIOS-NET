@@ -107,7 +107,7 @@ hc_ac_t *hc_sig_load(const char *path, size_t *out_count) {
     while (offset < length && !invalid) {
         char *line = data + offset;
         size_t remaining = length - offset;
-        char *newline = (char *)memchr(line, '\n', remaining);
+        const char *newline = (const char *)memchr(line, '\n', remaining);
         size_t line_len = newline ? (size_t)(newline - line) : remaining;
         offset += line_len + (newline ? 1 : 0);
 
