@@ -1007,7 +1007,7 @@ class _WorkerProcess:
 
 def _persistent_worker(response: dict):
     worker = goscan_bridge._ServeWorker()
-    proc = _WorkerProcess(json.dumps(response) + "\\n")
+    proc = _WorkerProcess(json.dumps(response) + "\n")
     worker._proc = proc
     worker._bin = str(goscan_bridge.GOSCAN_BIN)
     return worker, proc
