@@ -280,7 +280,13 @@ class _ServeWorker:
             if not isinstance(raw_results, list):
                 self._stop()
                 raise GoscanError("Go serve worker sent a non-list results field")
-            self.last_summary = _validated_summary(reply.get("summary"))
+            summary = _validated_summary(reply.get("summary"))
+            if summary is None:
+                self._stop()
+                raise GoscanError(
+                    "Go serve worker sent a missing or invalid summary"
+                )
+            self.last_summary = summary
 
             results: list[dict[str, Any]] = []
             for data in raw_results:
