@@ -292,10 +292,7 @@ def cmd_probe(args: Any) -> int:
         if not result.get("open"):
             continue
         banner = result.get("banner", "")
-        print(
-            f"  {result['host']} ({result['ip']}):{result['port']}  "
-            f"{banner[:120]!r}"
-        )
+        print(f"  {result['host']} ({result['ip']}):{result['port']}  {banner[:120]!r}")
     print(f"[HELIOS] probed {len(results)} open port(s) via adaptive engine")
     return 0
 
