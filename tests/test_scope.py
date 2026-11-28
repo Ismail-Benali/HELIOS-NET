@@ -49,7 +49,6 @@ def test_scope_rejects_non_finite_rate_limit_values(tmp_path):
         ScopeEnforcer.from_config(scope_file)
 
 
-
 def test_resolve_authorized_ips_filters_out_of_scope_dns_answers():
     enforcer = ScopeEnforcer(
         allowed_cidrs=["10.0.0.0/8"],
