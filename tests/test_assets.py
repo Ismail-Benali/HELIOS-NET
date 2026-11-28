@@ -317,6 +317,45 @@ def test_an_in_scope_redirect_is_followed_and_recorded():
     assert ("app.lab.test", "/login") in seen
 
 
+@pytest.mark.parametrize(
+    "location",
+    [
+        "http://app.lab.test:not-a-port/admin",
+        "http://app.lab.test:0/admin",
+        "ftp://app.lab.test/admin",
+    ],
+)
+def test_malformed_or_unsupported_redirect_is_blocked_without_crashing(location):
+    probed: list[tuple[str, int]] = []
+
+    def probe(host: str, ip: str, port: int, **kwargs: object) -> dict:
+        probed.append((host, port))
+        return {
+            "open": True,
+            "scheme": "http",
+            "status": 302,
+            "location": location,
+        }
+
+    summary = discover_assets(
+        ScopeEnforcer(
+            allowed_domains=["lab.test"],
+            allowed_cidrs=["127.0.0.1/32"],
+            ports=[80],
+        ),
+        ["app.lab.test"],
+        resolve=lambda name: ["127.0.0.1"],
+        probe=probe,
+        web_ports=[80],
+        max_requests=10,
+    )
+
+    assert probed == [("app.lab.test", 80), ("app.lab.test", 80)]
+    assert any(
+        entry["reason"] == "redirect-unparseable" for entry in summary["blocked"]
+    )
+
+
 def test_a_redirect_outside_the_scope_is_blocked_and_not_followed():
     probed: list[str] = []
 
