@@ -27,7 +27,7 @@ from typing import Any
 
 from core import accel
 from core.planner import PlanStep
-from core.scope import ScopeEnforcer
+from core.scope import ScopeEnforcer, ScopeError
 from modules.core import discover, list_modules
 from modules.discovery import goscan_bridge
 from modules.discovery.assets import WEB_PORTS, discover_assets
@@ -62,37 +62,95 @@ def _signature_pairs() -> list[tuple[str, str]]:
 
 
 def discovery_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Scans the requested ports through the best available native backend."""
-    ports = step.params.get("ports") or ctx.get("scope_ports") or sorted(COMMON_PORTS)
-    port_list = [int(port) for port in ports]
-    outcome = accel.scan_ports(step.target, port_list)
-
-    findings: list[dict[str, Any]] = []
-    for row in outcome.rows:
-        port = int(row["port"])
-        finding: dict[str, Any] = {
+    """Scans only IP addresses pinned by the campaign's authorized scope."""
+    scope = ctx.get("scope")
+    if not isinstance(scope, ScopeEnforcer):
+        return {
             "module": "discovery",
             "host": step.target,
-            "port": port,
-            "open": True,
-            "state": row.get("state", "open"),
-            "service": row.get("service") or COMMON_PORTS.get(port, ""),
-            "engine": outcome.engine,
-            "source": "go-native" if outcome.engine == "go-native" else "socket-probe",
+            "open_ports": [],
+            "count": 0,
+            "engine": "none",
+            "reason": "scope unavailable; network discovery refused",
+            "error": "scope unavailable",
         }
-        for key in ("banner", "latency_ms", "time"):
-            if row.get(key) not in (None, ""):
-                finding[key] = row[key]
-        findings.append(finding)
+
+    ports = step.params.get("ports") or ctx.get("scope_ports") or sorted(COMMON_PORTS)
+    port_list = [int(port) for port in ports]
+    try:
+        scope.check_ports(port_list)
+    except ScopeError as exc:
+        return {
+            "module": "discovery",
+            "host": step.target,
+            "open_ports": [],
+            "count": 0,
+            "engine": "none",
+            "reason": str(exc),
+            "error": str(exc),
+        }
+
+    authorized_ips = [
+        str(address)
+        for address in ctx.get("authorized_ips", [])
+        if scope.is_target_allowed(str(address))
+    ]
+    if not authorized_ips:
+        try:
+            authorized_ips = scope.resolve_authorized_ips(step.target)
+        except ScopeError as exc:
+            return {
+                "module": "discovery",
+                "host": step.target,
+                "open_ports": [],
+                "count": 0,
+                "engine": "none",
+                "reason": str(exc),
+                "error": str(exc),
+            }
+
+    outcomes = [
+        (address, accel.scan_ports(address, port_list))
+        for address in sorted(set(authorized_ips))
+    ]
+    engines = sorted({outcome.engine for _, outcome in outcomes})
+    engine = engines[0] if len(engines) == 1 else "mixed"
+    reasons = list(
+        dict.fromkeys(
+            outcome.reason for _, outcome in outcomes if outcome.reason
+        )
+    )
+    reason = "; ".join(reasons)
+
+    findings: list[dict[str, Any]] = []
+    for address, outcome in outcomes:
+        for row in outcome.rows:
+            port = int(row["port"])
+            finding: dict[str, Any] = {
+                "module": "discovery",
+                "host": step.target,
+                "ip": address,
+                "port": port,
+                "open": True,
+                "state": row.get("state", "open"),
+                "service": row.get("service") or COMMON_PORTS.get(port, ""),
+                "engine": outcome.engine,
+                "source": "go-native" if outcome.engine == "go-native" else "socket-probe",
+            }
+            for key in ("banner", "latency_ms", "time"):
+                if row.get(key) not in (None, ""):
+                    finding[key] = row[key]
+            findings.append(finding)
 
     ctx.setdefault("findings", []).extend(findings)
     return {
         "module": "discovery",
         "host": step.target,
-        "open_ports": [finding["port"] for finding in findings],
+        "authorized_ips": sorted(set(authorized_ips)),
+        "open_ports": sorted({finding["port"] for finding in findings}),
         "count": len(findings),
-        "engine": outcome.engine,
-        "reason": outcome.reason,
+        "engine": engine,
+        "reason": reason,
     }
 
 
@@ -118,23 +176,32 @@ def _match_banner(banner: str, pairs: list[tuple[str, str]]) -> list[dict[str, A
 
 
 def recon_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Grabs and identifies the banner of every open port found by discovery."""
+    """Grabs banners only from the IPs authorized and pinned by discovery."""
     discovered = [
         finding
         for finding in ctx.get("findings", [])
-        if finding.get("open") and finding.get("port") is not None
+        if finding.get("open")
+        and finding.get("port") is not None
+        and finding.get("ip")
     ]
-    ports = sorted({int(finding["port"]) for finding in discovered})
+    targets = sorted(
+        {
+            (str(finding["ip"]), int(finding["port"]))
+            for finding in discovered
+        }
+    )
     pairs = _signature_pairs()
 
     probes: list[dict[str, Any]] = []
     engines: set[str] = set()
-    for port in ports:
+    for address, port in targets:
         existing = next(
             (
                 finding
                 for finding in discovered
-                if int(finding["port"]) == port and finding.get("banner")
+                if str(finding["ip"]) == address
+                and int(finding["port"]) == port
+                and finding.get("banner")
             ),
             None,
         )
@@ -142,14 +209,18 @@ def recon_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
             banner = str(existing["banner"])
         else:
             _pace(ctx)
-            grabbed = banner_grab(step.target, port)
+            grabbed = banner_grab(address, port)
             banner = str(grabbed.get("banner", ""))
+
         if not banner or banner.startswith("<error:"):
-            probes.append({"port": port, "banner": banner, "matches": []})
+            probes.append(
+                {"ip": address, "port": port, "banner": banner, "matches": []}
+            )
             continue
         matches = _match_banner(banner, pairs)
         probes.append(
             {
+                "ip": address,
                 "port": port,
                 "banner": banner,
                 "matches": matches,
@@ -168,8 +239,11 @@ def recon_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
         "signature_matches": sum(len(probe["matches"]) for probe in probes),
         "engines": sorted(engines),
     }
-    if not ports:
-        result["note"] = "no open ports were reported by discovery"
+    if not targets:
+        result["note"] = (
+            "no IP-pinned open ports were reported by authorized discovery; "
+            "no banner connections were attempted"
+        )
 
     ctx.setdefault("findings", []).append(result)
     ctx["fingerprint_source"] = result["source"]
