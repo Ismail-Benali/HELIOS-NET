@@ -70,7 +70,6 @@ def test_orchestrator_accepts_scoped_ports(tmp_path):
     orchestrator._authorize_steps(steps)
 
 
-
 def test_orchestrator_passes_resolved_authorized_ips_to_runners(tmp_path, monkeypatch):
     scope = ScopeEnforcer(
         allowed_cidrs=["10.0.0.0/8"],
