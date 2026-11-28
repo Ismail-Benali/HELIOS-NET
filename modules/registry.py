@@ -116,9 +116,7 @@ def discovery_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
     engines = sorted({outcome.engine for _, outcome in outcomes})
     engine = engines[0] if len(engines) == 1 else "mixed"
     reasons = list(
-        dict.fromkeys(
-            outcome.reason for _, outcome in outcomes if outcome.reason
-        )
+        dict.fromkeys(outcome.reason for _, outcome in outcomes if outcome.reason)
     )
     reason = "; ".join(reasons)
 
@@ -135,7 +133,9 @@ def discovery_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
                 "state": row.get("state", "open"),
                 "service": row.get("service") or COMMON_PORTS.get(port, ""),
                 "engine": outcome.engine,
-                "source": "go-native" if outcome.engine == "go-native" else "socket-probe",
+                "source": "go-native"
+                if outcome.engine == "go-native"
+                else "socket-probe",
             }
             for key in ("banner", "latency_ms", "time"):
                 if row.get(key) not in (None, ""):
@@ -180,15 +180,10 @@ def recon_runner(step: PlanStep, ctx: dict[str, Any]) -> dict[str, Any]:
     discovered = [
         finding
         for finding in ctx.get("findings", [])
-        if finding.get("open")
-        and finding.get("port") is not None
-        and finding.get("ip")
+        if finding.get("open") and finding.get("port") is not None and finding.get("ip")
     ]
     targets = sorted(
-        {
-            (str(finding["ip"]), int(finding["port"]))
-            for finding in discovered
-        }
+        {(str(finding["ip"]), int(finding["port"])) for finding in discovered}
     )
     pairs = _signature_pairs()
 
