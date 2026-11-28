@@ -47,3 +47,48 @@ def test_scope_rejects_non_finite_rate_limit_values(tmp_path):
     )
     with pytest.raises(ScopeError, match="must be a number"):
         ScopeEnforcer.from_config(scope_file)
+
+
+
+def test_resolve_authorized_ips_filters_out_of_scope_dns_answers():
+    enforcer = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        allowed_domains=["app.example.test"],
+    )
+
+    resolved = enforcer.resolve_authorized_ips(
+        "app.example.test",
+        resolver=lambda _name: ["203.0.113.8", "10.2.3.4", "10.2.3.4"],
+    )
+
+    assert resolved == ["10.2.3.4"]
+
+
+def test_resolve_authorized_ips_rejects_domain_without_authorized_cidr():
+    enforcer = ScopeEnforcer(allowed_domains=["app.example.test"])
+
+    with pytest.raises(ScopeError, match="no addresses inside the authorized CIDRs"):
+        enforcer.resolve_authorized_ips(
+            "app.example.test", resolver=lambda _name: ["10.2.3.4"]
+        )
+
+
+def test_resolve_authorized_ips_rejects_unresolvable_target():
+    enforcer = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        allowed_domains=["app.example.test"],
+    )
+
+    with pytest.raises(ScopeError, match="could not resolve"):
+        enforcer.resolve_authorized_ips(
+            "app.example.test",
+            resolver=lambda _name: (_ for _ in ()).throw(OSError("DNS unavailable")),
+        )
+
+
+def test_resolve_authorized_ips_checks_literal_addresses_without_dns():
+    enforcer = ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"])
+
+    assert enforcer.resolve_authorized_ips("10.1.2.3") == ["10.1.2.3"]
+    with pytest.raises(ScopeError, match="outside the authorized scope"):
+        enforcer.resolve_authorized_ips("192.0.2.3")
