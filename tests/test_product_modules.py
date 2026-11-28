@@ -133,6 +133,63 @@ def test_discovery_runner_routes_every_port_through_the_accelerator(monkeypatch)
     assert all(f["engine"] == "go-native" for f in ctx["findings"])
 
 
+def test_discovery_runner_dials_the_pinned_ip_not_the_hostname(monkeypatch):
+    import modules.registry as registry
+
+    calls: list[str] = []
+
+    class Outcome:
+        engine = "go-native"
+        reason = ""
+        rows = [{"port": 80, "state": "open", "service": "http"}]
+
+    monkeypatch.setattr(
+        registry.accel,
+        "scan_ports",
+        lambda host, ports: (calls.append(host), Outcome())[1],
+    )
+    scope = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        allowed_domains=["app.example.test"],
+        ports=[80],
+    )
+    ctx = {"scope": scope, "authorized_ips": ["10.2.3.4"]}
+
+    result = registry.discovery_runner(
+        PlanStep(
+            step_id=1,
+            module="discovery",
+            action="scan",
+            target="app.example.test",
+            params={"ports": [80]},
+        ),
+        ctx,
+    )
+
+    assert calls == ["10.2.3.4"]
+    assert result["authorized_ips"] == ["10.2.3.4"]
+    assert ctx["findings"][0]["host"] == "app.example.test"
+    assert ctx["findings"][0]["ip"] == "10.2.3.4"
+
+
+def test_discovery_runner_fails_closed_without_scope(monkeypatch):
+    import modules.registry as registry
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        registry.accel,
+        "scan_ports",
+        lambda host, ports: calls.append(host),
+    )
+    result = registry.discovery_runner(
+        PlanStep(step_id=1, module="discovery", action="scan", target="10.0.0.1"),
+        {},
+    )
+
+    assert result["error"] == "scope unavailable"
+    assert calls == []
+
+
 def test_discovery_runner_prefers_the_scope_ports_from_context(monkeypatch):
     import modules.registry as registry
 
