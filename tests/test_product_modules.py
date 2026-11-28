@@ -22,8 +22,8 @@ import pytest
 
 from core.drift import compute_surface_drift
 from core.planner import PlanStep
-from core.scope import ScopeEnforcer
 from core.reporter import generate_executive_briefing
+from core.scope import ScopeEnforcer
 from core.state import CampaignState
 from engine.ai.adaptive_learner import EpsilonGreedyBandit
 from engine.algorithms import balancing
