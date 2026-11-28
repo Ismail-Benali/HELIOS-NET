@@ -22,6 +22,7 @@ import pytest
 
 from core.drift import compute_surface_drift
 from core.planner import PlanStep
+from core.scope import ScopeEnforcer
 from core.reporter import generate_executive_briefing
 from core.state import CampaignState
 from engine.ai.adaptive_learner import EpsilonGreedyBandit
@@ -115,7 +116,10 @@ def test_discovery_runner_routes_every_port_through_the_accelerator(monkeypatch)
         target="10.0.0.1",
         params={"ports": [22, 80]},
     )
-    ctx: dict = {}
+    ctx: dict = {
+        "scope": ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"]),
+        "authorized_ips": ["10.0.0.1"],
+    }
     result = registry.discovery_runner(step, ctx)
 
     assert calls == [("10.0.0.1", [22, 80])], (
@@ -146,7 +150,14 @@ def test_discovery_runner_prefers_the_scope_ports_from_context(monkeypatch):
     )
 
     step = PlanStep(step_id=1, module="discovery", action="scan", target="10.0.0.1")
-    result = registry.discovery_runner(step, {"scope_ports": [443]})
+    result = registry.discovery_runner(
+        step,
+        {
+            "scope": ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"], ports=[443]),
+            "authorized_ips": ["10.0.0.1"],
+            "scope_ports": [443],
+        },
+    )
 
     assert seen == [[443]]
     assert result["count"] == 0
@@ -164,7 +175,10 @@ def test_a_successful_scan_records_only_rows_it_received(monkeypatch):
 
     monkeypatch.setattr(registry.accel, "scan_ports", lambda host, ports: Outcome())
 
-    ctx: dict = {}
+    ctx: dict = {
+        "scope": ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"], ports=[22]),
+        "authorized_ips": ["10.0.0.1"],
+    }
     result = registry.discovery_runner(
         PlanStep(
             step_id=1,
@@ -194,7 +208,7 @@ def test_recon_runner_matches_banners_through_the_signature_core(tmp_path, monke
 
     ctx = {
         "findings": [
-            {"module": "discovery", "host": "10.0.0.1", "port": 22, "open": True}
+            {"module": "discovery", "host": "10.0.0.1", "ip": "10.0.0.1", "port": 22, "open": True}
         ]
     }
     result = recon_runner(
@@ -225,6 +239,7 @@ def test_recon_runner_reuses_a_banner_discovery_already_collected(monkeypatch):
             {
                 "module": "discovery",
                 "host": "10.0.0.1",
+                "ip": "10.0.0.1",
                 "port": 80,
                 "open": True,
                 "banner": "HTTP/1.1 200 OK\r\nServer: nginx/1.27",
