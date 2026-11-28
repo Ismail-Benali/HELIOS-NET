@@ -282,6 +282,43 @@ def test_recon_runner_matches_banners_through_the_signature_core(tmp_path, monke
     assert ctx["findings"][-1] is result
 
 
+def test_recon_runner_uses_the_discovery_ip_not_the_hostname(monkeypatch):
+    import modules.registry as registry
+
+    connected: list[str] = []
+    monkeypatch.setattr(
+        registry,
+        "banner_grab",
+        lambda host, port: (
+            connected.append(host) or {"banner": "HTTP/1.1 200 OK"}
+        ),
+    )
+    monkeypatch.setattr(registry, "_signature_pairs", lambda: [])
+
+    ctx = {
+        "findings": [
+            {
+                "module": "discovery",
+                "host": "app.example.test",
+                "ip": "10.2.3.4",
+                "port": 80,
+                "open": True,
+            }
+        ]
+    }
+    recon_runner(
+        PlanStep(
+            step_id=1,
+            module="recon",
+            action="fingerprint",
+            target="app.example.test",
+        ),
+        ctx,
+    )
+
+    assert connected == ["10.2.3.4"]
+
+
 def test_recon_runner_reuses_a_banner_discovery_already_collected(monkeypatch):
     import modules.registry as registry
 
