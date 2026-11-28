@@ -122,14 +122,10 @@ Modules are the primary extension point. They live under `modules/` (e.g. `modul
 1. Create `modules/discovery/my_discovery.py`.
 2. Implement the in-process runner contract:
    ```python
-   def run(step: PlanStep, context: dict[str, Any]) -> dict[str, Any]:
-       scope = context.get("scope")
-       if scope is None:
-           raise ScopeError("active campaign scope is required")
-       scope.check(step.target)
-       # Validate requested ports before any network operation.
+   def runner(step: PlanStep, context: dict[str, Any]) -> dict[str, Any]:
+       # Require the active campaign ScopeEnforcer from context.
+       # Check the target and requested ports before any network operation.
        ...
-       return {"findings": [], "evidence": []}
    ```
    The example is a contract sketch: import the project types and use the
    existing scope/port helpers rather than creating a permissive enforcer.
