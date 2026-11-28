@@ -40,7 +40,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from core.input_guard import sanitize_banner
-from core.scope import ScopeEnforcer
+from core.scope import ScopeEnforcer, ScopeError
 from modules.discovery.ct import fetch_ct_names
 from modules.discovery.graph_ingest import ingest_discovery_summary
 
@@ -401,6 +401,19 @@ def _follow_redirects(
             )
             break
         next_host, next_port, next_scheme, path = target
+        try:
+            scope.check_ports([next_port])
+        except ScopeError:
+            blocked.append(
+                {
+                    "host": name,
+                    "reason": "redirect-port-outside-scope",
+                    "location": location,
+                    "target_host": next_host,
+                    "target_port": next_port,
+                }
+            )
+            break
         addresses = resolve(next_host) if next_host != current_host else [current_ip]
         allowed = [address for address in addresses if scope.is_target_allowed(address)]
         if not addresses or not allowed or not scope.is_target_allowed(next_host):
@@ -512,6 +525,9 @@ def discover_assets(
     if web_ports is None:
         web_ports = [p for p in WEB_PORTS if not scope.ports or p in scope.ports]
     web_ports = [int(p) for p in web_ports]
+    # Enforce the allowlist here as well as at the CLI boundary: discovery is
+    # also a public in-process API and must not trust every caller to preflight.
+    scope.check_ports(web_ports)
 
     queue: deque[tuple[str, int]] = deque()
     seen: set[str] = set()
