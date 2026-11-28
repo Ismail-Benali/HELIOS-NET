@@ -969,6 +969,108 @@ def test_a_failure_to_start_the_event_loop_raises_in_strict_mode(monkeypatch):
 # --------------------------------------------------------------------------- #
 
 
+class _WorkerPipe:
+    def __init__(self, response: str = "") -> None:
+        self.response = response
+        self.written: list[str] = []
+
+    def write(self, value: str) -> int:
+        self.written.append(value)
+        return len(value)
+
+    def flush(self) -> None:
+        return None
+
+    def readline(self) -> str:
+        return self.response
+
+
+class _WorkerProcess:
+    def __init__(self, response: str) -> None:
+        self.stdin = _WorkerPipe()
+        self.stdout = _WorkerPipe(response)
+        self.stderr = None
+        self.terminated = False
+
+    def poll(self):
+        return None
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def wait(self, timeout=None) -> int:
+        return 0
+
+    def kill(self) -> None:
+        self.terminated = True
+
+
+def _persistent_worker(response: dict):
+    worker = goscan_bridge._ServeWorker()
+    proc = _WorkerProcess(json.dumps(response) + "\\n")
+    worker._proc = proc
+    worker._bin = str(goscan_bridge.GOSCAN_BIN)
+    return worker, proc
+
+
+def test_persistent_worker_rejects_a_missing_or_invalid_summary():
+    worker, proc = _persistent_worker({"id": 1, "results": []})
+
+    with pytest.raises(GoscanError, match="missing or invalid summary"):
+        worker.scan("127.0.0.1", "80", 1.0)
+
+    assert proc.terminated is True
+
+
+def test_persistent_worker_rejects_a_mismatched_request_id():
+    worker, proc = _persistent_worker(
+        {
+            "id": 99,
+            "results": [],
+            "summary": {
+                "attempted": 1,
+                "open": 0,
+                "refused": 1,
+                "timeout": 0,
+                "unreachable": 0,
+                "errors": 0,
+            },
+        }
+    )
+
+    with pytest.raises(GoscanError, match="different request"):
+        worker.scan("127.0.0.1", "80", 1.0)
+
+    assert proc.terminated is True
+
+
+def test_persistent_worker_accepts_a_complete_empty_reply():
+    worker, _proc = _persistent_worker(
+        {
+            "id": 1,
+            "results": [],
+            "summary": {
+                "attempted": 1,
+                "open": 0,
+                "refused": 1,
+                "timeout": 0,
+                "unreachable": 0,
+                "errors": 0,
+            },
+        }
+    )
+
+    assert worker.scan("127.0.0.1", "80", 1.0) == []
+    assert worker.last_summary == {
+        "attempted": 1,
+        "open": 0,
+        "refused": 1,
+        "timeout": 0,
+        "unreachable": 0,
+        "errors": 0,
+    }
+
+
 def test_validated_summary_requires_every_count():
     good = {
         "attempted": 2,
