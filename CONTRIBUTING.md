@@ -118,18 +118,28 @@ python tests/smoke.py
 
 Modules are the primary extension point. They live under `modules/` (e.g. `modules/discovery/`).
 
-### Example: a new discovery module
+### Example: a new in-process discovery module
 1. Create `modules/discovery/my_discovery.py`.
-2. It should accept input via **JSON on `stdin`** and emit results via **JSON on `stdout`**:
+2. Implement the in-process runner contract:
+   ```python
+   def run(step: PlanStep, context: dict[str, Any]) -> dict[str, Any]:
+       scope = context.get("scope")
+       if scope is None:
+           raise ScopeError("active campaign scope is required")
+       scope.check(step.target)
+       # Validate requested ports before any network operation.
+       ...
+       return {"findings": [], "evidence": []}
    ```
-   {"host": "10.0.0.1", "ports": [80, 443]}
-   ```
-   ```
-   [{"host": "10.0.0.1", "port": 443, "status": "open"}]
-   ```
-3. Register it in `modules/registry.py` (or the relevant registry) so the orchestrator can discover and load it.
-4. Add a corresponding smoke test in `tests/smoke.py`.
-5. Document the module in `docs/`.
+   The example is a contract sketch: import the project types and use the
+   existing scope/port helpers rather than creating a permissive enforcer.
+3. Register the runner in `modules/registry.py` (or the relevant registry).
+4. Add deterministic allowed/denied tests and a smoke test where appropriate.
+5. Document the module and its evidence/output shape in `docs/`.
+
+A Python discovery module is not a subprocess protocol. If a genuinely
+independent native process is required, define its UTF-8 JSON/NDJSON wire
+contract separately and update both producer and consumer tests.
 
 ### Module and native-process contracts
 Python modules are in-process runners using
