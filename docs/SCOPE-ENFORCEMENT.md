@@ -36,12 +36,19 @@ engagement.
 4. Discovery runners receive the campaign scope and its port allowlist.
 5. Asset discovery checks a candidate name before resolution, checks every
    resolved address before connecting, and keeps redirects inside the same
-   authorized boundary.
+   authorized boundary. Every redirect destination port is checked against
+   the same TCP port allowlist before the next request is made.
 6. Out-of-scope requests are rejected; they must not be converted into a
    permissive fallback.
 
-The CLI's direct `probe` and `assets` paths also validate their requested
-targets and explicit ports before invoking the runner.
+The CLI's direct `probe` and `assets` paths validate their requested targets
+and explicit ports before invoking the runner. The in-process
+`discover_assets()` API repeats the port check itself; it does not rely on the
+CLI as its only caller. Redirects are subject to the same port policy.
+
+A non-empty `web_ports` argument containing any unauthorized port is rejected
+before DNS resolution or probing. A redirect to a disallowed port is recorded
+as `redirect-port-outside-scope` and is never followed.
 
 ## Port semantics
 
@@ -69,7 +76,8 @@ Changes to scope handling must cover:
 - allowed and denied IPv4/IPv6 targets;
 - exact domain and subdomain matching, including lookalike-domain rejection;
 - malformed, missing, wildcard, and unreadable scope files;
-- allowed and denied ports;
+- allowed and denied ports, including direct discovery API calls;
+- redirects to disallowed ports, including same-host redirects;
 - planned `ports`, `web_ports`, and singular `port` values;
 - DNS answers outside the authorized CIDR;
 - redirects that leave the authorized scope;
