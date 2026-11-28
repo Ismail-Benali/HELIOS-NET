@@ -6,7 +6,8 @@ HELIOS-NET is engineered as a polyglot architecture across four languages, each
 selected for a specific strength:
 
 - **Python — control plane.** Orchestration, campaign state, dependency planning,
-  asset graphing (Dijkstra, Degree Centrality, PageRank, articulation points),\n  verdict classification, and
+  asset graphing (Dijkstra, Degree Centrality, PageRank, articulation points),
+  verdict classification, and
   executive HTML reporting.
 - **Go — network plane.** High-concurrency TCP port scanning and banner grabbing
   using bounded worker pools and NDJSON streaming (`transport/goscan`).
