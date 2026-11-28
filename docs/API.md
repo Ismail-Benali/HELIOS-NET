@@ -14,7 +14,7 @@ is specified in [IPC Contract](IPC-CONTRACT.md).
 | `engine/` | Asset graph, algorithms, verdicts, scanning utilities | Consumes findings; graph analysis itself is network-free |
 | `modules/` | Discovery, asset metadata, recon, collection and extension runners | Must receive the campaign scope context before network work |
 | `transport/goscan/` | Go TCP discovery worker | Process boundary; UTF-8 NDJSON |
-| `transport/c_core/` | C signature/fingerprint core | Process boundary; line-oriented JSON |
+| `transport/c_core/` | C signature/fingerprint core | Line-oriented JSON process interface or in-process shared-library FFI |
 | `rust-core/` | Native graph and signature operations | In-process C ABI via `ctypes`, not an NDJSON process |
 
 Python core logic uses the standard library. Native components are optional at

@@ -40,7 +40,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from core.input_guard import sanitize_banner
-from core.scope import ScopeEnforcer
+from core.scope import ScopeEnforcer, ScopeError
 from modules.discovery.ct import fetch_ct_names
 from modules.discovery.graph_ingest import ingest_discovery_summary
 
@@ -340,14 +340,25 @@ def _redirect_target(
     """
     try:
         parts = urlsplit(location)
+        next_scheme = parts.scheme or scheme
+        if next_scheme not in {"http", "https"}:
+            return None
+        next_host = (parts.hostname or host).strip().lower().rstrip(".")
+        explicit_port = parts.port
+        next_port = (
+            explicit_port
+            if explicit_port is not None
+            else (443 if next_scheme == "https" else 80)
+        )
+        path = parts.path or "/"
+        if parts.query:
+            path = f"{path}?{parts.query}"
     except ValueError:
+        # urlsplit() validates the authority lazily: malformed brackets and
+        # non-numeric/out-of-range ports can raise when hostname/port is read.
         return None
-    next_scheme = parts.scheme or scheme
-    next_host = (parts.hostname or host).strip().lower().rstrip(".")
-    next_port = parts.port or (443 if next_scheme == "https" else 80)
-    path = parts.path or "/"
-    if parts.query:
-        path = f"{path}?{parts.query}"
+    if not next_host or not 1 <= next_port <= 65535:
+        return None
     return next_host, next_port, next_scheme, path
 
 
@@ -401,6 +412,19 @@ def _follow_redirects(
             )
             break
         next_host, next_port, next_scheme, path = target
+        try:
+            scope.check_ports([next_port])
+        except ScopeError:
+            blocked.append(
+                {
+                    "host": name,
+                    "reason": "redirect-port-outside-scope",
+                    "location": location,
+                    "target_host": next_host,
+                    "target_port": next_port,
+                }
+            )
+            break
         addresses = resolve(next_host) if next_host != current_host else [current_ip]
         allowed = [address for address in addresses if scope.is_target_allowed(address)]
         if not addresses or not allowed or not scope.is_target_allowed(next_host):
@@ -512,6 +536,9 @@ def discover_assets(
     if web_ports is None:
         web_ports = [p for p in WEB_PORTS if not scope.ports or p in scope.ports]
     web_ports = [int(p) for p in web_ports]
+    # Enforce the allowlist here as well as at the CLI boundary: discovery is
+    # also a public in-process API and must not trust every caller to preflight.
+    scope.check_ports(web_ports)
 
     queue: deque[tuple[str, int]] = deque()
     seen: set[str] = set()

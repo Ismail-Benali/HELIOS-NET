@@ -35,10 +35,11 @@ Understanding the layering helps you place your contribution correctly:
 
 ```
 Python Orchestration Layer        core/  · engine/ · modules/ · cli/ · run.py
-Native Transport Layer (Go & C)   transport/  (goscan, c_core)
-High-Performance Rust Core        rust-core/  (graph pathfinding, TTL analysis)
-Documentation                      docs/ · README.md · ROADMAP.md
-Automation                         build.py · .github/workflows/build.yml
+Go process worker                 transport/goscan/  (TCP discovery, NDJSON)
+C process / FFI core              transport/c_core/  (matching, fingerprints)
+Rust shared library               rust-core/  (graph analytics, matching, C ABI)
+Documentation                     docs/ · README.md · ROADMAP.md
+Automation                        build.py · .github/workflows/
 ```
 
 | Layer | Purpose |
@@ -117,24 +118,39 @@ python tests/smoke.py
 
 Modules are the primary extension point. They live under `modules/` (e.g. `modules/discovery/`).
 
-### Example: a new discovery module
+### Example: a new in-process discovery module
 1. Create `modules/discovery/my_discovery.py`.
-2. It should accept input via **JSON on `stdin`** and emit results via **JSON on `stdout`**:
+2. Implement the in-process runner contract:
+   ```python
+   def runner(step: PlanStep, context: dict[str, Any]) -> dict[str, Any]:
+       # Require the active campaign ScopeEnforcer from context.
+       # Check the target and requested ports before any network operation.
+       ...
    ```
-   {"host": "10.0.0.1", "ports": [80, 443]}
-   ```
-   ```
-   [{"host": "10.0.0.1", "port": 443, "status": "open"}]
-   ```
-3. Register it in `modules/registry.py` (or the relevant registry) so the orchestrator can discover and load it.
-4. Add a corresponding smoke test in `tests/smoke.py`.
-5. Document the module in `docs/`.
+   The example is a contract sketch: import the project types and use the
+   existing scope/port helpers rather than creating a permissive enforcer.
+3. Register the runner in `modules/registry.py` (or the relevant registry).
+4. Add deterministic allowed/denied tests and a smoke test where appropriate.
+5. Document the module and its evidence/output shape in `docs/`.
 
-### Module contract
-In-process runners use `runner(step: PlanStep, context: dict) -> dict`.
-They receive the active campaign scope in the context and must enforce it
-before network access. Native subprocesses follow their component-specific
-UTF-8 JSON/NDJSON contract; Rust uses a C ABI rather than stdin/stdout. See
+A Python discovery module is not a subprocess protocol. If a genuinely
+independent native process is required, define its UTF-8 JSON/NDJSON wire
+contract separately and update both producer and consumer tests.
+
+### Module and native-process contracts
+Python modules are in-process runners using
+`runner(step: PlanStep, context: dict) -> dict`. They receive the active
+campaign scope in the context and must enforce target and port authorization
+before network access. Do not describe or implement a Python module as an
+independent stdin/stdout process unless a separately reviewed process boundary
+is explicitly introduced.
+
+The Go scanner uses UTF-8 NDJSON over a process boundary. The C core has its
+own line-oriented JSON process interface and an optional in-process FFI path.
+Rust is loaded in-process through a C ABI; it is not an NDJSON worker. stdout is
+protocol-only, while diagnostics and Standardized Error Envelopes (SEE) belong
+on stderr. A missing response, malformed record, timeout, or non-zero process
+exit must remain distinguishable from a genuine empty result. See
 [API](docs/API.md), [scope policy](docs/SCOPE-ENFORCEMENT.md), and
 [IPC contract](docs/IPC-CONTRACT.md).
 
@@ -148,7 +164,7 @@ Before submitting a pull request, confirm:
 
 - [ ] **English only.** All code comments, docstrings, CLI help, and documentation are in English.
 - [ ] **Zero external pip dependencies.** Core Python logic uses only the standard library. Native modules (Go/Rust/C) may use their respective toolchains' standards but must not require system-level package installation beyond the toolchain itself.
-- [ ] **Tests pass.** `python tests/smoke.py` completes with `ALL SETS PASSED`.
+- [ ] **Tests pass.** Build native cores where supported, then run `python -m pytest -q` and `python tests/smoke.py`.
 - [ ] **License.** Contributions are accepted under `AGPL-3.0-only`; do not submit code you cannot license on those terms.
 - [ ] **Authorized-use framing.** No hardcoded third-party targets; offensive primitives framed within the red-teaming / ASM context.
 - [ ] **Documentation updated.** README, relevant `docs/`, or module docs reflect your change.
@@ -204,7 +220,7 @@ Before submitting a pull request, confirm:
 
 - Extend `tests/smoke.py` with a focused set for any new capability.
 - Keep tests deterministic and independent of network availability.
-- Native modules should degrade gracefully (return `[]` / fallbacks) when their binaries are absent.
+- Native bridges may use a documented Python fallback when a core is absent, but must preserve backend status and failure reasons. Never use an empty result to disguise a missing binary, timeout, malformed response, or failed process.
 
 ---
 

@@ -6,7 +6,8 @@ HELIOS-NET is engineered as a polyglot architecture across four languages, each
 selected for a specific strength:
 
 - **Python — control plane.** Orchestration, campaign state, dependency planning,
-  asset graphing (Dijkstra, Degree Centrality, PageRank, articulation points),\n  verdict classification, and
+  asset graphing (Dijkstra, Degree Centrality, PageRank, articulation points),
+  verdict classification, and
   executive HTML reporting.
 - **Go — network plane.** High-concurrency TCP port scanning and banner grabbing
   using bounded worker pools and NDJSON streaming (`transport/goscan`).
@@ -14,8 +15,9 @@ selected for a specific strength:
   core (`transport/c_core`): Boyer-Moore-Horspool single-pattern search with the
   Galil optimisation, a sparse Aho-Corasick multi-pattern automaton that also
   matches chunked banners across boundaries, FNV-1a 32/64 and CRC-32 digests,
-  and a streaming NDJSON CLI front end. Signature files are read as untrusted
-  input: bounded size, bounded line length, no embedded NUL, bounded patterns.
+  and a streaming NDJSON CLI front end. The same C functions are also exposed
+  through a shared library for the in-process `ctypes` FFI path. Signature
+  files are read as untrusted input: bounded size, bounded line length, no embedded NUL, bounded patterns.
 - **Rust — native acceleration.** Graph pathfinding plus native signature matching
   exposed as a C-ABI shared library (`rust-core`), consumed from Python through
   `core/rust_bridge.py` via `ctypes`.
@@ -25,7 +27,7 @@ selected for a specific strength:
 | Module | Entry point | Role |
 |---|---|---|
 | `transport/goscan` | `goscan match <sigfile>` | Go port scanner, NDJSON stream |
-| `transport/c_core` | `helios_core match\|fp\|selftest` | C signature & fingerprint core |
+| `transport/c_core` | `helios_core match\|fp\|selftest` and shared-library exports | C signature/fingerprint core over JSON IPC or in-process FFI |
 | `rust-core` | `helios_match_signatures` (C-ABI) | Rust signature matching and graph analytics, loaded by ctypes |
 
 ## Process IPC contracts
