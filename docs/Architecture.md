@@ -27,7 +27,7 @@ selected for a specific strength:
 | Module | Entry point | Role |
 |---|---|---|
 | `transport/goscan` | `goscan match <sigfile>` | Go port scanner, NDJSON stream |
-| `transport/c_core` | `helios_core match\|fp\|selftest` | C signature & fingerprint core |
+| `transport/c_core` | `helios_core match\|fp\|selftest` and shared-library exports | C signature/fingerprint core over JSON IPC or in-process FFI |
 | `rust-core` | `helios_match_signatures` (C-ABI) | Rust signature matching and graph analytics, loaded by ctypes |
 
 ## Process IPC contracts
