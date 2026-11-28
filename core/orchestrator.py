@@ -56,10 +56,18 @@ class Orchestrator:
     ) -> CampaignState:
         """Executes a full campaign against the specified target."""
         self.scope.check(target)
+        authorized_ips = self.scope.resolve_authorized_ips(target)
+        self._context["scope"] = self.scope
+        self._context["scope_ports"] = list(self.scope.ports)
+        self._context["authorized_ips"] = authorized_ips
+
         state = CampaignState(target=target)
+        state.meta["authorized_ips"] = authorized_ips
         state.transition("planning")
         self.store.save(state)
-        self.store.log_event(state, "campaign_start", target=target)
+        self.store.log_event(
+            state, "campaign_start", target=target, authorized_ips=authorized_ips
+        )
 
         steps = self.planner.plan(list(intelligence or []), target)
         self._authorize_steps(steps)
