@@ -15,7 +15,8 @@ selected for a specific strength:
   core (`transport/c_core`): Boyer-Moore-Horspool single-pattern search with the
   Galil optimisation, a sparse Aho-Corasick multi-pattern automaton that also
   matches chunked banners across boundaries, FNV-1a 32/64 and CRC-32 digests,
-  and a streaming NDJSON CLI front end. Signature files are read as untrusted
+  and a streaming NDJSON CLI front end. The same C functions are also exposed
+  through a shared library for the in-process `ctypes` FFI path. Signature files are read as untrusted
   input: bounded size, bounded line length, no embedded NUL, bounded patterns.
 - **Rust — native acceleration.** Graph pathfinding plus native signature matching
   exposed as a C-ABI shared library (`rust-core`), consumed from Python through
