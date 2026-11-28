@@ -16,7 +16,7 @@ import pytest
 
 import modules.registry as registry
 from core.planner import PlanStep
-from core.scope import ScopeEnforcer
+from core.scope import ScopeEnforcer, ScopeError
 from modules.discovery.assets import (
     decode_certificate,
     discover_assets,
@@ -350,7 +350,7 @@ def test_a_redirect_outside_the_scope_is_blocked_and_not_followed():
 def test_discovery_rejects_requested_web_ports_outside_scope():
     resolved: list[str] = []
 
-    with pytest.raises(Exception, match="outside the authorized scope"):
+    with pytest.raises(ScopeError, match="outside the authorized scope"):
         discover_assets(
             ScopeEnforcer(
                 allowed_domains=["lab.test"],
