@@ -340,14 +340,25 @@ def _redirect_target(
     """
     try:
         parts = urlsplit(location)
+        next_scheme = parts.scheme or scheme
+        if next_scheme not in {"http", "https"}:
+            return None
+        next_host = (parts.hostname or host).strip().lower().rstrip(".")
+        explicit_port = parts.port
+        next_port = (
+            explicit_port
+            if explicit_port is not None
+            else (443 if next_scheme == "https" else 80)
+        )
+        path = parts.path or "/"
+        if parts.query:
+            path = f"{path}?{parts.query}"
     except ValueError:
+        # urlsplit() validates the authority lazily: malformed brackets and
+        # non-numeric/out-of-range ports can raise when hostname/port is read.
         return None
-    next_scheme = parts.scheme or scheme
-    next_host = (parts.hostname or host).strip().lower().rstrip(".")
-    next_port = parts.port or (443 if next_scheme == "https" else 80)
-    path = parts.path or "/"
-    if parts.query:
-        path = f"{path}?{parts.query}"
+    if not next_host or not 1 <= next_port <= 65535:
+        return None
     return next_host, next_port, next_scheme, path
 
 
