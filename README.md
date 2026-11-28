@@ -52,29 +52,29 @@
 ## 🗺️ System Architecture
 
 ```text
-+-------------------------------------------------------------------------+
-|                         HELIOS-NET CLI & DAEMON                         |
-|                       (Python Control Plane Core)                       |
-+-------------------------------------------------------------------------+
-       |                     |                     |              
-       v                     v                     v              
-+--------------+     +---------------+     +---------------+   
-|  core/       |     |   engine/     |     |   modules/    |   
-| - wal.py     |     | - graph/      |     | - discovery/  |   
-| - state.py     |     | - killchain/  |     | - recon/      |   
-| - orchestr.  |     | - algorithms/ |     | - stealth/    |   
-+--------------+     +---------------+     +---------------+   
-       |                     |                     |
-       +---------------------+---------------------+
-                             | (IPC / NDJSON Streams)
-                             v
-         +------------------+------------------+------------------+
-         |    GO / NETWORK  |    C / MATCHING   |  RUST / GRAPH    |
-         |    goscan        | signatures + FP  | graph + matcher  |
-         +------------------+------------------+------------------+
-                              ^
-                              | UTF-8 IPC / C ABI
-                              +-----------------------------------+
++-----------------------------------------------------------------------+
+|                         HELIOS-NET CLI                                |
+|                  Python control plane (core/, cli/, run.py)             |
++-----------------------------------------------------------------------+
+                 |                  |                   |
+                 v                  v                   v
+       +----------------+  +----------------+  +----------------------+
+       | core/          |  | engine/        |  | modules/             |
+       | scope, state,  |  | graph, verdict,|  | discovery, recon,    |
+       | WAL, planning, |  | risk, matching |  | collection, registry |
+       | bridges        |  | (offline)      |  | (scope-bound runners)|
+       +----------------+  +----------------+  +----------------------+
+                 |                  |                   |
+                 +------------------+-------------------+
+                                    |
+                   +----------------+----------------+
+                   |                |                |
+                   v                v                v
+          +----------------+ +---------------+ +----------------------+
+          | Go process     | | C process/FFI | | Rust shared library  |
+          | TCP discovery  | | signatures,   | | graph analytics and  |
+          | UTF-8 NDJSON    | | fingerprints  | | matching via C ABI   |
+          +----------------+ +---------------+ +----------------------+
 ```
 
 ---
