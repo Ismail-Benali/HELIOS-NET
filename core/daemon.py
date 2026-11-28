@@ -14,8 +14,10 @@ import asyncio
 import logging
 import time
 from pathlib import Path
+from typing import Any
 
 from core.async_engine import enterprise_adaptive_recon
+from core.scope import ScopeEnforcer, ScopeError
 from core.wal import TransactionalWAL
 from engine.graph.core import AssetGraph
 from engine.killchain.pathfinder import KillChainEngine
@@ -27,10 +29,30 @@ log = logging.getLogger(__name__)
 class AutonomousDaemon:
     """Autonomous background security intelligence daemon."""
 
+    DEFAULT_PORTS = (80, 443, 22, 3306)
+
     def __init__(
-        self, target: str, state_dir: str | Path, interval_seconds: float = 30.0
+        self,
+        target: str,
+        state_dir: str | Path,
+        scope: ScopeEnforcer,
+        interval_seconds: float = 30.0,
     ):
+        if not isinstance(scope, ScopeEnforcer):
+            raise TypeError("AutonomousDaemon requires an explicit ScopeEnforcer")
+        scope.check(target)
         self.target = target
+        self.scope = scope
+        self.ports = tuple(
+            port
+            for port in self.DEFAULT_PORTS
+            if not scope.ports or port in scope.ports
+        )
+        if not self.ports:
+            raise ScopeError(
+                "none of the daemon's default ports are authorized by the scope"
+            )
+        scope.check_ports(list(self.ports))
         self.state_dir = Path(state_dir)
         self.interval = interval_seconds
         self.wal = TransactionalWAL(self.state_dir / "daemon_missions.wal")
@@ -45,14 +67,30 @@ class AutonomousDaemon:
 
         # 1. Transactional WAL logging start
         self.wal.begin()
-        self.wal.append(
-            "MISSION_START", {"target": self.target, "timestamp": time.time()}
-        )
 
         try:
+            # Resolve each cycle and connect only to addresses authorized by
+            # the same scope. The returned IPs are passed to the dialer directly,
+            # so a second DNS lookup cannot move the connection out of scope.
+            authorized_ips = self.scope.resolve_authorized_ips(self.target)
+            self.wal.append(
+                "MISSION_START",
+                {
+                    "target": self.target,
+                    "authorized_ips": authorized_ips,
+                    "ports": list(self.ports),
+                    "timestamp": time.time(),
+                },
+            )
+
             # 2. Async recon probe
-            ports = [80, 443, 22, 3306]
-            active_services = await enterprise_adaptive_recon(self.target, ports)
+            active_services: list[dict[str, Any]] = []
+            for address in authorized_ips:
+                services = await enterprise_adaptive_recon(address, list(self.ports))
+                for service in services:
+                    service["ip"] = address
+                    service["host"] = self.target
+                active_services.extend(services)
 
             # 3. Graph & Kill-Chain analysis
             g = AssetGraph()

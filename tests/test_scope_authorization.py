@@ -68,3 +68,76 @@ def test_orchestrator_accepts_scoped_ports(tmp_path):
     )
 
     orchestrator._authorize_steps(steps)
+
+
+def test_orchestrator_passes_resolved_authorized_ips_to_runners(tmp_path, monkeypatch):
+    scope = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        allowed_domains=["app.example.test"],
+        ports=[80],
+    )
+    monkeypatch.setattr(
+        scope,
+        "resolve_authorized_ips",
+        lambda target: ["10.2.3.4"] if target == "app.example.test" else [],
+    )
+    seen: list[list[str]] = []
+
+    def discovery(step, ctx):
+        seen.append(list(ctx["authorized_ips"]))
+        return {"module": "discovery", "host": step.target, "count": 0}
+
+    orchestrator = Orchestrator(
+        StateStore(tmp_path / "campaigns"),
+        reg={"discovery": discovery},
+        scope=scope,
+    )
+
+    state = orchestrator.run_campaign("app.example.test")
+
+    assert seen == [["10.2.3.4"]]
+    assert state.meta["authorized_ips"] == ["10.2.3.4"]
+
+
+
+def test_daemon_scans_only_ports_permitted_by_scope(tmp_path, monkeypatch):
+    import asyncio
+
+    from core.daemon import AutonomousDaemon
+
+    scope = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        ports=[80, 443],
+    )
+    daemon = AutonomousDaemon(
+        target="10.0.0.1",
+        state_dir=tmp_path,
+        scope=scope,
+        interval_seconds=1.0,
+    )
+    calls: list[tuple[str, list[int]]] = []
+
+    async def fake_recon(host, ports):
+        calls.append((host, list(ports)))
+        return []
+
+    monkeypatch.setattr("core.daemon.enterprise_adaptive_recon", fake_recon)
+    asyncio.run(daemon.run_mission_cycle())
+
+    assert calls == [("10.0.0.1", [80, 443])]
+
+
+def test_daemon_refuses_when_none_of_its_ports_are_authorized(tmp_path):
+    from core.daemon import AutonomousDaemon
+
+    scope = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        ports=[8080],
+    )
+    with pytest.raises(ScopeError, match="none of the daemon's default ports"):
+        AutonomousDaemon(
+            target="10.0.0.1",
+            state_dir=tmp_path,
+            scope=scope,
+            interval_seconds=1.0,
+        )

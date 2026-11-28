@@ -225,13 +225,16 @@ def cmd_judge(args: Any) -> int:
     try:
         scope = _load_scope(getattr(args, "scope", None))
         scope.check(args.target)
+        authorized_ips = scope.resolve_authorized_ips(args.target)
     except ScopeError as exc:
         print(f"[HELIOS] refused: {exc}")
         return 2
 
     step = PlanStep(step_id=1, module="discovery", action="scan", target=args.target)
     ctx: dict[str, Any] = {
-        "scope_ports": list(scope.ports) or [22, 80, 443, 3306, 3389]
+        "scope": scope,
+        "authorized_ips": authorized_ips,
+        "scope_ports": list(scope.ports) or [22, 80, 443, 3306, 3389],
     }
     outcome = discovery_runner(step, ctx)
     findings = [f for f in ctx.get("findings", []) if f.get("open")]
@@ -270,17 +273,27 @@ def cmd_probe(args: Any) -> int:
         ports = list(scope.ports) or [22, 80, 443]
     try:
         scope.check_ports(ports)
+        authorized_ips = scope.resolve_authorized_ips(args.target)
     except ScopeError as exc:
         print(f"[HELIOS] refused: {exc}")
         return 2
 
-    results = asyncio.run(enterprise_adaptive_recon(args.target, ports))
+    async def _probe_authorized_ips() -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for address in authorized_ips:
+            for result in await enterprise_adaptive_recon(address, ports):
+                result["ip"] = address
+                result["host"] = args.target
+                rows.append(result)
+        return rows
+
+    results = asyncio.run(_probe_authorized_ips())
     for result in results:
         if not result.get("open"):
             continue
         banner = result.get("banner", "")
-        print(f"  {result['host']}:{result['port']}  {banner[:120]!r}")
-    print(f"[HELIOS] probed {len(results)} port(s) via adaptive engine")
+        print(f"  {result['host']} ({result['ip']}):{result['port']}  {banner[:120]!r}")
+    print(f"[HELIOS] probed {len(results)} open port(s) via adaptive engine")
     return 0
 
 
@@ -745,6 +758,13 @@ def cmd_daemon(args: Any) -> int:
     try:
         scope = _load_scope(getattr(args, "scope", None))
         scope.check(args.target)
+        scope.resolve_authorized_ips(args.target)
+        daemon = AutonomousDaemon(
+            target=args.target,
+            state_dir=Path(args.data),
+            scope=scope,
+            interval_seconds=args.interval,
+        )
     except ScopeError as exc:
         print(f"[HELIOS] refused: {exc}")
         return 2
@@ -752,9 +772,6 @@ def cmd_daemon(args: Any) -> int:
     print(f"[DEMIURG-DAEMON] Activating autonomous agent for target: {args.target}")
     print("[DEMIURG-DAEMON] Press Ctrl+C to terminate the living daemon loop.")
 
-    daemon = AutonomousDaemon(
-        target=args.target, state_dir=Path(args.data), interval_seconds=args.interval
-    )
     try:
         asyncio.run(daemon.start())
     except KeyboardInterrupt:

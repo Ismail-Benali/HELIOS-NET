@@ -21,6 +21,8 @@ import ipaddress
 import json
 import math
 import os
+import socket
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -87,6 +89,71 @@ class ScopeEnforcer:
                 f"target {target!r} is outside the authorized scope "
                 f"(source: {self.source}; {self.describe()})"
             )
+
+    def resolve_authorized_ips(
+        self,
+        target: str,
+        resolver: Callable[[str], Iterable[str]] | None = None,
+    ) -> list[str]:
+        """Resolve a scoped name and return only addresses authorized by CIDR.
+
+        The caller must connect to one of the returned addresses directly,
+        rather than resolving the hostname again at the socket boundary. This
+        keeps DNS rebinding between authorization and connection from changing
+        the destination. Domain permission alone is not permission to connect
+        to every address returned by DNS.
+        """
+        name = (target or "").strip()
+        if not name:
+            raise ScopeError("target cannot be empty")
+
+        # Literal addresses do not need DNS, but still have to match a CIDR.
+        try:
+            literal = ipaddress.ip_address(name.split("%", 1)[0])
+        except ValueError:
+            self.check(name)
+        else:
+            if not any(literal in network for network in self.networks):
+                self.check(str(literal))
+            return [name]
+
+        if resolver is None:
+            def resolve_name(host: str) -> list[str]:
+                records = socket.getaddrinfo(
+                    host,
+                    None,
+                    family=socket.AF_UNSPEC,
+                    type=socket.SOCK_STREAM,
+                )
+                return [str(record[4][0]) for record in records]
+
+            resolver = resolve_name
+
+        try:
+            candidates = list(resolver(name))
+        except (OSError, ValueError) as exc:
+            raise ScopeError(
+                f"could not resolve scoped target {name!r}: {exc}"
+            ) from exc
+
+        allowed: set[str] = set()
+        for candidate in candidates:
+            address_text = str(candidate).strip()
+            if not address_text:
+                continue
+            try:
+                address = ipaddress.ip_address(address_text.split("%", 1)[0])
+            except ValueError:
+                continue
+            if any(address in network for network in self.networks):
+                allowed.add(address_text)
+
+        if not allowed:
+            raise ScopeError(
+                f"target {name!r} resolved to no addresses inside the authorized CIDRs "
+                f"(source: {self.source}; {self.describe()})"
+            )
+        return sorted(allowed)
 
     def check_ports(self, ports: list[int] | tuple[int, ...]) -> None:
         """Raises `ScopeError` if any requested port is outside the allowlist.

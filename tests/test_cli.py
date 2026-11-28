@@ -294,12 +294,47 @@ def test_assets_defaults_are_bounded():
     assert args.web_ports is None
 
 
+def test_probe_dials_only_authorized_dns_addresses(capsys, monkeypatch):
+    import socket
+
+    from core.scope import ScopeEnforcer
+
+    scope = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        allowed_domains=["app.test"],
+        ports=[80],
+    )
+    monkeypatch.setattr(cli, "_load_scope", lambda _path=None: scope)
+
+    def fake_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        assert host == "app.test"
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.7", 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("203.0.113.8", 0)),
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    calls: list[tuple[str, list[int]]] = []
+
+    async def fake_recon(host, ports):
+        calls.append((host, list(ports)))
+        return [{"host": host, "port": 80, "open": True, "banner": "HTTP"}]
+
+    monkeypatch.setattr("core.async_engine.enterprise_adaptive_recon", fake_recon)
+
+    code = cli.cmd_probe(_args(target="app.test", ports="80"))
+
+    assert code == 0
+    assert calls == [("10.0.0.7", [80])]
+    assert "app.test (10.0.0.7):80" in capsys.readouterr().out
+
+
 def test_daemon_starts_and_stops_cleanly(capsys, monkeypatch, data_dir):
 
     started: list[str] = []
 
     class FakeDaemon:
-        def __init__(self, target, state_dir, interval_seconds):
+        def __init__(self, target, state_dir, scope, interval_seconds):
             started.append(target)
 
         async def start(self):
@@ -314,7 +349,7 @@ def test_daemon_starts_and_stops_cleanly(capsys, monkeypatch, data_dir):
 
 def test_daemon_reports_a_keyboard_interrupt(capsys, monkeypatch, data_dir):
     class Interrupting:
-        def __init__(self, target, state_dir, interval_seconds):
+        def __init__(self, target, state_dir, scope, interval_seconds):
             pass
 
         async def start(self):

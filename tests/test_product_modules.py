@@ -23,6 +23,7 @@ import pytest
 from core.drift import compute_surface_drift
 from core.planner import PlanStep
 from core.reporter import generate_executive_briefing
+from core.scope import ScopeEnforcer
 from core.state import CampaignState
 from engine.ai.adaptive_learner import EpsilonGreedyBandit
 from engine.algorithms import balancing
@@ -115,7 +116,10 @@ def test_discovery_runner_routes_every_port_through_the_accelerator(monkeypatch)
         target="10.0.0.1",
         params={"ports": [22, 80]},
     )
-    ctx: dict = {}
+    ctx: dict = {
+        "scope": ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"]),
+        "authorized_ips": ["10.0.0.1"],
+    }
     result = registry.discovery_runner(step, ctx)
 
     assert calls == [("10.0.0.1", [22, 80])], (
@@ -127,6 +131,63 @@ def test_discovery_runner_routes_every_port_through_the_accelerator(monkeypatch)
     assert result["reason"] == "ok"
     assert ctx["findings"][0]["banner"] == "SSH-2.0-OpenSSH_9.6"
     assert all(f["engine"] == "go-native" for f in ctx["findings"])
+
+
+def test_discovery_runner_dials_the_pinned_ip_not_the_hostname(monkeypatch):
+    import modules.registry as registry
+
+    calls: list[str] = []
+
+    class Outcome:
+        engine = "go-native"
+        reason = ""
+        rows = [{"port": 80, "state": "open", "service": "http"}]
+
+    monkeypatch.setattr(
+        registry.accel,
+        "scan_ports",
+        lambda host, ports: (calls.append(host), Outcome())[1],
+    )
+    scope = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        allowed_domains=["app.example.test"],
+        ports=[80],
+    )
+    ctx = {"scope": scope, "authorized_ips": ["10.2.3.4"]}
+
+    result = registry.discovery_runner(
+        PlanStep(
+            step_id=1,
+            module="discovery",
+            action="scan",
+            target="app.example.test",
+            params={"ports": [80]},
+        ),
+        ctx,
+    )
+
+    assert calls == ["10.2.3.4"]
+    assert result["authorized_ips"] == ["10.2.3.4"]
+    assert ctx["findings"][0]["host"] == "app.example.test"
+    assert ctx["findings"][0]["ip"] == "10.2.3.4"
+
+
+def test_discovery_runner_fails_closed_without_scope(monkeypatch):
+    import modules.registry as registry
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        registry.accel,
+        "scan_ports",
+        lambda host, ports: calls.append(host),
+    )
+    result = registry.discovery_runner(
+        PlanStep(step_id=1, module="discovery", action="scan", target="10.0.0.1"),
+        {},
+    )
+
+    assert result["error"] == "scope unavailable"
+    assert calls == []
 
 
 def test_discovery_runner_prefers_the_scope_ports_from_context(monkeypatch):
@@ -146,7 +207,14 @@ def test_discovery_runner_prefers_the_scope_ports_from_context(monkeypatch):
     )
 
     step = PlanStep(step_id=1, module="discovery", action="scan", target="10.0.0.1")
-    result = registry.discovery_runner(step, {"scope_ports": [443]})
+    result = registry.discovery_runner(
+        step,
+        {
+            "scope": ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"], ports=[443]),
+            "authorized_ips": ["10.0.0.1"],
+            "scope_ports": [443],
+        },
+    )
 
     assert seen == [[443]]
     assert result["count"] == 0
@@ -164,7 +232,10 @@ def test_a_successful_scan_records_only_rows_it_received(monkeypatch):
 
     monkeypatch.setattr(registry.accel, "scan_ports", lambda host, ports: Outcome())
 
-    ctx: dict = {}
+    ctx: dict = {
+        "scope": ScopeEnforcer(allowed_cidrs=["10.0.0.0/8"], ports=[22]),
+        "authorized_ips": ["10.0.0.1"],
+    }
     result = registry.discovery_runner(
         PlanStep(
             step_id=1,
@@ -194,7 +265,13 @@ def test_recon_runner_matches_banners_through_the_signature_core(tmp_path, monke
 
     ctx = {
         "findings": [
-            {"module": "discovery", "host": "10.0.0.1", "port": 22, "open": True}
+            {
+                "module": "discovery",
+                "host": "10.0.0.1",
+                "ip": "10.0.0.1",
+                "port": 22,
+                "open": True,
+            }
         ]
     }
     result = recon_runner(
@@ -211,6 +288,41 @@ def test_recon_runner_matches_banners_through_the_signature_core(tmp_path, monke
     assert ctx["findings"][-1] is result
 
 
+def test_recon_runner_uses_the_discovery_ip_not_the_hostname(monkeypatch):
+    import modules.registry as registry
+
+    connected: list[str] = []
+    monkeypatch.setattr(
+        registry,
+        "banner_grab",
+        lambda host, port: connected.append(host) or {"banner": "HTTP/1.1 200 OK"},
+    )
+    monkeypatch.setattr(registry, "_signature_pairs", lambda: [])
+
+    ctx = {
+        "findings": [
+            {
+                "module": "discovery",
+                "host": "app.example.test",
+                "ip": "10.2.3.4",
+                "port": 80,
+                "open": True,
+            }
+        ]
+    }
+    recon_runner(
+        PlanStep(
+            step_id=1,
+            module="recon",
+            action="fingerprint",
+            target="app.example.test",
+        ),
+        ctx,
+    )
+
+    assert connected == ["10.2.3.4"]
+
+
 def test_recon_runner_reuses_a_banner_discovery_already_collected(monkeypatch):
     import modules.registry as registry
 
@@ -225,6 +337,7 @@ def test_recon_runner_reuses_a_banner_discovery_already_collected(monkeypatch):
             {
                 "module": "discovery",
                 "host": "10.0.0.1",
+                "ip": "10.0.0.1",
                 "port": 80,
                 "open": True,
                 "banner": "HTTP/1.1 200 OK\r\nServer: nginx/1.27",
@@ -249,7 +362,13 @@ def test_recon_runner_skips_error_banners(monkeypatch):
 
     ctx = {
         "findings": [
-            {"module": "discovery", "host": "10.0.0.1", "port": 22, "open": True}
+            {
+                "module": "discovery",
+                "host": "10.0.0.1",
+                "ip": "10.0.0.1",
+                "port": 22,
+                "open": True,
+            }
         ]
     }
     result = recon_runner(
