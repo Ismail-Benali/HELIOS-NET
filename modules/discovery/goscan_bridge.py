@@ -283,9 +283,7 @@ class _ServeWorker:
             summary = _validated_summary(reply.get("summary"))
             if summary is None:
                 self._stop()
-                raise GoscanError(
-                    "Go serve worker sent a missing or invalid summary"
-                )
+                raise GoscanError("Go serve worker sent a missing or invalid summary")
             self.last_summary = summary
 
             results: list[dict[str, Any]] = []
