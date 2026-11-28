@@ -132,7 +132,9 @@ class ScopeEnforcer:
         try:
             candidates = list(resolver(name))
         except (OSError, ValueError) as exc:
-            raise ScopeError(f"could not resolve scoped target {name!r}: {exc}") from exc
+            raise ScopeError(
+                f"could not resolve scoped target {name!r}: {exc}"
+            ) from exc
 
         allowed: set[str] = set()
         for candidate in candidates:
