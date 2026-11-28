@@ -265,7 +265,13 @@ def test_recon_runner_matches_banners_through_the_signature_core(tmp_path, monke
 
     ctx = {
         "findings": [
-            {"module": "discovery", "host": "10.0.0.1", "ip": "10.0.0.1", "port": 22, "open": True}
+            {
+                "module": "discovery",
+                "host": "10.0.0.1",
+                "ip": "10.0.0.1",
+                "port": 22,
+                "open": True,
+            }
         ]
     }
     result = recon_runner(
@@ -289,9 +295,7 @@ def test_recon_runner_uses_the_discovery_ip_not_the_hostname(monkeypatch):
     monkeypatch.setattr(
         registry,
         "banner_grab",
-        lambda host, port: (
-            connected.append(host) or {"banner": "HTTP/1.1 200 OK"}
-        ),
+        lambda host, port: connected.append(host) or {"banner": "HTTP/1.1 200 OK"},
     )
     monkeypatch.setattr(registry, "_signature_pairs", lambda: [])
 
