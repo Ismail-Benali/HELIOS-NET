@@ -6,16 +6,17 @@ visibility.
 
 ## P0 — Engineering foundation
 
-| Priority | Work | Completion evidence |
-|---|---|---|
-| P0 | Unify architecture and documentation | One current component map; obsolete module descriptions removed; README, Architecture, API, and contributor guidance agree |
-| P0 | Review scope enforcement | Target and port checks happen before execution; DNS/redirect boundaries are tested; denied targets produce no connection |
-| P0 | Stabilize IPC and NDJSON contracts | UTF-8, framing, request correlation, SEE errors, timeout and fallback semantics are documented and tested |
+| Priority | Work | State | Completion evidence |
+|---|---|---|---|
+| P0 | Unify architecture and documentation | **Done** | README, Architecture, API, and contributor guidance aligned with the current Python / Go / C / Rust boundaries; obsolete process descriptions and empty-result fallback guidance corrected (PR #68) |
+| P0 | Review scope enforcement | **Done — enforced runners** | Asset discovery enforces requested ports internally; redirects validate scheme, authority, host, address, and destination port before follow-up; denied/malformed cases have regression tests (PR #68). This does not certify arbitrary plugins or direct socket code outside enforced runners. |
+| P0 | Stabilize IPC and NDJSON contracts | **Done for validated contracts** | Go persistent-worker responses require valid summaries and request correlation; missing/invalid replies fail closed. Existing UTF-8 framing, SEE, timeout, and fallback contracts remain documented and CI-tested (PR #68) |
 
-**Exit gate:** all P0 changes pass Python tests, native contract tests where
-available, and CI on supported platforms. No claim of complete authorization
-is made for arbitrary plugins or direct socket code outside the enforced
-runners.
+**Exit gate: PASSED — PR #68 merged to `master`.** Python tests, native
+contract/build tests, lint, Docker, and supported-platform CI completed
+successfully on Ubuntu and Windows. Authorization guarantees remain scoped to
+the enforced runners; arbitrary plugins and direct socket code are not
+certified by this milestone.
 
 ## P1 — Intelligence and engine consistency
 
@@ -51,14 +52,15 @@ and evidence model as one-time campaigns.
 
 ## Current implementation notes
 
-- P0 scope and contract hardening is merged into `master` (PR #31).
+- Initial P0 scope and contract hardening was merged in PR #31. The follow-up P0 audit and remediation is now merged in PR #68; the current P0 exit gate passed Ubuntu and Windows CI.
 - Graph analytics are available on both the Rust core and Python: the same
   directed/weighted inputs produce the same route, ranking and cut points, and
   only the reported engine changes. The native core is an accelerator, never a
   prerequisite.
-- The Go scanner is a process/NDJSON component, the C core is a process
-  component, and Rust is currently exposed through a C ABI. They do not share
-  one transport protocol.
+- The Go scanner is a process/NDJSON component. The C core supports both a
+  line-oriented JSON process interface and an in-process shared-library FFI
+  path. Rust is exposed through a C ABI. These components do not share one
+  transport protocol.
 - Empty port allowlists currently retain backward-compatible any-port
   semantics for an otherwise authorized target. Explicit port lists are
   recommended for least-privilege engagements.
