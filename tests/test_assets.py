@@ -347,6 +347,60 @@ def test_a_redirect_outside_the_scope_is_blocked_and_not_followed():
     )
 
 
+def test_discovery_rejects_requested_web_ports_outside_scope():
+    resolved: list[str] = []
+
+    with pytest.raises(Exception, match="outside the authorized scope"):
+        discover_assets(
+            ScopeEnforcer(
+                allowed_domains=["lab.test"],
+                allowed_cidrs=["127.0.0.1/32"],
+                ports=[80],
+            ),
+            ["app.lab.test"],
+            resolve=lambda name: resolved.append(name) or ["127.0.0.1"],
+            probe=lambda *args, **kwargs: {"open": True},
+            web_ports=[8080],
+        )
+
+    assert resolved == []
+
+
+def test_redirect_to_disallowed_port_is_blocked_before_probe():
+    probed: list[tuple[str, int]] = []
+
+    def probe(host: str, ip: str, port: int, **kwargs: object) -> dict:
+        probed.append((host, port))
+        if str(kwargs.get("path", "/")) == "/":
+            return {
+                "open": True,
+                "scheme": "http",
+                "status": 302,
+                "location": "http://app.lab.test:8080/admin",
+            }
+        return {"open": True, "scheme": "http", "status": 200}
+
+    summary = discover_assets(
+        ScopeEnforcer(
+            allowed_domains=["lab.test"],
+            allowed_cidrs=["127.0.0.1/32"],
+            ports=[80],
+        ),
+        ["app.lab.test"],
+        resolve=lambda name: ["127.0.0.1"],
+        probe=probe,
+        web_ports=[80],
+        max_requests=10,
+    )
+
+    assert probed == [("app.lab.test", 80), ("app.lab.test", 80)]
+    assert any(
+        entry["reason"] == "redirect-port-outside-scope"
+        and entry["target_port"] == 8080
+        for entry in summary["blocked"]
+    )
+
+
 def test_deep_mode_collects_well_known_documents():
     def probe(host: str, ip: str, port: int, **kwargs: object) -> dict:
         path = str(kwargs.get("path", "/"))
