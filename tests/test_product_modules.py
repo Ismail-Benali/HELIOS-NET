@@ -362,7 +362,13 @@ def test_recon_runner_skips_error_banners(monkeypatch):
 
     ctx = {
         "findings": [
-            {"module": "discovery", "host": "10.0.0.1", "port": 22, "open": True}
+            {
+                "module": "discovery",
+                "host": "10.0.0.1",
+                "ip": "10.0.0.1",
+                "port": 22,
+                "open": True,
+            }
         ]
     }
     result = recon_runner(
