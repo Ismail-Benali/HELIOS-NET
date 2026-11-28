@@ -68,3 +68,33 @@ def test_orchestrator_accepts_scoped_ports(tmp_path):
     )
 
     orchestrator._authorize_steps(steps)
+
+
+
+def test_orchestrator_passes_resolved_authorized_ips_to_runners(tmp_path, monkeypatch):
+    scope = ScopeEnforcer(
+        allowed_cidrs=["10.0.0.0/8"],
+        allowed_domains=["app.example.test"],
+        ports=[80],
+    )
+    monkeypatch.setattr(
+        scope,
+        "resolve_authorized_ips",
+        lambda target: ["10.2.3.4"] if target == "app.example.test" else [],
+    )
+    seen: list[list[str]] = []
+
+    def discovery(step, ctx):
+        seen.append(list(ctx["authorized_ips"]))
+        return {"module": "discovery", "host": step.target, "count": 0}
+
+    orchestrator = Orchestrator(
+        StateStore(tmp_path / "campaigns"),
+        reg={"discovery": discovery},
+        scope=scope,
+    )
+
+    state = orchestrator.run_campaign("app.example.test")
+
+    assert seen == [["10.2.3.4"]]
+    assert state.meta["authorized_ips"] == ["10.2.3.4"]
